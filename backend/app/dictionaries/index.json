@@ -1,0 +1,42 @@
+[
+  {
+    "lang": "en",
+    "version": 1,
+    "bytes": 1731307,
+    "file": "en-1.sqlite.deflate",
+    "sha256": "9bb23dd49e91d1050e934ae70317165dd7dc5726189a02c7abd5e5e29ca86d32",
+    "source": "ECDICT"
+  },
+  {
+    "lang": "es",
+    "version": 1,
+    "bytes": 768685,
+    "file": "es-1.sqlite.deflate",
+    "sha256": "7c9835d89c72a467d9dfcd4acd32d8c9089a8338d09951826d5cd1efdf9a24d7",
+    "source": "Wiktionary"
+  },
+  {
+    "lang": "fr",
+    "version": 1,
+    "bytes": 689289,
+    "file": "fr-1.sqlite.deflate",
+    "sha256": "e894df9c4956971434a66e88696399525f3b4ec71411d884eb144436c7f70629",
+    "source": "Wiktionary"
+  },
+  {
+    "lang": "ja",
+    "version": 1,
+    "bytes": 1534012,
+    "file": "ja-1.sqlite.deflate",
+    "sha256": "836e0dff02811594513f7eda01ead8e971abb542b97bec8a2ccc5f86adcdc869",
+    "source": "EJDict"
+  },
+  {
+    "lang": "ko",
+    "version": 1,
+    "bytes": 362855,
+    "file": "ko-1.sqlite.deflate",
+    "sha256": "2682391f588c3ee423793b083fa013ab3612c87797ce5925e239cc8fd6014339",
+    "source": "Wiktionary"
+  }
+]

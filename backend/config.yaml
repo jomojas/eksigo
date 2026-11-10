@@ -1,0 +1,10 @@
+# Server configuration that isn't secret (secrets and paths come from environment variables, .env.example).
+
+auth:
+  # Apple identity tokens' audience: the iPhone app's bundle ID.
+  apple_audiences:
+    - com.eksigo.app
+  # Google ID tokens' audience: the apps' OAuth client IDs. They are public by design (they ship inside the apps).
+  google_client_ids:
+    - 1034250709893-dck1asb1ukaip3obnsl6ij55j0jp4t8e.apps.googleusercontent.com
+  session_idle_days: 180

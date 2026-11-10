@@ -1,0 +1,21 @@
+# HTTPS with an automatic Let's Encrypt certificate for $DOMAIN.
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy api:8000
+}
+
+# The website (DESIGN.md section 12, Website): static files copied from the repo's site/ by the deploy job.
+{$SITE_DOMAIN:eksigo.com} {
+	root * /srv/site
+	encode zstd gzip
+	header {
+		Cache-Control "public, max-age=600"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+	file_server
+}
+
+www.{$SITE_DOMAIN:eksigo.com} {
+	redir https://{$SITE_DOMAIN:eksigo.com}{uri} permanent
+}

@@ -1,0 +1,42 @@
+# Runs on the VPS in /opt/eab, next to Caddyfile and .env (DESIGN.md section 12).
+# The deploy job copies this file and runs: docker compose pull && docker compose up -d --remove-orphans
+
+services:
+  api:
+    image: ${EKSIGO_IMAGE}
+    env_file: .env
+    environment:
+      EKSIGO_PUBLIC_BASE_URL: https://${DOMAIN}
+    volumes:
+      - eksigo:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/v1/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  caddy:
+    image: caddy:2.10
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN}
+      SITE_DOMAIN: ${SITE_DOMAIN:-eksigo.com}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./site:/srv/site:ro   # the website, copied from the repo's site/ by the deploy job
+      - caddy_data:/data      # HTTPS certificates
+      - caddy_config:/config
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  # v2's SQLite database and cached cover art. Never inside the image, never audio. A new volume, so v1's
+  # database (eab_data) is left untouched until it is deleted by hand.
+  eksigo:
+  caddy_data:
+  caddy_config:
