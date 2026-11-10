@@ -345,13 +345,16 @@ Releases go to GitHub Releases, built by a `tauri-action` workflow on every vers
 
 ## 13. Desktop MVP and build order
 
+The detailed milestones are in [ROADMAP.md](ROADMAP.md).
+
+
 1. **New repository** (decided 2026-11-10). `jomojas/eksigo`, private until this step is done. Copy from v1 only what still fits, reviewing each part:
    - **server:** sign-in (Apple, Google), accounts, the database setup, Docker, deploy and CI
    - **iPhone:** the playback engine, RSS and podcast search, downloads, local storage, the sign-in client
    - **website:** `site/`, rewritten for v2 (privacy policy included)
 
    Point the VPS at the new server image and delete v1's clips and lesson data there. Choose the licenses, add the README and contribution files, then make the repo public.
-2. **Visual design:** one theme for both apps, from the Claude-style brand tokens (cream canvas, serif headlines at regular weight, flat surfaces, one sparing accent, light and dark). Eksigo keeps its own name and icon and never uses Claude's. Mockups of the key screens (desktop dictation and review, iPhone Listen and Review) are agreed before code.
+2. **Visual design** (changed 2026-11-10): the Linear-style design system instead of the Claude brand: a dark, IDE-like look with a near-black canvas, grey surfaces and hairlines, one sparing accent, plus a derived light theme. Mockups of the desktop, iPhone and website screens are on the design canvas (https://claude.ai/artifact/9ZrDQTW2L9JBaDHDnwDC6f) and are agreed before code.
 3. **Desktop MVP:**
    - podcast search and RSS
    - download as a practice copy
@@ -377,7 +380,7 @@ Releases go to GitHub Releases, built by a `tauri-action` workflow on every vers
 
 ## 14. Open questions
 
-- **Accent colour:** Claude's coral, or Eksigo's own (for example a deep green or ink blue), so the app doesn't look like an Anthropic product. Fonts: EB Garamond and Inter (free to bundle), or Apple's New York serif on iPhone.
+- **Accent colour:** Linear's lavender as in the design canvas, or Eksigo's own colour so the app doesn't look like Linear. Fonts: Inter and JetBrains Mono (free to bundle) stand in for Linear's own faces.
 - **Licenses:** MIT plus AGPL as proposed in section 10, or one license for everything?
 - **Premium:** a monthly plan or credit packs, the exact price and allowance. Check current AI prices first.
 - **Offline dictionaries** for Japanese, Korean, Spanish and French speakers, with licenses that allow bundling.
