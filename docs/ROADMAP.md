@@ -4,7 +4,7 @@ The order we build v2 in, desktop first. It expands [DESIGN.md](DESIGN.md) secti
 
 **Goal (decided 2026-11-10): ship desktop v0.1.0 within one week.** Jomo directs each step; Claude builds it. One branch and one PR per day's work, reviewed and merged by Jomo.
 
-**Design reference:** the Linear-style canvas, https://claude.ai/artifact/9ZrDQTW2L9JBaDHDnwDC6f (dark by default, plus a derived light theme).
+**Design reference:** the Linear-style canvas, https://claude.ai/artifact/9ZrDQTW2L9JBaDHDnwDC6f. Each desktop screen is marked *v0.1* or *next*.
 
 ## v0.1.0 in seven days
 
@@ -13,10 +13,10 @@ The riskiest parts come first: Whisper building on both systems, then the dictat
 | Day | Build | Done when |
 |---|---|---|
 | 1 | **Skeleton and the Whisper test.** Tauri 2 (React, TypeScript, Rust) in `desktop/`; design tokens with light and dark mode; the app layout (sidebar, top bar, status bar); SQLite; CI building on macOS and Windows. whisper.cpp linked from Rust with Metal on Mac and CPU on Windows, timed on a sample episode. | The app opens on both systems, CI is green, and Whisper transcribes a test file on both |
-| 2 | **Podcasts and library.** Apple podcast search, add an RSS feed, episode lists, download with progress, the library table with delete, cover art via `GET /v1/art`, playing an exact stretch of audio at 1.0 / 0.85 / 0.7 without changing the pitch. | An episode can be found, downloaded and played sentence-sized |
+| 2 | **Podcasts and library.** Apple podcast search, add an RSS feed, the Show and Episode pages, download with progress, the Library with filters and delete, **adding your own audio or video files**, cover art via `GET /v1/art`, playing an exact stretch of audio at 1.0 / 0.85 / 0.7 without changing the pitch. | An episode can be found, downloaded and played sentence-sized |
 | 3 | **Transcription.** The *Fast* model downloaded on first use; background transcription in chunks with word timestamps; sentence splitting; progress in the status bar. | Dictation can start about 30 seconds after starting a 30-minute episode |
-| 4 | **Dictation loop.** Plays per sentence, gap and speed; the typing box; `Enter`, `Tab`, `Ctrl R`, `Ctrl ←/→`, `Ctrl K`, `_` for gaps; word-by-word comparison with the missed and misheard marks; resume where you stopped. | A whole episode can be dictated with the keyboard alone; the comparison has unit tests |
-| 5 | **Review and My words.** End-of-episode review (accuracy, counts, missed sentences with audio and what was typed, *Practise only these*); click words to save them; My words list with meanings from the offline dictionary (`GET /v1/dictionaries`); a simple Today page (Continue and the library). | Finishing an episode shows the review; a saved word shows its meaning |
+| 4 | **Dictation loop.** Manual and Auto playback, speed and maximum plays; the typing box; `Tab` to play, `Shift Enter` to finish, `Shift Tab` for I know this one, `Ctrl R`, `Ctrl ←/→`, `Ctrl K`, `_` for gaps, `Esc` to stop; word-by-word comparison; stop and resume. | A whole episode can be dictated with the keyboard alone; the comparison has unit tests |
+| 5 | **Results and My words.** The side-by-side results (original and your text, missed and wrong words marked) after stopping or finishing, also from the Episode page; select words to look them up and save them; My words list with meanings from the offline dictionary (`GET /v1/dictionaries`); a simple Today page (Continue and the library). | Stopping shows the results so far and resuming continues; a saved word shows its meaning |
 | 6 | **First launch and release.** Choose the language and download the speech model; Settings (theme, playback defaults, storage); `tauri-action` release workflow on version tags, Mac signed and notarised, Windows unsigned; the updater. | A test tag produces installable builds for both systems |
 | 7 | **Test and ship.** Install on a clean Mac and Windows machine, fix what breaks, tag **v0.1.0**. Point the eksigo.com download buttons at the release. | v0.1.0 is on GitHub Releases and downloadable from eksigo.com |
 
@@ -25,8 +25,10 @@ The riskiest parts come first: Whisper building on both systems, then the dictat
 - Publisher transcripts (`podcast:transcript`) and their alignment
 - The *Accurate* speech model
 - Mistakes grouped by type (weak forms, numbers, names, similar sounds, endings)
+- Word practice and levels in My words
+- Recommendations beyond the *Good for learners* list
 - Adjusting, merging or splitting sentences, and "the transcript is wrong here"
-- The Progress page (charts, streak) and the statistics in the right-hand panel
+- The Progress page (the year grid, streak, accuracy)
 - Interface translations (English only at first)
 - CSV export of My words
 - The full website redesign (only the download buttons change on day 7)
