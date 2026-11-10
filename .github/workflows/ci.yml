@@ -1,0 +1,44 @@
+# Pull request checks (DESIGN.md section 12, "Development workflow"). Runs on every pull request; each part runs only
+# when its folder changed, and `passed` sums them up. `passed` is the one check main requires before a merge (a
+# required check that never ran would block the merge, so the path filters live here instead of on the workflow).
+# The desktop and iOS jobs are added when those apps are.
+name: ci
+
+on:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read  # the pull request's list of changed files
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend: ["backend/**", ".github/workflows/ci.yml", ".github/workflows/backend.yml", ".github/workflows/backend-test.yml"]
+
+  backend:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    uses: ./.github/workflows/backend-test.yml
+
+  passed:
+    needs: [changes, backend]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every part that ran passed
+        run: |
+          echo "backend: ${{ needs.backend.result }}"
+          [[ "${{ needs.changes.result }}" == success ]]
+          [[ "${{ needs.backend.result }}" =~ ^(success|skipped)$ ]]

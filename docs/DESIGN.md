@@ -299,12 +299,13 @@ push to main (backend/**)
 ```
 - Registry: GitHub Container Registry (free private images, same login as GitHub). Docker Hub works too, but its free tier allows only one private repo.
 - Build the image in Actions, not on the Mac: the Mac is ARM, the VPS is x86.
-- `docker-compose.yml` on the VPS: `caddy` (HTTPS), `api` (FastAPI), `pipeline` (same image; after the cleanup it no longer ingests anything and only runs operator commands such as `users`, `plan` and `backup`).
+- `docker-compose.yml` on the VPS: `caddy` (HTTPS and the website) and `api` (FastAPI). Operator commands run inside `api`: `python -m app.admin users | plan | backup` (2026-11-10; v1's `pipeline` container is gone).
+- **Volumes:** v2's database is in `eab_eksigo` (the compose project is still called `eab`, after the folder `/opt/eab`). v1's database stays in `eab_data` until it is deleted by hand. Switching steps: `backend/README.md`.
 - Data lives in volumes, never in the image: the SQLite file (no audio is stored since section 7). Nightly SQLite backup to R2 or another off-site location.
 - Secrets (OpenAI / DeepSeek keys): a `.env` file on the VPS only (mode 600), plus GitHub Actions secrets for the deploy SSH key. Never in the repo or the image.
 - **VPS (decided 2026-10-17):** Ubuntu 26.04, 2 vCPU / 3.7 GB, `ubuntu` user with key-only SSH. Docker from Ubuntu's packages (`docker.io`, `docker-compose-v2`). `ufw` allows only SSH, 80 and 443. Stack lives in `/opt/eab`.
-- **Domain (decided 2026-10-17):** `eksigo.com` from Cloudflare Registrar. The API is `https://api.eksigo.com`: an A record to the VPS, **DNS only** (not proxied), so Caddy gets the Let's Encrypt certificate itself and clips are served straight from the VPS. The apex and `www` are free for a later website.
-- **Backups:** VPS crontab runs `pipeline backup` at 03:00 UTC (keeps 14, logs to `/opt/eab/backup.log`). Copying them off the server is still open.
+- **Domain (decided 2026-10-17):** `eksigo.com` from Cloudflare Registrar. The API is `https://api.eksigo.com`: an A record to the VPS, **DNS only** (not proxied), so Caddy gets the Let's Encrypt certificate itself. The apex and `www` are free for a later website.
+- **Backups:** VPS crontab runs `python -m app.admin backup` at 03:00 UTC (keeps 14, logs to `/opt/eab/backup.log`). Copying them off the server is still open.
 - **Image pull without a stored token:** the deploy job logs the VPS in to ghcr.io with the job's own short-lived `GITHUB_TOKEN` (`packages: read`), pulls, then logs out. No personal access token sits on the server. Containers that restart later reuse the image already pulled.
 - The deploy job uses its own SSH key (not the developer's), so it can be revoked on its own.
 
