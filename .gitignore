@@ -1,0 +1,20 @@
+.DS_Store
+
+# Backend
+backend/.venv/
+backend/data/
+backend/.env
+**/__pycache__/
+.pytest_cache/
+
+# Desktop (Tauri)
+desktop/node_modules/
+desktop/dist/
+desktop/src-tauri/target/
+desktop/src-tauri/gen/
+
+# Xcode
+xcuserdata/
+*.xcuserstate
+DerivedData/
+.build/
