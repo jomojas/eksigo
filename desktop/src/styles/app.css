@@ -346,6 +346,8 @@ textarea,
   flex-grow: 1;
   min-height: 0;
   overflow-y: auto;
+  /* So a side panel can be exactly as tall as the visible area (100cqh) and stay put while the page scrolls. */
+  container-type: size;
 }
 
 .statusbar {
@@ -534,6 +536,11 @@ select.btn {
 }
 
 .insp {
+  /* Stays put while the page beside it scrolls. */
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  height: 100cqh;
   width: 296px;
   flex-shrink: 0;
   border-left: 1px solid var(--hairline);
