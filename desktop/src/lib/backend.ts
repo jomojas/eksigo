@@ -2,6 +2,9 @@
 // there is no Rust side, so each call falls back to sample data (sample.ts) and the screens still work.
 
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { open } from "@tauri-apps/plugin-dialog";
 import { sample } from "./sample";
 
 export const inApp = isTauri();
@@ -158,7 +161,6 @@ export const backend = {
   /** Opens the system file picker. Returns the chosen paths; empty when cancelled or in the browser. */
   async pickFiles(title: string, extensions: string[], multiple = false): Promise<string[]> {
     if (!inApp) return [];
-    const { open } = await import("@tauri-apps/plugin-dialog");
     const picked = await open({ title, multiple, directory: false, filters: [{ name: title, extensions }] });
     if (picked === null) return [];
     return Array.isArray(picked) ? picked : [picked];
@@ -176,12 +178,10 @@ export function on<K extends keyof Events>(event: K, handler: (payload: Events[K
   if (!inApp) return sample.on(event, handler as (p: unknown) => void);
   let unlisten: (() => void) | null = null;
   let cancelled = false;
-  import("@tauri-apps/api/event").then(({ listen }) =>
-    listen<Events[K]>(event, (e) => handler(e.payload)).then((u) => {
-      if (cancelled) u();
-      else unlisten = u;
-    }),
-  );
+  listen<Events[K]>(event, (e) => handler(e.payload)).then((u) => {
+    if (cancelled) u();
+    else unlisten = u;
+  });
   return () => {
     cancelled = true;
     unlisten?.();
@@ -193,22 +193,20 @@ export function onFileDrop(handlers: { over: (on: boolean) => void; drop: (paths
   if (!inApp) return () => {};
   let unlisten: (() => void) | null = null;
   let cancelled = false;
-  import("@tauri-apps/api/webview").then(({ getCurrentWebview }) =>
-    getCurrentWebview()
-      .onDragDropEvent((e) => {
-        const p = e.payload;
-        if (p.type === "enter" || p.type === "over") handlers.over(true);
-        else if (p.type === "leave") handlers.over(false);
-        else if (p.type === "drop") {
-          handlers.over(false);
-          handlers.drop(p.paths);
-        }
-      })
-      .then((u) => {
-        if (cancelled) u();
-        else unlisten = u;
-      }),
-  );
+  getCurrentWebview()
+    .onDragDropEvent((e) => {
+      const p = e.payload;
+      if (p.type === "enter" || p.type === "over") handlers.over(true);
+      else if (p.type === "leave") handlers.over(false);
+      else if (p.type === "drop") {
+        handlers.over(false);
+        handlers.drop(p.paths);
+      }
+    })
+    .then((u) => {
+      if (cancelled) u();
+      else unlisten = u;
+    });
   return () => {
     cancelled = true;
     unlisten?.();
