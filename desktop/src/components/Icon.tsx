@@ -12,6 +12,15 @@ const PATHS = {
   plus: '<path d="M12 5v14M5 12h14"/>',
   file: '<path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z"/><path d="M14 3v5h5"/>',
   play: '<path d="M7 4l13 8-13 8z"/>',
+  pause: '<path d="M8 5v14M16 5v14"/>',
+  check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  chevron: '<path d="M6 9l6 6 6-6"/>',
+  back: '<path d="M15 6l-6 6 6 6"/>',
+  download: '<path d="M12 4v11M7 10.5l5 5 5-5M5 20h14"/>',
+  upload: '<path d="M12 20V9M7 13.5l5-5 5 5M5 4h14"/>',
+  x: '<path d="M6 6l12 12M18 6L6 18"/>',
+  rss: '<path d="M5 19h.01M5 12a7 7 0 017 7M5 5a14 14 0 0114 14"/>',
+  replay: '<path d="M4 12a8 8 0 108-8H8"/><path d="M10 1L7 4l3 3"/>',
 } as const;
 
 export type IconName = keyof typeof PATHS;

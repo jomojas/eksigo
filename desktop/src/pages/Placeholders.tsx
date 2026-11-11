@@ -1,9 +1,10 @@
-// First-run screens. Each becomes the real screen on the day noted in docs/ROADMAP.md;
+// Screens still to come. Each becomes the real screen on the day noted in docs/ROADMAP.md;
 // until then they show what a new learner would see with nothing added yet.
 
 import { useNavigate } from "react-router";
 import { Icon } from "../components/Icon";
-import { Kbd, Page } from "../components/Shell";
+import { addAudio, Kbd, Page } from "../components/Shell";
+import { inApp } from "../lib/backend";
 
 function greeting(): string {
   const h = new Date().getHours();
@@ -36,53 +37,12 @@ export function Today() {
               <Icon name="podcasts" />
               Find a podcast
             </button>
-            <button className="btn" disabled>
+            <button className="btn" disabled={!inApp} onClick={() => addAudio().then((added) => added && navigate("/library", { state: { added } }))}>
               <Icon name="plus" />
               Add audio
               <Kbd keys="Mod O" />
             </button>
           </div>
-        </div>
-      </div>
-    </Page>
-  );
-}
-
-export function Podcasts() {
-  return (
-    <Page crumbs={["Podcasts"]}>
-      <div className="page">
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <h1 className="h1" style={{ flexGrow: 1 }}>
-            Podcasts
-          </h1>
-          <Soon day="day 2" />
-        </div>
-        <div className="empty">
-          <h2 className="h2">Search Apple Podcasts or add an RSS feed</h2>
-          <p>Shows you follow appear here, with a list of podcasts that are good for learners.</p>
-        </div>
-      </div>
-    </Page>
-  );
-}
-
-export function Library() {
-  return (
-    <Page crumbs={["Library"]} keys={[["Mod O", "Add audio"]]}>
-      <div className="page">
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <h1 className="h1" style={{ flexGrow: 1 }}>
-            Library
-          </h1>
-          <Soon day="day 2" />
-        </div>
-        <div className="empty">
-          <h2 className="h2">Your episodes and files</h2>
-          <p>
-            Downloaded episodes and your own audio or video files live here, with your progress and accuracy for each. Drop a file
-            here to add it.
-          </p>
         </div>
       </div>
     </Page>

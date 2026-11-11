@@ -12,6 +12,47 @@ const MIGRATIONS: &[&str] = &[
         key   TEXT PRIMARY KEY,
         value TEXT NOT NULL
     );",
+    // 2: podcasts and the Library. Times are Unix seconds.
+    "CREATE TABLE shows (
+        id            INTEGER PRIMARY KEY,
+        feed_url      TEXT NOT NULL UNIQUE,
+        apple_id      TEXT,
+        title         TEXT NOT NULL,
+        author        TEXT NOT NULL DEFAULT '',
+        description   TEXT NOT NULL DEFAULT '',
+        artwork_url   TEXT,
+        subscribed_at INTEGER,      -- NULL when not subscribed
+        refreshed_at  INTEGER       -- last time the feed was read
+    );
+    CREATE TABLE episodes (
+        id           INTEGER PRIMARY KEY,
+        show_id      INTEGER NOT NULL REFERENCES shows(id) ON DELETE CASCADE,
+        guid         TEXT NOT NULL,
+        title        TEXT NOT NULL,
+        published_at INTEGER,
+        duration_s   REAL,
+        audio_url    TEXT NOT NULL,
+        audio_bytes  INTEGER,
+        description  TEXT NOT NULL DEFAULT '',
+        artwork_url  TEXT,
+        UNIQUE (show_id, guid)
+    );
+    CREATE INDEX episodes_by_show ON episodes (show_id, published_at DESC);
+    -- The Library: everything that can be practised, downloaded episodes and the learner's own files.
+    CREATE TABLE items (
+        id                INTEGER PRIMARY KEY,
+        episode_id        INTEGER UNIQUE REFERENCES episodes(id) ON DELETE SET NULL,
+        title             TEXT NOT NULL,
+        source            TEXT NOT NULL,   -- the show's title, or 'My files'
+        own_file          INTEGER NOT NULL DEFAULT 0,
+        path              TEXT,            -- the audio or video file; NULL until downloaded
+        bytes             INTEGER,
+        duration_s        REAL,
+        state             TEXT NOT NULL,   -- 'downloading', 'ready' or 'failed'
+        error             TEXT,
+        added_at          INTEGER NOT NULL,
+        last_practised_at INTEGER
+    );",
 ];
 
 pub struct Db(pub Mutex<Connection>);
@@ -31,6 +72,11 @@ impl Db {
         conn.pragma_update(None, "foreign_keys", "ON")?;
         migrate(&mut conn)?;
         Ok(Db(Mutex::new(conn)))
+    }
+
+    /// The connection, for the queries in other modules.
+    pub fn conn(&self) -> std::sync::MutexGuard<'_, Connection> {
+        self.0.lock().unwrap()
     }
 
     pub fn schema_version(&self) -> Result<i64> {
