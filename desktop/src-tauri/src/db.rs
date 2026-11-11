@@ -89,7 +89,7 @@ const MIGRATIONS: &[&str] = &[
     CREATE TABLE answers (
         attempt_id INTEGER NOT NULL REFERENCES attempts(id) ON DELETE CASCADE,
         idx        INTEGER NOT NULL,              -- the sentence
-        kind       TEXT NOT NULL,                 -- 'typed', 'known' (I know this one) or 'ad' (left out)
+        kind       TEXT NOT NULL,                 -- 'typed', 'shown' (since 5; was 'known') or 'ad'
         original   TEXT NOT NULL,
         typed      TEXT NOT NULL DEFAULT '',
         plays      INTEGER NOT NULL DEFAULT 0,
@@ -100,6 +100,10 @@ const MIGRATIONS: &[&str] = &[
         answered_at INTEGER NOT NULL,
         PRIMARY KEY (attempt_id, idx)
     );",
+    // 5: "I know this one" became "show the original": the original goes into the box, and the learner
+    // marks what they didn't know or catch. `flags` is the JSON list of those marks.
+    "ALTER TABLE answers ADD COLUMN flags TEXT NOT NULL DEFAULT '[]';
+    UPDATE answers SET kind = 'shown', typed = original WHERE kind = 'known';",
 ];
 
 pub struct Db(pub Mutex<Connection>);

@@ -77,10 +77,50 @@ impl Comparison {
 }
 
 /// Compares the learner's text with the original sentence.
+/// What the learner marked in the original once it was shown: a word or a phrase, written words `from..=to`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Flag {
+    /// Didn't know the word: counts as wrong.
+    Unknown,
+    /// Knew it, but didn't catch it in the audio: counts as wrong.
+    Missed,
+    /// Expected something else: counts as wrong.
+    Unexpected,
+    /// Spelled differently from what the learner thought: half a word, like a misspelling.
+    Spelling,
+    /// Worth keeping (a nice expression): no effect on the score.
+    Keep,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Flagged {
+    pub from: usize,
+    pub to: usize,
+    pub flag: Flag,
+}
+
 pub fn compare(original: &str, typed: &str) -> Comparison {
+    compare_flagged(original, typed, &[])
+}
+
+/// The comparison, with the learner's marks applied: each word scores the worse of what the comparison
+/// found and how the learner marked it.
+pub fn compare_flagged(original: &str, typed: &str, flags: &[Flagged]) -> Comparison {
     let (o_words, o) = tokens(original, false);
     let (t_words, t) = tokens(typed, true);
-    let (o_marks, t_marks) = align(&o, &t, &o_words, &t_words);
+    let (mut o_marks, t_marks) = align(&o, &t, &o_words, &t_words);
+
+    for (tok, m) in o.iter().zip(o_marks.iter_mut()) {
+        let on = |f: &Flagged| f.from <= tok.to && tok.from <= f.to;
+        if flags.iter().any(|f| on(f) && matches!(f.flag, Flag::Unknown | Flag::Missed | Flag::Unexpected)) {
+            if matches!(m, Mark::Correct | Mark::Spelling) {
+                *m = Mark::Wrong;
+            }
+        } else if flags.iter().any(|f| on(f) && f.flag == Flag::Spelling) && *m == Mark::Correct {
+            *m = Mark::Spelling;
+        }
+    }
 
     let mut credit = 0.0;
     let mut spelling = 0;
@@ -101,13 +141,6 @@ pub fn compare(original: &str, typed: &str) -> Comparison {
         total: o.len() as u32,
         spelling,
     }
-}
-
-/// "I know this one": every word right.
-pub fn known(original: &str) -> Comparison {
-    let mut c = compare(original, original);
-    c.typed.clear();
-    c
 }
 
 // ---------- tokens ----------
@@ -997,10 +1030,26 @@ mod tests {
     }
 
     #[test]
-    fn known_sentences_are_all_correct() {
-        let c = known("It's 5 o'clock, isn't it?");
+    fn a_sentence_copied_from_the_original_is_all_correct() {
+        let o = "It's 5 o'clock, isn't it?";
+        let c = compare(o, o);
         assert_eq!(c.credit, c.total as f64);
         assert!(c.original.iter().all(|w| w.mark == Mark::Correct));
+    }
+
+    #[test]
+    fn the_learners_marks_count_as_mistakes() {
+        let o = "I'm gonna grab a coffee, honestly.";
+        let f = |from, to, flag| Flagged { from, to, flag };
+        // Shown and copied, nothing marked: all right.
+        assert_eq!(compare_flagged(o, o, &[]).credit, 7.0);
+        // Didn't catch "gonna"; "honestly" was spelled differently from what the learner thought.
+        let c = compare_flagged(o, o, &[f(1, 1, Flag::Missed), f(5, 5, Flag::Spelling), f(3, 4, Flag::Keep)]);
+        assert_eq!((c.credit, c.total, c.spelling), (5.5, 7, 1));
+        assert_eq!(marks(&c.original), "I'm !gonna grab a coffee, ~honestly.");
+        // The worse of the two: a word already missed stays missed, not "spelling".
+        let c = compare_flagged(o, "I'm gonna grab a coffee", &[f(5, 5, Flag::Spelling)]);
+        assert_eq!(marks(&c.original), "I'm gonna grab a coffee, -honestly.");
     }
 
     #[test]

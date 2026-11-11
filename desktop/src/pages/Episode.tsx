@@ -231,7 +231,7 @@ function Attempts({ item }: { item: Item }) {
             <span>
               {plural(s.done, "sentence")}
               {s.transcriptDone ? ` of ${s.sentences - s.ads}` : ""}
-              {s.known > 0 && ` · ${s.known} known`}
+              {s.shown > 0 && ` · ${s.shown} shown`}
             </span>
             <b className="mono" style={{ fontSize: 12 }}>
               {percent(s.accuracy)}

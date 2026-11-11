@@ -5,7 +5,7 @@ use anyhow::{anyhow, bail, Result};
 use rusqlite::{params, Connection, OptionalExtension, Row};
 use serde::Serialize;
 
-use crate::compare::{self, Comparison};
+use crate::compare::{self, Comparison, Flagged};
 
 fn now() -> i64 {
     chrono::Utc::now().timestamp()
@@ -43,7 +43,8 @@ fn attempt_from(r: &Row) -> rusqlite::Result<Attempt> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
     Typed,
-    Known,
+    /// The learner showed the original (and may have edited it or marked words in it).
+    Shown,
     Ad,
 }
 
@@ -51,7 +52,7 @@ impl Kind {
     pub fn parse(s: &str) -> Result<Self> {
         Ok(match s {
             "typed" => Kind::Typed,
-            "known" => Kind::Known,
+            "shown" => Kind::Shown,
             "ad" => Kind::Ad,
             _ => bail!("unknown answer kind {s}"),
         })
@@ -59,7 +60,7 @@ impl Kind {
     fn as_str(self) -> &'static str {
         match self {
             Kind::Typed => "typed",
-            Kind::Known => "known",
+            Kind::Shown => "shown",
             Kind::Ad => "ad",
         }
     }
@@ -69,7 +70,7 @@ impl Kind {
 #[serde(rename_all = "camelCase")]
 pub struct Answer {
     pub idx: i64,
-    /// "typed", "known" or "ad".
+    /// "typed", "shown" or "ad".
     pub kind: String,
     pub original: String,
     pub typed: String,
@@ -78,6 +79,8 @@ pub struct Answer {
     pub total: i64,
     pub spelling: i64,
     pub comparison: Option<Comparison>,
+    /// What the learner marked in the original.
+    pub flags: Vec<Flagged>,
 }
 
 fn answer_from(r: &Row) -> rusqlite::Result<Answer> {
@@ -92,6 +95,7 @@ fn answer_from(r: &Row) -> rusqlite::Result<Answer> {
         total: r.get(6)?,
         spelling: r.get(7)?,
         comparison: marks.and_then(|m| serde_json::from_str(&m).ok()),
+        flags: serde_json::from_str(&r.get::<_, String>(9)?).unwrap_or_default(),
     })
 }
 
@@ -129,7 +133,7 @@ pub fn start(conn: &Connection, item_id: i64, again: bool) -> Result<Attempt> {
 
 pub fn answers(conn: &Connection, attempt_id: i64) -> Result<Vec<Answer>> {
     let mut st = conn.prepare(
-        "SELECT idx, kind, original, typed, plays, credit, total, spelling, marks FROM answers WHERE attempt_id = ?1 ORDER BY idx",
+        "SELECT idx, kind, original, typed, plays, credit, total, spelling, marks, flags FROM answers WHERE attempt_id = ?1 ORDER BY idx",
     )?;
     let rows = st.query_map([attempt_id], answer_from)?.collect::<rusqlite::Result<_>>()?;
     Ok(rows)
@@ -142,24 +146,22 @@ fn sentence_text(conn: &Connection, item_id: i64, idx: i64) -> Result<String> {
 }
 
 /// Saves the answer to one sentence, compared with the original, and moves the attempt on past it.
-/// `seconds` is the time spent since the last save.
-pub fn answer(conn: &Connection, attempt_id: i64, idx: i64, kind: Kind, typed: &str, plays: i64, seconds: i64) -> Result<Answer> {
+/// Typed or shown, it is scored the same way: the text in the box against the original, with the
+/// learner's marks counted as mistakes. `seconds` is the time spent since the last save.
+#[allow(clippy::too_many_arguments)]
+pub fn answer(conn: &Connection, attempt_id: i64, idx: i64, kind: Kind, typed: &str, flags: &[Flagged], plays: i64, seconds: i64) -> Result<Answer> {
     let a = attempt(conn, attempt_id)?;
     let original = sentence_text(conn, a.item_id, idx)?;
-    let comparison = match kind {
-        Kind::Typed => Some(compare::compare(&original, typed)),
-        Kind::Known => Some(compare::known(&original)),
-        Kind::Ad => None,
-    };
+    let (typed, flags) = if kind == Kind::Ad { (String::new(), Vec::new()) } else { (typed.trim().to_string(), flags.to_vec()) };
+    let comparison = (kind != Kind::Ad).then(|| compare::compare_flagged(&original, &typed, &flags));
     let (credit, total, spelling) = comparison.as_ref().map(|c| (c.credit, c.total as i64, c.spelling as i64)).unwrap_or((0.0, 0, 0));
-    let typed = if kind == Kind::Typed { typed.trim().to_string() } else { String::new() };
     let t = now();
     conn.execute(
-        "INSERT INTO answers (attempt_id, idx, kind, original, typed, plays, credit, total, spelling, marks, answered_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+        "INSERT INTO answers (attempt_id, idx, kind, original, typed, plays, credit, total, spelling, marks, flags, answered_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
          ON CONFLICT (attempt_id, idx) DO UPDATE SET kind = excluded.kind, original = excluded.original, typed = excluded.typed,
            plays = excluded.plays, credit = excluded.credit, total = excluded.total, spelling = excluded.spelling,
-           marks = excluded.marks, answered_at = excluded.answered_at",
+           marks = excluded.marks, flags = excluded.flags, answered_at = excluded.answered_at",
         params![
             attempt_id,
             idx,
@@ -171,17 +173,18 @@ pub fn answer(conn: &Connection, attempt_id: i64, idx: i64, kind: Kind, typed: &
             total,
             spelling,
             comparison.as_ref().map(|c| serde_json::to_string(c).unwrap()),
+            serde_json::to_string(&flags)?,
             t
         ],
     )?;
     save_position(conn, attempt_id, idx + 1, seconds)?;
-    Ok(Answer { idx, kind: kind.as_str().into(), original, typed, plays, credit, total, spelling, comparison })
+    Ok(Answer { idx, kind: kind.as_str().into(), original, typed, plays, credit, total, spelling, comparison, flags })
 }
 
 /// Marks sentences `from..to` as an ad: left out of the score. The attempt carries on at `to`.
 pub fn mark_ads(conn: &Connection, attempt_id: i64, from: i64, to: i64, seconds: i64) -> Result<()> {
     for idx in from..to {
-        answer(conn, attempt_id, idx, Kind::Ad, "", 0, 0)?;
+        answer(conn, attempt_id, idx, Kind::Ad, "", &[], 0, 0)?;
     }
     save_position(conn, attempt_id, to, seconds)
 }
@@ -208,10 +211,11 @@ pub fn finish(conn: &Connection, attempt_id: i64) -> Result<()> {
 #[serde(rename_all = "camelCase")]
 pub struct Summary {
     pub attempt: Attempt,
-    /// Sentences answered (typed or known), not counting ads.
+    /// Sentences answered (typed or shown), not counting ads.
     pub done: i64,
-    pub known: i64,
-    /// Typed sentences with at least one word not fully right.
+    /// Sentences where the learner showed the original.
+    pub shown: i64,
+    /// Sentences with at least one word not fully right.
     pub with_mistakes: i64,
     pub ads: i64,
     pub credit: f64,
@@ -226,11 +230,11 @@ pub struct Summary {
 
 pub fn summary(conn: &Connection, attempt_id: i64) -> Result<Summary> {
     let a = attempt(conn, attempt_id)?;
-    let (done, known, with_mistakes, ads, credit, total, spelling): (i64, i64, i64, i64, f64, i64, i64) = conn.query_row(
+    let (done, shown, with_mistakes, ads, credit, total, spelling): (i64, i64, i64, i64, f64, i64, i64) = conn.query_row(
         "SELECT
             COALESCE(SUM(kind != 'ad'), 0),
-            COALESCE(SUM(kind = 'known'), 0),
-            COALESCE(SUM(kind = 'typed' AND credit < total), 0),
+            COALESCE(SUM(kind = 'shown'), 0),
+            COALESCE(SUM(kind != 'ad' AND credit < total), 0),
             COALESCE(SUM(kind = 'ad'), 0),
             COALESCE(SUM(credit), 0),
             COALESCE(SUM(total), 0),
@@ -248,7 +252,7 @@ pub fn summary(conn: &Connection, attempt_id: i64) -> Result<Summary> {
     Ok(Summary {
         attempt: a,
         done,
-        known,
+        shown,
         with_mistakes,
         ads,
         credit,
@@ -273,7 +277,7 @@ pub fn summaries(conn: &Connection, item_id: i64) -> Result<Vec<Summary>> {
 pub struct Practice {
     pub attempt_id: i64,
     pub position: i64,
-    /// Sentences answered (typed or known).
+    /// Sentences answered (typed or shown).
     pub done: i64,
     pub sentences: i64,
     pub transcript_done: bool,
@@ -373,7 +377,7 @@ mod tests {
         let db = setup();
         let c = db.conn();
         let a = start(&c, 1, false).unwrap();
-        let ans = answer(&c, a.id, 0, Kind::Typed, "hello their", 2, 30).unwrap();
+        let ans = answer(&c, a.id, 0, Kind::Typed, "hello their", &[], 2, 30).unwrap();
         assert_eq!((ans.credit, ans.total), (1.0, 2));
         // Opening again carries on the same attempt, at the next sentence.
         let again = start(&c, 1, false).unwrap();
@@ -381,9 +385,9 @@ mod tests {
         assert_eq!(in_progress(&c).unwrap().len(), 1);
 
         mark_ads(&c, a.id, 1, 3, 5).unwrap();
-        answer(&c, a.id, 3, Kind::Known, "", 1, 1000).unwrap();
+        answer(&c, a.id, 3, Kind::Shown, "Back to the show.", &[], 1, 1000).unwrap();
         let s = summary(&c, a.id).unwrap();
-        assert_eq!((s.done, s.known, s.with_mistakes, s.ads), (2, 1, 1, 2));
+        assert_eq!((s.done, s.shown, s.with_mistakes, s.ads), (2, 1, 1, 2));
         assert_eq!((s.credit, s.total), (5.0, 6), "ads are left out of the score");
         assert_eq!(s.attempt.seconds, 30 + 5 + MAX_SECONDS_PER_SENTENCE, "time away isn't counted");
         assert_eq!(s.attempt.position, 4);
@@ -402,8 +406,8 @@ mod tests {
         let db = setup();
         let c = db.conn();
         let a = start(&c, 1, false).unwrap();
-        answer(&c, a.id, 0, Kind::Typed, "hello", 1, 0).unwrap();
-        let second = answer(&c, a.id, 0, Kind::Typed, "Hello there", 3, 0).unwrap();
+        answer(&c, a.id, 0, Kind::Typed, "hello", &[], 1, 0).unwrap();
+        let second = answer(&c, a.id, 0, Kind::Typed, "Hello there", &[], 3, 0).unwrap();
         assert_eq!(second.credit, 2.0);
         let all = answers(&c, a.id).unwrap();
         assert_eq!(all.len(), 1);
@@ -411,11 +415,25 @@ mod tests {
     }
 
     #[test]
+    fn a_shown_sentence_scores_its_box_and_marks() {
+        use crate::compare::{Flag, Flagged};
+        let db = setup();
+        let c = db.conn();
+        let a = start(&c, 1, false).unwrap();
+        let ans = answer(&c, a.id, 1, Kind::Shown, "This is an ad for socks.", &[Flagged { from: 5, to: 5, flag: Flag::Unknown }], 4, 0).unwrap();
+        assert_eq!((ans.credit, ans.total), (5.0, 6));
+        assert_eq!(answers(&c, a.id).unwrap()[0].flags.len(), 1, "the marks are kept");
+        // Shown, then edited down: scored on what's left in the box.
+        let ans = answer(&c, a.id, 2, Kind::Shown, "Buy them", &[], 1, 0).unwrap();
+        assert_eq!((ans.credit, ans.total), (2.0, 3));
+    }
+
+    #[test]
     fn a_sentence_not_transcribed_yet_cant_be_answered() {
         let db = setup();
         let c = db.conn();
         let a = start(&c, 1, false).unwrap();
-        assert!(answer(&c, a.id, 9, Kind::Typed, "x", 1, 0).is_err());
+        assert!(answer(&c, a.id, 9, Kind::Typed, "x", &[], 1, 0).is_err());
     }
 
     #[test]
@@ -424,7 +442,7 @@ mod tests {
         let c = db.conn();
         let a = start(&c, 1, false).unwrap();
         assert_eq!(start(&c, 1, true).unwrap().id, a.id, "an attempt with nothing done is reused");
-        answer(&c, a.id, 0, Kind::Known, "", 0, 0).unwrap();
+        answer(&c, a.id, 0, Kind::Shown, "Hello there.", &[], 0, 0).unwrap();
         let b = start(&c, 1, true).unwrap();
         assert_ne!(a.id, b.id);
         assert!(attempt(&c, a.id).unwrap().finished_at.is_some());

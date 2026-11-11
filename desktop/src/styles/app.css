@@ -826,6 +826,63 @@ select.btn {
   color: var(--ink-tertiary);
 }
 
+/* The learner's own marks in the original (1–5). Shapes rather than colours: one accent only. */
+.f-unknown.f-from::before {
+  content: "⟨";
+}
+.f-unknown.f-to::after {
+  content: "⟩";
+}
+.f-missed.f-from::before {
+  content: "[";
+}
+.f-missed.f-to::after {
+  content: "]";
+}
+.f-from::before,
+.f-to::after {
+  color: var(--ink-subtle);
+  font-weight: 600;
+  padding: 0 1px;
+}
+.f-unexpected {
+  background: var(--select-fill);
+  border-radius: 4px;
+  padding: 1px 3px;
+}
+.f-spelling {
+  text-decoration: underline dotted var(--ink-muted);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
+}
+.f-keep {
+  text-decoration: underline double var(--ink-muted);
+  text-underline-offset: 4px;
+}
+.original {
+  font: 400 18px/1.6 var(--font-text);
+  color: var(--ink);
+}
+.current-num {
+  width: 28px;
+  flex-shrink: 0;
+  text-align: right;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  padding-top: 1px;
+}
+.tag {
+  font: 500 10px/1 var(--font-text);
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  color: var(--ink-subtle);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-pill);
+  padding: 2px 6px;
+  white-space: nowrap;
+}
+
 .scrim {
   position: fixed;
   inset: 0;

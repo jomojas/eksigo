@@ -5,6 +5,7 @@ import type {
   Added,
   Answer,
   AnswerKind,
+  Flagged,
   Attempt,
   Comparison,
   EpisodePage,
@@ -189,7 +190,7 @@ const attempts: Attempt[] = [];
 const answers = new Map<number, Map<number, Answer>>();
 
 /** A rough stand-in for compare.rs: exact words only, lined up by longest common subsequence. */
-function roughCompare(original: string, typed: string): Comparison {
+function roughCompare(original: string, typed: string, flags: Flagged[] = []): Comparison {
   const norm = (w: string) => w.toLowerCase().replace(/[^a-z0-9']/g, "");
   const o = original.split(/\s+/).filter(Boolean);
   const t = typed.split(/\s+/).filter(Boolean);
@@ -206,8 +207,15 @@ function roughCompare(original: string, typed: string): Comparison {
     } else if (L[i + 1][j] >= L[i][j + 1]) i++;
     else j++;
   }
-  const credit = om.filter((m) => m.mark === "correct").length;
-  return { original: om, typed: tm, credit, total: o.length, spelling: 0 };
+  // The learner's marks: the worse of the two.
+  om.forEach((m, i) => {
+    const f = flags.find((x) => x.from <= i && i <= x.to)?.flag;
+    if (f === "unknown" || f === "missed" || f === "unexpected") m.mark = m.mark === "correct" ? "wrong" : m.mark;
+    else if (f === "spelling" && m.mark === "correct") m.mark = "spelling";
+  });
+  const spelling = om.filter((m) => m.mark === "spelling").length;
+  const credit = om.filter((m) => m.mark === "correct").length + spelling / 2;
+  return { original: om, typed: tm, credit, total: o.length, spelling };
 }
 
 function summaryOf(a: Attempt): Summary {
@@ -219,8 +227,8 @@ function summaryOf(a: Attempt): Summary {
   return {
     attempt: { ...a },
     done: scored.length,
-    known: list.filter((x) => x.kind === "known").length,
-    withMistakes: list.filter((x) => x.kind === "typed" && x.credit < x.total).length,
+    shown: list.filter((x) => x.kind === "shown").length,
+    withMistakes: scored.filter((x) => x.credit < x.total).length,
     ads: list.length - scored.length,
     credit,
     total,
@@ -441,21 +449,23 @@ export const sample = {
     return { attempt: { ...a }, answers: [...answers.get(a.id)!.values()].sort((x, y) => x.idx - y.idx) };
   },
 
-  answer(attemptId: number, idx: number, kind: AnswerKind, typed: string, plays: number, seconds: number): Answer {
+  answer(attemptId: number, idx: number, kind: AnswerKind, typed: string, flags: Flagged[], plays: number, seconds: number): Answer {
     const a = attemptById(attemptId);
     const original = transcripts.get(a.itemId)?.sentences[idx]?.text;
     if (original === undefined) throw new Error(`Sentence ${idx + 1} isn't transcribed yet.`);
-    const comparison = kind === "typed" ? roughCompare(original, typed) : kind === "known" ? { ...roughCompare(original, original), typed: [] } : null;
+    const ad = kind === "ad";
+    const comparison = ad ? null : roughCompare(original, typed, flags);
     const ans: Answer = {
       idx,
       kind,
       original,
-      typed: kind === "typed" ? typed.trim() : "",
+      typed: ad ? "" : typed.trim(),
       plays,
       credit: comparison?.credit ?? 0,
       total: comparison?.total ?? 0,
-      spelling: 0,
+      spelling: comparison?.spelling ?? 0,
       comparison,
+      flags: ad ? [] : flags,
     };
     answers.get(a.id)!.set(idx, ans);
     sample.savePosition(attemptId, idx + 1, seconds);
@@ -463,7 +473,7 @@ export const sample = {
   },
 
   markAds(attemptId: number, from: number, to: number, seconds: number) {
-    for (let i = from; i < to; i++) sample.answer(attemptId, i, "ad", "", 0, 0);
+    for (let i = from; i < to; i++) sample.answer(attemptId, i, "ad", "", [], 0, 0);
     sample.savePosition(attemptId, to, seconds);
   },
 

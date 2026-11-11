@@ -6,9 +6,9 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useLocation, useNavigate, useParams } from "react-router";
 import { PlaybackSettings } from "../components/DictationSettings";
 import { Icon } from "../components/Icon";
-import { MarkedText } from "../components/Marks";
+import { FLAGS, FlaggedText, MarkedText, selectedWords, setFlag } from "../components/Marks";
 import { Kbd, Page, useFocusMode } from "../components/Shell";
-import { backend, type Answer, type Item, type Sentence, type Session, type Show, type Summary, type TranscriptStatus } from "../lib/backend";
+import { backend, type Answer, type Flag, type Item, type Sentence, type Session, type Show, type Summary, type TranscriptStatus } from "../lib/backend";
 import { fraction, useDownloads, useLibraryChanged } from "../lib/downloads";
 import { clampSpeed, pauseMs, percent, slowerSpeed, SPEED_STEP, speedLabel, useDictationSettings } from "../lib/dictation";
 import { bytes, clock, plural } from "../lib/format";
@@ -21,7 +21,8 @@ type Phase = "dictating" | "ad" | "stop" | "results";
 const KEYS: [string, string][] = [
   ["Tab", "Play"],
   ["Shift Enter", "Finish"],
-  ["Shift Tab", "Know it"],
+  ["Shift Tab", "Show original"],
+  ["Mod P", "Play anyway"],
   ["Mod R", "Slower"],
   ["Esc", "Stop"],
 ];
@@ -196,7 +197,15 @@ function Dictation({
   const [pos, setPos] = useState(session.attempt.position);
   const drafts = useRef(new Map<number, string>());
   const [text, setText] = useState(() => answers.get(session.attempt.position)?.typed ?? "");
-  const [plays, setPlays] = useState(0);
+  // Each sentence keeps its plays, whether the original was shown, and the learner's marks, when moving
+  // back and forth; answered sentences start from their saved answer.
+  const [playsBy, setPlaysBy] = useState(() => new Map(session.answers.map((a) => [a.idx, a.plays])));
+  const [shownBy, setShownBy] = useState(() => new Set(session.answers.filter((a) => a.kind === "shown").map((a) => a.idx)));
+  const [flagsBy, setFlagsBy] = useState(() => new Map(session.answers.map((a) => [a.idx, a.flags])));
+  const plays = playsBy.get(pos) ?? 0;
+  const shown = shownBy.has(pos);
+  const flags = flagsBy.get(pos) ?? [];
+  const originalRef = useRef<HTMLDivElement>(null);
   const [phase, setPhase] = useState<Phase>("dictating");
   const [adFrom, setAdFrom] = useState(0);
   const [note, setNote] = useState("");
@@ -254,20 +263,18 @@ function Dictation({
     playingFor.current = null;
   };
 
-  /** Plays the sentence once; `count` uses up one of its plays. */
+  /** Plays the sentence once, as one of its plays. Past the maximum only when `anyway` (Mod P). */
   const playSentence = useCallback(
-    (sp = speed, count = true) => {
+    (sp = speed, anyway = false) => {
       if (!sentence) return false;
-      if (count && plays >= settings.maxPlays) {
-        setNote(`No plays left for this sentence. Finish it with Shift Enter, or raise Max plays.`);
+      if (plays >= settings.maxPlays && !anyway) {
+        setNote("No plays left for this sentence.");
         return false;
       }
       clearAuto();
       player.play(sentence.startMs, sentence.endMs, sp);
-      if (count) {
-        setPlays((p) => p + 1);
-        playingFor.current = pos;
-      }
+      setPlaysBy((m) => new Map(m).set(pos, plays + 1));
+      playingFor.current = pos;
       setNote("");
       return true;
     },
@@ -309,7 +316,6 @@ function Dictation({
       player.stop();
       setPos(i);
       setText(drafts.current.get(i) ?? answers.get(i)?.typed ?? "");
-      setPlays(0);
       setNote("");
       if (save) {
         const s = secondsSince();
@@ -321,13 +327,32 @@ function Dictation({
     [answers, attemptId, player, secondsSince],
   );
 
-  const submit = async (kind: "typed" | "known") => {
+  /** Shift Tab: the original appears, and goes into the box when nothing is typed yet. */
+  const reveal = () => {
+    if (!sentence) return;
+    setShownBy((s) => new Set(s).add(pos));
+    if (!text.trim()) setText(sentence.text);
+    setNote("");
+    focusBox();
+  };
+
+  /** Marks the words selected in the original (1–5), or clears them (0 or Backspace). */
+  const markSelection = (flag: Flag | null) => {
+    const range = selectedWords(originalRef.current);
+    if (!range) return false;
+    setFlagsBy((m) => new Map(m).set(pos, setFlag(flags, range[0], range[1], flag)));
+    window.getSelection()?.removeAllRanges();
+    focusBox();
+    return true;
+  };
+
+  const submit = async () => {
     if (!sentence || busy) return;
     setBusy(true);
     try {
       const s = secondsSince();
       addSeconds(s);
-      const a = await backend.answer(attemptId, pos, kind, kind === "typed" ? text : "", plays, s);
+      const a = await backend.answer(attemptId, pos, shown ? "shown" : "typed", text, shown ? flags : [], plays, s);
       setAnswers((m) => new Map(m).set(pos, a));
       setFeedback(settings.showOriginal === "each" ? a : null);
       goTo(pos + 1, false);
@@ -339,12 +364,18 @@ function Dictation({
     }
   };
 
-  const move = (d: number) => {
-    const i = Math.max(0, Math.min(pos + d, sentences.length));
+  const jump = (i: number) => {
     if (i !== pos) {
       setFeedback(null);
       goTo(i, true);
     }
+  };
+  const move = (d: number) => jump(Math.max(0, Math.min(pos + d, sentences.length)));
+  /** Mod ↓: back to the first sentence not done yet. */
+  const firstNotDone = () => {
+    let i = 0;
+    while (i < sentences.length && answers.has(i)) i++;
+    return i;
   };
 
   // ---------- ads ----------
@@ -363,7 +394,7 @@ function Dictation({
         setAnswers((m) => {
           const n = new Map(m);
           for (let i = adFrom; i < to; i++)
-            n.set(i, { idx: i, kind: "ad", original: sentences[i].text, typed: "", plays: 0, credit: 0, total: 0, spelling: 0, comparison: null });
+            n.set(i, { idx: i, kind: "ad", original: sentences[i].text, typed: "", plays: 0, credit: 0, total: 0, spelling: 0, comparison: null, flags: [] });
           return n;
         });
         setFeedback(null);
@@ -435,8 +466,12 @@ function Dictation({
       const k = e.key.toLowerCase();
       const is = (key: string, ...codes: string[]) => k === key || codes.includes(e.code);
       if (is("r", "KeyR")) slow();
-      else if (is("arrowleft")) move(-1);
+      else if (is("p", "KeyP")) {
+        if (phase === "dictating" && playSentence(speed, true) && plays + 1 > settings.maxPlays)
+          setNote(`Played ${plays + 1} times · ${plays + 1 - settings.maxPlays} over your limit of ${settings.maxPlays}.`);
+      } else if (is("arrowleft")) move(-1);
       else if (is("arrowright")) move(1);
+      else if (is("arrowdown")) jump(firstNotDone());
       else if (is("k", "KeyK")) toggleAd();
       else if (is("-", "Minus", "NumpadSubtract")) setSpeed(speed - SPEED_STEP);
       else if (is("=", "Equal", "NumpadAdd") || k === "+") setSpeed(speed + SPEED_STEP);
@@ -451,16 +486,29 @@ function Dictation({
       else openStop();
       return;
     }
-    if (e.target !== box.current || phase !== "dictating") return;
+    if (phase !== "dictating") return;
+    // Marking: a selection in the original, then a number.
+    if (shown && !modKey(e) && !e.altKey && originalRef.current && selectedWords(originalRef.current)) {
+      const n = "12345".indexOf(e.key);
+      if (n >= 0 || e.key === "0" || e.key === "Backspace" || e.key === "Delete") {
+        stop();
+        markSelection(n >= 0 ? FLAGS[n].flag : null);
+        return;
+      }
+    }
+    // The dictation keys work from the box, or with nothing else focused (after selecting in the original).
+    const t = e.target as HTMLElement | null;
+    if (t !== box.current && t?.closest?.("input, textarea, select, button, a, [contenteditable]")) return;
     if (e.key === "Tab" && !e.shiftKey) {
       stop();
       playSentence();
+      focusBox();
     } else if (e.key === "Tab" && e.shiftKey) {
       stop();
-      submit("known");
+      reveal();
     } else if (e.key === "Enter" && e.shiftKey) {
       stop();
-      submit("typed");
+      submit();
     }
   };
   useEffect(() => {
@@ -472,27 +520,28 @@ function Dictation({
 
   // ---------- view ----------
 
-  const answeredBefore = useMemo(
-    () =>
-      [...answers.values()]
-        .filter((a) => a.idx < pos && a.idx !== feedback?.idx)
-        .sort((a, b) => a.idx - b.idx)
-        .slice(feedback ? -2 : -3),
-    [answers, pos, feedback],
-  );
+  // The sentences just before this one, done or not, so it's clear where in the episode this is.
+  const before = useMemo(() => {
+    const list: number[] = [];
+    for (let i = pos - 1; i >= 0 && list.length < (feedback ? 2 : 3); i--) if (i !== feedback?.idx) list.unshift(i);
+    return list;
+  }, [pos, feedback]);
   const doneCount = [...answers.values()].filter((a) => a.kind !== "ad").length;
+  const adCount = answers.size - doneCount;
+  const toDo = total !== null ? total - adCount : null;
   const left = total !== null ? Math.max(0, total - pos - 1) : null;
   const playsLeft = settings.maxPlays - plays;
+  const current = answers.get(pos);
   const inSentence = player.playing && sentence && phase === "dictating" ? (player.positionMs - sentence.startMs) / Math.max(1, sentence.endMs - sentence.startMs) : 0;
   const elapsed = secondsBase + Math.min(180, Math.round((Date.now() - lastSave.current) / 1000));
 
   const actions = (
     <>
-      <span className="mono" style={{ fontSize: 12, color: "var(--ink-muted)" }}>
-        {Math.min(pos + 1, sentences.length)} / {total ?? `${sentences.length}+`}
+      <span className="mono" style={{ fontSize: 12, color: "var(--ink-muted)", whiteSpace: "nowrap" }} title="Sentences done">
+        {doneCount} / {toDo ?? `${sentences.length - adCount}+`} done
       </span>
-      <span className="track" role="progressbar" aria-label="Progress" style={{ width: 120 }}>
-        <span className="fill" style={{ display: "block", width: `${total ? Math.round((pos / total) * 100) : 0}%` }} />
+      <span className="track" role="progressbar" aria-label="Sentences done" aria-valuenow={doneCount} aria-valuemax={toDo ?? undefined} style={{ width: 120 }}>
+        <span className="fill" style={{ display: "block", width: `${toDo ? Math.round((doneCount / toDo) * 100) : 0}%` }} />
       </span>
       <button type="button" className="btn btn-ghost btn-sm" aria-label="Focus mode" aria-pressed={focus} onClick={() => setFocus(!focus)}>
         <Icon name="focus" size={14} />
@@ -509,7 +558,7 @@ function Dictation({
   if (phase === "results" && summary) {
     return (
       <Page crumbs={crumbs} actions={actions}>
-        <Results summary={summary} answers={answers} onResume={summary.attempt.finishedAt ? null : resume} onAgain={practiseAgain} onBack={() => navigate(`/library/${item.id}`)} />
+        <Results summary={summary} answers={answers} maxPlays={settings.maxPlays} onResume={summary.attempt.finishedAt ? null : resume} onAgain={practiseAgain} onBack={() => navigate(`/library/${item.id}`)} />
       </Page>
     );
   }
@@ -518,25 +567,29 @@ function Dictation({
     <Page crumbs={crumbs} keys={KEYS} actions={actions}>
       <div style={{ display: "flex", minHeight: "100%" }}>
         <section aria-label="Sentences" className="page" style={{ flexGrow: 1, minWidth: 0, gap: 4, padding: "24px 40px 32px 28px" }}>
-          {answeredBefore.length > 0 && (
+          {before.length > 0 && (
             <div className="eyebrow" style={{ paddingLeft: 42, marginBottom: 6 }}>
               Your text so far{settings.showOriginal === "end" ? " · the original shows when you stop or finish" : ""}
             </div>
           )}
-          {answeredBefore.map((a) => (
-            <div key={a.idx} className="done-row">
-              <span className="mono num">{a.idx + 1}</span>
-              <span className="ell" style={{ flexGrow: 1 }}>
-                {a.kind === "known" ? "Known · filled in" : a.kind === "ad" ? "Ad · left out" : a.typed || "(nothing typed)"}
-              </span>
-            </div>
-          ))}
+          {before.map((i) => {
+            const a = answers.get(i);
+            return (
+              <div key={i} className="done-row" style={a ? undefined : { color: "var(--ink-tertiary)" }}>
+                <span className="mono num">{i + 1}</span>
+                <span className="ell" style={{ flexGrow: 1 }}>
+                  {!a ? "Not done yet" : a.kind === "ad" ? "Ad · left out" : a.typed || "(nothing typed)"}
+                </span>
+                {a?.kind === "shown" && <span className="tag">shown</span>}
+              </div>
+            );
+          })}
 
           {feedback?.comparison && (
             <div className="done-row" style={{ alignItems: "flex-start" }}>
               <span className="mono num">{feedback.idx + 1}</span>
               <div className="panel" style={{ flexGrow: 1, padding: "10px 14px", display: "flex", flexDirection: "column", gap: 6, color: "var(--ink)" }}>
-                <MarkedText words={feedback.comparison.original} />
+                <MarkedText words={feedback.comparison.original} flags={feedback.flags} />
                 {feedback.comparison.typed.length > 0 && (
                   <span style={{ fontSize: 13, color: "var(--ink-subtle)" }}>
                     <MarkedText words={feedback.comparison.typed} />
@@ -552,10 +605,18 @@ function Dictation({
 
           {sentence ? (
             <div style={{ display: "flex", gap: 14, marginTop: 18 }}>
-              <span className="mono" style={{ width: 28, flexShrink: 0, textAlign: "right", fontSize: 12, color: "var(--ink)", paddingTop: 10 }}>
-                {pos + 1}
-              </span>
+              <span className="mono current-num">{pos + 1}</span>
               <div style={{ flexGrow: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 14 }}>
+                <div className="eyebrow" style={{ display: "flex", gap: 8, alignItems: "baseline", marginBottom: -4 }}>
+                  <span style={{ color: "var(--ink)" }}>
+                    Sentence {pos + 1}
+                    {total ? ` of ${total}` : ""}
+                  </span>
+                  {current && current.kind !== "ad" && (
+                    <span>· Done, {percent(current.total ? current.credit / current.total : 1)} · finishing it again replaces the answer</span>
+                  )}
+                  {current?.kind === "ad" && <span>· Left out as an ad</span>}
+                </div>
                 {phase === "ad" ? (
                   <div className="panel" style={{ padding: "14px 16px", display: "flex", alignItems: "center", gap: 14 }} role="status">
                     <span className="dot dot-ok" aria-hidden="true" />
@@ -587,8 +648,9 @@ function Dictation({
                           {Array.from({ length: settings.maxPlays }, (_, i) => (
                             <span key={i} className={i < plays ? "dot dot-ink" : "dot dot-ring"} />
                           ))}
-                          <span className="mono" style={{ fontSize: 12, color: "var(--ink)", marginLeft: 4 }}>
+                          <span className="mono" style={{ fontSize: 12, color: plays > settings.maxPlays ? "var(--semantic-error)" : "var(--ink)", marginLeft: 4 }}>
                             {plays} / {settings.maxPlays}
+                            {plays > settings.maxPlays && ` · ${plays - settings.maxPlays} over`}
                           </span>
                         </span>
                         <span className="mono" style={{ fontSize: 11 }}>
@@ -604,19 +666,47 @@ function Dictation({
                           </>
                         ) : playsLeft > 0 ? (
                           <>
-                            Played {plays === 1 ? "once" : `${plays} times`}. Type what you caught; <Kbd keys="Tab" /> plays it again · {plural(playsLeft, "play")} left.
+                            Played {plays === 1 ? "once" : `${plays} times`}. {shown ? "" : "Type what you caught; "}
+                            <Kbd keys="Tab" /> plays it again · {plural(playsLeft, "play")} left.
                           </>
                         ) : (
                           <>
-                            No plays left. Finish with <Kbd keys="Shift Enter" />, or <Kbd keys="Shift Tab" /> if you know it.
+                            No plays left. <Kbd keys="Mod P" /> plays it anyway · <Kbd keys="Shift Enter" /> finishes
+                            {shown ? "" : <>, <Kbd keys="Shift Tab" /> shows the original</>}.
                           </>
                         ))}
                     </div>
                   </>
                 )}
 
+                {shown && phase === "dictating" && (
+                  <div className="panel" style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
+                    <div className="eyebrow">The original · select words, then press a number to mark them</div>
+                    <div ref={originalRef} className="selectable original" onMouseDown={() => setNote("")}>
+                      <FlaggedText text={sentence.text} flags={flags} />
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", fontSize: 12 }}>
+                      {FLAGS.map((f, i) => (
+                        <button
+                          key={f.flag}
+                          type="button"
+                          className="btn btn-sm btn-ghost"
+                          title={f.title}
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => markSelection(f.flag) || setNote("Select words in the original first.")}
+                        >
+                          <Kbd keys={String(i + 1)} /> <span className={`f f-${f.flag} f-from f-to`}>{f.label}</span>
+                        </button>
+                      ))}
+                      <button type="button" className="btn btn-sm btn-ghost" onMouseDown={(e) => e.preventDefault()} onClick={() => markSelection(null) || setNote("Select words in the original first.")}>
+                        <Kbd keys="0" /> Clear
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <label htmlFor="dictation" className="eyebrow" style={{ marginTop: 4 }}>
-                  Type what you hear
+                  {shown ? "Your text · compared with the original when you finish; edit it if you like" : "Type what you hear"}
                 </label>
                 <textarea
                   id="dictation"
@@ -633,15 +723,17 @@ function Dictation({
                 />
                 <div style={{ fontSize: 12 }}>
                   <Kbd keys="Enter" /> starts a new line · <Kbd keys="_" /> marks a part you didn't catch · <Kbd keys="Mod ←" /> <Kbd keys="Mod →" /> previous
-                  or next sentence
+                  or next sentence · <Kbd keys="Mod ↓" /> first one not done
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <button type="button" className="btn btn-primary" onClick={() => submit("typed")} disabled={busy || phase !== "dictating"}>
+                  <button type="button" className="btn btn-primary" onClick={() => submit()} disabled={busy || phase !== "dictating"}>
                     Finish sentence <Kbd keys="Shift Enter" />
                   </button>
-                  <button type="button" className="btn" onClick={() => submit("known")} disabled={busy || phase !== "dictating"}>
-                    I know this one <Kbd keys="Shift Tab" />
-                  </button>
+                  {!shown && (
+                    <button type="button" className="btn" onClick={reveal} disabled={busy || phase !== "dictating"}>
+                      Show the original <Kbd keys="Shift Tab" />
+                    </button>
+                  )}
                   <span style={{ flexGrow: 1 }} />
                   <button type="button" className="btn btn-ghost" onClick={toggleAd}>
                     {phase === "ad" ? "The episode is back" : "Skip section"} <Kbd keys="Mod K" />
@@ -781,19 +873,21 @@ function StopDialog({
 function Results({
   summary: s,
   answers,
+  maxPlays,
   onResume,
   onAgain,
   onBack,
 }: {
   summary: Summary;
   answers: Map<number, Answer>;
+  maxPlays: number;
   onResume: (() => void) | null;
   onAgain: () => void;
   onBack: () => void;
 }) {
   const [onlyMistakes, setOnlyMistakes] = useState(false);
   const list = [...answers.values()]
-    .filter((a) => a.kind !== "ad" && (!onlyMistakes || (a.kind === "typed" && a.credit < a.total)))
+    .filter((a) => a.kind !== "ad" && (!onlyMistakes || a.credit < a.total))
     .sort((a, b) => a.idx - b.idx);
   const finished = s.attempt.finishedAt !== null;
   return (
@@ -819,7 +913,7 @@ function Results({
       <div className="cells" style={{ gridTemplateColumns: "repeat(5, minmax(0, 1fr))" }}>
         <Cell big={percent(s.accuracy)} small="Accuracy" />
         <Cell big={`${s.done}${s.transcriptDone ? ` / ${s.sentences - s.ads}` : ""}`} small="Sentences done" />
-        <Cell big={String(s.known)} small="Known" />
+        <Cell big={String(s.shown)} small="Original shown" />
         <Cell big={String(s.withMistakes)} small="With mistakes" />
         <Cell big={clock(s.attempt.seconds)} small="Time" />
       </div>
@@ -827,7 +921,14 @@ function Results({
         {s.spelling > 0 && `${plural(s.spelling, "spelling mistake")}, counted as half a word each. `}
         {s.ads > 0 && `${plural(s.ads, "sentence")} skipped as ads, left out of the score. `}
         <span className="w w-missing">Boxed</span> words were missed, <span className="w w-wrong">red</span> ones were wrong, and{" "}
-        <span className="w w-spelling">underlined</span> ones misspelled.
+        <span className="w w-spelling">underlined</span> ones misspelled. Your own marks:{" "}
+        {FLAGS.map((f, i) => (
+          <span key={f.flag}>
+            {i > 0 && ", "}
+            <span className={`f f-${f.flag} f-from f-to`}>{f.label.toLowerCase()}</span>
+          </span>
+        ))}
+        .
       </p>
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         <h2 className="eyebrow" style={{ flexGrow: 1 }}>
@@ -843,19 +944,19 @@ function Results({
           <li key={a.idx} className="result-row">
             <span className="mono num">{a.idx + 1}</span>
             <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0, flexGrow: 1 }}>
-              <span style={{ color: "var(--ink)" }}>{a.comparison ? <MarkedText words={a.comparison.original} /> : a.original}</span>
-              {a.kind === "known" ? (
-                <span style={{ fontSize: 13 }}>Known · filled in</span>
-              ) : (
-                a.comparison && (
-                  <span style={{ fontSize: 13 }}>
-                    {a.comparison.typed.length ? <MarkedText words={a.comparison.typed} /> : "(nothing typed)"}
-                  </span>
-                )
+              <span style={{ color: "var(--ink)" }}>{a.comparison ? <MarkedText words={a.comparison.original} flags={a.flags} /> : a.original}</span>
+              {a.comparison && (a.kind === "typed" || a.typed !== a.original) && (
+                <span style={{ fontSize: 13 }}>{a.comparison.typed.length ? <MarkedText words={a.comparison.typed} /> : "(nothing typed)"}</span>
               )}
             </div>
-            <span className="mono" style={{ fontSize: 12, whiteSpace: "nowrap" }}>
-              {percent(a.total ? a.credit / a.total : 1)}
+            <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
+              <span className="mono" style={{ fontSize: 12, whiteSpace: "nowrap", color: "var(--ink)" }}>
+                {percent(a.total ? a.credit / a.total : 1)}
+              </span>
+              <span style={{ fontSize: 11, whiteSpace: "nowrap" }}>
+                {a.kind === "shown" && <span className="tag">shown</span>} {plural(a.plays, "play")}
+                {a.plays > maxPlays && ` · ${a.plays - maxPlays} over`}
+              </span>
             </span>
           </li>
         ))}

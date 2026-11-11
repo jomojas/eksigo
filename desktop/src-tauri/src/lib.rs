@@ -348,7 +348,7 @@ fn dictation_start(app: AppHandle, db: State<Db>, item_id: i64, again: bool) -> 
     Ok(s)
 }
 
-/// Saves the answer to sentence `idx`: "typed" (compared with the original), "known" or "ad".
+/// Saves the answer to sentence `idx`: "typed" or "shown" (the box compared with the original, the marks counted), or "ad".
 #[tauri::command]
 fn dictation_answer(
     app: AppHandle,
@@ -357,11 +357,12 @@ fn dictation_answer(
     idx: i64,
     kind: String,
     typed: String,
+    flags: Vec<compare::Flagged>,
     plays: i64,
     seconds: i64,
 ) -> CmdResult<dictation::Answer> {
     let kind = dictation::Kind::parse(&kind).map_err(err)?;
-    let a = dictation::answer(&db.conn(), attempt_id, idx, kind, &typed, plays, seconds).map_err(err)?;
+    let a = dictation::answer(&db.conn(), attempt_id, idx, kind, &typed, &flags, plays, seconds).map_err(err)?;
     let _ = app.emit("practice", ());
     Ok(a)
 }

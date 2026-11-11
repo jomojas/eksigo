@@ -112,7 +112,12 @@ export type Attempt = {
   seconds: number;
 };
 
-export type AnswerKind = "typed" | "known" | "ad";
+/** What the learner marked in the original: written words `from..=to`. */
+export type Flag = "unknown" | "missed" | "unexpected" | "spelling" | "keep";
+export type Flagged = { from: number; to: number; flag: Flag };
+
+/** Typed, or the original shown (and maybe edited and marked); both are scored on the box. Or an ad. */
+export type AnswerKind = "typed" | "shown" | "ad";
 export type Answer = {
   idx: number;
   kind: AnswerKind;
@@ -123,6 +128,7 @@ export type Answer = {
   total: number;
   spelling: number;
   comparison: Comparison | null;
+  flags: Flagged[];
 };
 
 export type Session = { attempt: Attempt; answers: Answer[] };
@@ -130,7 +136,8 @@ export type Session = { attempt: Attempt; answers: Answer[] };
 export type Summary = {
   attempt: Attempt;
   done: number;
-  known: number;
+  /** Sentences where the original was shown. */
+  shown: number;
   withMistakes: number;
   ads: number;
   credit: number;
@@ -145,7 +152,7 @@ export type Summary = {
 export type Practice = {
   attemptId: number;
   position: number;
-  /** Sentences answered (typed or known). */
+  /** Sentences answered (typed or shown). */
   done: number;
   sentences: number;
   transcriptDone: boolean;
@@ -239,8 +246,8 @@ export const backend = {
 
   // Dictation
   startDictation: (itemId: number, again = false) => call<Session>("dictation_start", { itemId, again }, () => sample.startDictation(itemId, again)),
-  answer: (attemptId: number, idx: number, kind: AnswerKind, typed: string, plays: number, seconds: number) =>
-    call<Answer>("dictation_answer", { attemptId, idx, kind, typed, plays, seconds }, () => sample.answer(attemptId, idx, kind, typed, plays, seconds)),
+  answer: (attemptId: number, idx: number, kind: AnswerKind, typed: string, flags: Flagged[], plays: number, seconds: number) =>
+    call<Answer>("dictation_answer", { attemptId, idx, kind, typed, flags, plays, seconds }, () => sample.answer(attemptId, idx, kind, typed, flags, plays, seconds)),
   markAds: (attemptId: number, from: number, to: number, seconds: number) =>
     call<void>("dictation_mark_ads", { attemptId, from, to, seconds }, () => sample.markAds(attemptId, from, to, seconds)),
   savePosition: (attemptId: number, position: number, seconds: number) =>
