@@ -79,7 +79,7 @@ pub struct Answer {
     pub total: i64,
     pub spelling: i64,
     pub comparison: Option<Comparison>,
-    /// What the learner marked in the original.
+    /// What the learner marked, on the original's words (the marks as typed stay in `typed`).
     pub flags: Vec<Flagged>,
 }
 
@@ -146,14 +146,14 @@ fn sentence_text(conn: &Connection, item_id: i64, idx: i64) -> Result<String> {
 }
 
 /// Saves the answer to one sentence, compared with the original, and moves the attempt on past it.
-/// Typed or shown, it is scored the same way: the text in the box against the original, with the
-/// learner's marks counted as mistakes. `seconds` is the time spent since the last save.
-#[allow(clippy::too_many_arguments)]
-pub fn answer(conn: &Connection, attempt_id: i64, idx: i64, kind: Kind, typed: &str, flags: &[Flagged], plays: i64, seconds: i64) -> Result<Answer> {
+/// Typed or shown, it is scored the same way: the text in the box (with the marks typed in it) against
+/// the original. `seconds` is the time spent since the last save.
+pub fn answer(conn: &Connection, attempt_id: i64, idx: i64, kind: Kind, typed: &str, plays: i64, seconds: i64) -> Result<Answer> {
     let a = attempt(conn, attempt_id)?;
     let original = sentence_text(conn, a.item_id, idx)?;
-    let (typed, flags) = if kind == Kind::Ad { (String::new(), Vec::new()) } else { (typed.trim().to_string(), flags.to_vec()) };
-    let comparison = (kind != Kind::Ad).then(|| compare::compare_flagged(&original, &typed, &flags));
+    let typed = if kind == Kind::Ad { String::new() } else { typed.trim().to_string() };
+    let comparison = (kind != Kind::Ad).then(|| compare::compare(&original, &typed));
+    let flags = comparison.as_ref().map(|c| c.flags.clone()).unwrap_or_default();
     let (credit, total, spelling) = comparison.as_ref().map(|c| (c.credit, c.total as i64, c.spelling as i64)).unwrap_or((0.0, 0, 0));
     let t = now();
     conn.execute(
@@ -184,7 +184,7 @@ pub fn answer(conn: &Connection, attempt_id: i64, idx: i64, kind: Kind, typed: &
 /// Marks sentences `from..to` as an ad: left out of the score. The attempt carries on at `to`.
 pub fn mark_ads(conn: &Connection, attempt_id: i64, from: i64, to: i64, seconds: i64) -> Result<()> {
     for idx in from..to {
-        answer(conn, attempt_id, idx, Kind::Ad, "", &[], 0, 0)?;
+        answer(conn, attempt_id, idx, Kind::Ad, "", 0, 0)?;
     }
     save_position(conn, attempt_id, to, seconds)
 }
@@ -377,7 +377,7 @@ mod tests {
         let db = setup();
         let c = db.conn();
         let a = start(&c, 1, false).unwrap();
-        let ans = answer(&c, a.id, 0, Kind::Typed, "hello their", &[], 2, 30).unwrap();
+        let ans = answer(&c, a.id, 0, Kind::Typed, "hello their", 2, 30).unwrap();
         assert_eq!((ans.credit, ans.total), (1.0, 2));
         // Opening again carries on the same attempt, at the next sentence.
         let again = start(&c, 1, false).unwrap();
@@ -385,7 +385,7 @@ mod tests {
         assert_eq!(in_progress(&c).unwrap().len(), 1);
 
         mark_ads(&c, a.id, 1, 3, 5).unwrap();
-        answer(&c, a.id, 3, Kind::Shown, "Back to the show.", &[], 1, 1000).unwrap();
+        answer(&c, a.id, 3, Kind::Shown, "Back to the show.", 1, 1000).unwrap();
         let s = summary(&c, a.id).unwrap();
         assert_eq!((s.done, s.shown, s.with_mistakes, s.ads), (2, 1, 1, 2));
         assert_eq!((s.credit, s.total), (5.0, 6), "ads are left out of the score");
@@ -406,8 +406,8 @@ mod tests {
         let db = setup();
         let c = db.conn();
         let a = start(&c, 1, false).unwrap();
-        answer(&c, a.id, 0, Kind::Typed, "hello", &[], 1, 0).unwrap();
-        let second = answer(&c, a.id, 0, Kind::Typed, "Hello there", &[], 3, 0).unwrap();
+        answer(&c, a.id, 0, Kind::Typed, "hello", 1, 0).unwrap();
+        let second = answer(&c, a.id, 0, Kind::Typed, "Hello there", 3, 0).unwrap();
         assert_eq!(second.credit, 2.0);
         let all = answers(&c, a.id).unwrap();
         assert_eq!(all.len(), 1);
@@ -416,15 +416,14 @@ mod tests {
 
     #[test]
     fn a_shown_sentence_scores_its_box_and_marks() {
-        use crate::compare::{Flag, Flagged};
         let db = setup();
         let c = db.conn();
         let a = start(&c, 1, false).unwrap();
-        let ans = answer(&c, a.id, 1, Kind::Shown, "This is an ad for socks.", &[Flagged { from: 5, to: 5, flag: Flag::Unknown }], 4, 0).unwrap();
+        let ans = answer(&c, a.id, 1, Kind::Shown, "This is an ad for <socks>.", 4, 0).unwrap();
         assert_eq!((ans.credit, ans.total), (5.0, 6));
         assert_eq!(answers(&c, a.id).unwrap()[0].flags.len(), 1, "the marks are kept");
         // Shown, then edited down: scored on what's left in the box.
-        let ans = answer(&c, a.id, 2, Kind::Shown, "Buy them", &[], 1, 0).unwrap();
+        let ans = answer(&c, a.id, 2, Kind::Shown, "Buy them", 1, 0).unwrap();
         assert_eq!((ans.credit, ans.total), (2.0, 3));
     }
 
@@ -433,7 +432,7 @@ mod tests {
         let db = setup();
         let c = db.conn();
         let a = start(&c, 1, false).unwrap();
-        assert!(answer(&c, a.id, 9, Kind::Typed, "x", &[], 1, 0).is_err());
+        assert!(answer(&c, a.id, 9, Kind::Typed, "x", 1, 0).is_err());
     }
 
     #[test]
@@ -442,7 +441,7 @@ mod tests {
         let c = db.conn();
         let a = start(&c, 1, false).unwrap();
         assert_eq!(start(&c, 1, true).unwrap().id, a.id, "an attempt with nothing done is reused");
-        answer(&c, a.id, 0, Kind::Shown, "Hello there.", &[], 0, 0).unwrap();
+        answer(&c, a.id, 0, Kind::Shown, "Hello there.", 0, 0).unwrap();
         let b = start(&c, 1, true).unwrap();
         assert_ne!(a.id, b.id);
         assert!(attempt(&c, a.id).unwrap().finished_at.is_some());

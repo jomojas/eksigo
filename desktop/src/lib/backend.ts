@@ -99,7 +99,7 @@ export type Item = {
 
 export type Mark = "correct" | "spelling" | "wrong" | "missing" | "extra" | "gap" | "ignored";
 export type Marked = { text: string; mark: Mark };
-export type Comparison = { original: Marked[]; typed: Marked[]; credit: number; total: number; spelling: number };
+export type Comparison = { original: Marked[]; typed: Marked[]; credit: number; total: number; spelling: number; flags: Flagged[] };
 
 export type Attempt = {
   id: number;
@@ -112,7 +112,7 @@ export type Attempt = {
   seconds: number;
 };
 
-/** What the learner marked in the original: written words `from..=to`. */
+/** What the learner marked (typed in the box, lib/markup.ts), on the original's written words `from..=to`. */
 export type Flag = "unknown" | "missed" | "unexpected" | "spelling" | "keep";
 export type Flagged = { from: number; to: number; flag: Flag };
 
@@ -246,8 +246,8 @@ export const backend = {
 
   // Dictation
   startDictation: (itemId: number, again = false) => call<Session>("dictation_start", { itemId, again }, () => sample.startDictation(itemId, again)),
-  answer: (attemptId: number, idx: number, kind: AnswerKind, typed: string, flags: Flagged[], plays: number, seconds: number) =>
-    call<Answer>("dictation_answer", { attemptId, idx, kind, typed, flags, plays, seconds }, () => sample.answer(attemptId, idx, kind, typed, flags, plays, seconds)),
+  answer: (attemptId: number, idx: number, kind: AnswerKind, typed: string, plays: number, seconds: number) =>
+    call<Answer>("dictation_answer", { attemptId, idx, kind, typed, plays, seconds }, () => sample.answer(attemptId, idx, kind, typed, plays, seconds)),
   markAds: (attemptId: number, from: number, to: number, seconds: number) =>
     call<void>("dictation_mark_ads", { attemptId, from, to, seconds }, () => sample.markAds(attemptId, from, to, seconds)),
   savePosition: (attemptId: number, position: number, seconds: number) =>

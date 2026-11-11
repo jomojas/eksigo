@@ -6,14 +6,15 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useLocation, useNavigate, useParams } from "react-router";
 import { PlaybackSettings } from "../components/DictationSettings";
 import { Icon } from "../components/Icon";
-import { FLAGS, FlaggedText, MarkedText, selectedWords, setFlag } from "../components/Marks";
+import { FLAGS, FlaggedWords, MarkedText } from "../components/Marks";
 import { Kbd, Page, useFocusMode } from "../components/Shell";
-import { backend, type Answer, type Flag, type Item, type Sentence, type Session, type Show, type Summary, type TranscriptStatus } from "../lib/backend";
+import { backend, type Answer, type Item, type Sentence, type Session, type Show, type Summary, type TranscriptStatus } from "../lib/backend";
 import { fraction, useDownloads, useLibraryChanged } from "../lib/downloads";
 import { clampSpeed, pauseMs, percent, slowerSpeed, SPEED_STEP, speedLabel, useDictationSettings } from "../lib/dictation";
 import { bytes, clock, plural } from "../lib/format";
 import { modKey } from "../lib/platform";
 import { sentenceAt, usePlayer } from "../lib/playback";
+import { hasMarkup, parseMarkup } from "../lib/markup";
 import { isBusy, useActivity, useTranscript } from "../lib/transcripts";
 
 type Phase = "dictating" | "ad" | "stop" | "results";
@@ -197,15 +198,14 @@ function Dictation({
   const [pos, setPos] = useState(session.attempt.position);
   const drafts = useRef(new Map<number, string>());
   const [text, setText] = useState(() => answers.get(session.attempt.position)?.typed ?? "");
-  // Each sentence keeps its plays, whether the original was shown, and the learner's marks, when moving
-  // back and forth; answered sentences start from their saved answer.
+  // Each sentence keeps its plays and whether the original was shown when moving back and forth;
+  // answered sentences start from their saved answer.
   const [playsBy, setPlaysBy] = useState(() => new Map(session.answers.map((a) => [a.idx, a.plays])));
   const [shownBy, setShownBy] = useState(() => new Set(session.answers.filter((a) => a.kind === "shown").map((a) => a.idx)));
-  const [flagsBy, setFlagsBy] = useState(() => new Map(session.answers.map((a) => [a.idx, a.flags])));
   const plays = playsBy.get(pos) ?? 0;
   const shown = shownBy.has(pos);
-  const flags = flagsBy.get(pos) ?? [];
-  const originalRef = useRef<HTMLDivElement>(null);
+  // The marks typed in the box, read as they will be when the sentence is finished.
+  const marked = useMemo(() => (hasMarkup(text) ? parseMarkup(text) : null), [text]);
   const [phase, setPhase] = useState<Phase>("dictating");
   const [adFrom, setAdFrom] = useState(0);
   const [note, setNote] = useState("");
@@ -336,23 +336,13 @@ function Dictation({
     focusBox();
   };
 
-  /** Marks the words selected in the original (1–5), or clears them (0 or Backspace). */
-  const markSelection = (flag: Flag | null) => {
-    const range = selectedWords(originalRef.current);
-    if (!range) return false;
-    setFlagsBy((m) => new Map(m).set(pos, setFlag(flags, range[0], range[1], flag)));
-    window.getSelection()?.removeAllRanges();
-    focusBox();
-    return true;
-  };
-
   const submit = async () => {
     if (!sentence || busy) return;
     setBusy(true);
     try {
       const s = secondsSince();
       addSeconds(s);
-      const a = await backend.answer(attemptId, pos, shown ? "shown" : "typed", text, shown ? flags : [], plays, s);
+      const a = await backend.answer(attemptId, pos, shown ? "shown" : "typed", text, plays, s);
       setAnswers((m) => new Map(m).set(pos, a));
       setFeedback(settings.showOriginal === "each" ? a : null);
       goTo(pos + 1, false);
@@ -487,16 +477,7 @@ function Dictation({
       return;
     }
     if (phase !== "dictating") return;
-    // Marking: a selection in the original, then a number.
-    if (shown && !modKey(e) && !e.altKey && originalRef.current && selectedWords(originalRef.current)) {
-      const n = "12345".indexOf(e.key);
-      if (n >= 0 || e.key === "0" || e.key === "Backspace" || e.key === "Delete") {
-        stop();
-        markSelection(n >= 0 ? FLAGS[n].flag : null);
-        return;
-      }
-    }
-    // The dictation keys work from the box, or with nothing else focused (after selecting in the original).
+    // The dictation keys work from the box, or with nothing else focused.
     const t = e.target as HTMLElement | null;
     if (t !== box.current && t?.closest?.("input, textarea, select, button, a, [contenteditable]")) return;
     if (e.key === "Tab" && !e.shiftKey) {
@@ -680,33 +661,14 @@ function Dictation({
                 )}
 
                 {shown && phase === "dictating" && (
-                  <div className="panel" style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
-                    <div className="eyebrow">The original · select words, then press a number to mark them</div>
-                    <div ref={originalRef} className="selectable original" onMouseDown={() => setNote("")}>
-                      <FlaggedText text={sentence.text} flags={flags} />
-                    </div>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", fontSize: 12 }}>
-                      {FLAGS.map((f, i) => (
-                        <button
-                          key={f.flag}
-                          type="button"
-                          className="btn btn-sm btn-ghost"
-                          title={f.title}
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => markSelection(f.flag) || setNote("Select words in the original first.")}
-                        >
-                          <Kbd keys={String(i + 1)} /> <span className={`f f-${f.flag} f-from f-to`}>{f.label}</span>
-                        </button>
-                      ))}
-                      <button type="button" className="btn btn-sm btn-ghost" onMouseDown={(e) => e.preventDefault()} onClick={() => markSelection(null) || setNote("Select words in the original first.")}>
-                        <Kbd keys="0" /> Clear
-                      </button>
-                    </div>
+                  <div className="panel" style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
+                    <div className="eyebrow">The original</div>
+                    <div className="selectable original">{sentence.text}</div>
                   </div>
                 )}
 
                 <label htmlFor="dictation" className="eyebrow" style={{ marginTop: 4 }}>
-                  {shown ? "Your text · compared with the original when you finish; edit it if you like" : "Type what you hear"}
+                  {shown ? "Your text · mark it, edit it if you like; it's compared with the original when you finish" : "Type what you hear"}
                 </label>
                 <textarea
                   id="dictation"
@@ -721,6 +683,19 @@ function Dictation({
                   autoComplete="off"
                   disabled={phase !== "dictating"}
                 />
+                {marked && marked.flags.length > 0 && (
+                  <div style={{ fontSize: 15, lineHeight: 1.6, color: "var(--ink-muted)", marginTop: -4 }} aria-label="Your marks">
+                    <FlaggedWords words={marked.words} flags={marked.flags} />
+                  </div>
+                )}
+                <div className="markup-help" aria-label="Marks">
+                  Mark words as you type:
+                  {FLAGS.map((f) => (
+                    <span key={f.flag} title={f.title}>
+                      <code>{f.syntax.replace("…", "word")}</code> {f.label}
+                    </span>
+                  ))}
+                </div>
                 <div style={{ fontSize: 12 }}>
                   <Kbd keys="Enter" /> starts a new line · <Kbd keys="_" /> marks a part you didn't catch · <Kbd keys="Mod ←" /> <Kbd keys="Mod →" /> previous
                   or next sentence · <Kbd keys="Mod ↓" /> first one not done
@@ -925,7 +900,7 @@ function Results({
         {FLAGS.map((f, i) => (
           <span key={f.flag}>
             {i > 0 && ", "}
-            <span className={`f f-${f.flag} f-from f-to`}>{f.label.toLowerCase()}</span>
+            <span className={`f f-${f.flag} f-from f-to`}>{f.label}</span>
           </span>
         ))}
         .

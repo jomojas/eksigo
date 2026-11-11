@@ -25,6 +25,7 @@ import type {
   Summary,
   TranscriptStatus,
 } from "./backend";
+import { parseMarkup } from "./markup";
 import learnersJson from "../../src-tauri/data/learners.json";
 
 type Learner = { appleId: string; title: string; author: string; feedUrl: string; artworkUrl: string; blurb: string };
@@ -189,19 +190,21 @@ const notFound = (what: string) => new Error(`That ${what} isn't in the sample d
 const attempts: Attempt[] = [];
 const answers = new Map<number, Map<number, Answer>>();
 
-/** A rough stand-in for compare.rs: exact words only, lined up by longest common subsequence. */
-function roughCompare(original: string, typed: string, flags: Flagged[] = []): Comparison {
+/** A rough stand-in for compare.rs: exact words only, lined up by longest common subsequence; marks typed in the box apply. */
+function roughCompare(original: string, typedRaw: string): Comparison {
+  const { words: t, flags: typedFlags } = parseMarkup(typedRaw);
   const norm = (w: string) => w.toLowerCase().replace(/[^a-z0-9']/g, "");
   const o = original.split(/\s+/).filter(Boolean);
-  const t = typed.split(/\s+/).filter(Boolean);
   const L = Array.from({ length: o.length + 1 }, () => new Array<number>(t.length + 1).fill(0));
   for (let i = o.length - 1; i >= 0; i--)
     for (let j = t.length - 1; j >= 0; j--) L[i][j] = norm(o[i]) === norm(t[j]) ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
   const om: Marked[] = o.map((text) => ({ text, mark: "missing" }));
   const tm: Marked[] = t.map((text) => ({ text, mark: text === "_" ? "gap" : "extra" }));
+  const flagOf: (Flagged["flag"] | undefined)[] = o.map(() => undefined);
   for (let i = 0, j = 0; i < o.length && j < t.length; ) {
     if (norm(o[i]) === norm(t[j])) {
       om[i].mark = tm[j].mark = "correct";
+      flagOf[i] = typedFlags.find((x) => x.from <= j && j <= x.to)?.flag;
       i++;
       j++;
     } else if (L[i + 1][j] >= L[i][j + 1]) i++;
@@ -209,13 +212,20 @@ function roughCompare(original: string, typed: string, flags: Flagged[] = []): C
   }
   // The learner's marks: the worse of the two.
   om.forEach((m, i) => {
-    const f = flags.find((x) => x.from <= i && i <= x.to)?.flag;
+    const f = flagOf[i];
     if (f === "unknown" || f === "missed" || f === "unexpected") m.mark = m.mark === "correct" ? "wrong" : m.mark;
     else if (f === "spelling" && m.mark === "correct") m.mark = "spelling";
   });
+  const flags: Flagged[] = [];
+  flagOf.forEach((f, i) => {
+    if (!f) return;
+    const last = flags[flags.length - 1];
+    if (last && last.flag === f && last.to === i - 1) last.to = i;
+    else flags.push({ from: i, to: i, flag: f });
+  });
   const spelling = om.filter((m) => m.mark === "spelling").length;
   const credit = om.filter((m) => m.mark === "correct").length + spelling / 2;
-  return { original: om, typed: tm, credit, total: o.length, spelling };
+  return { original: om, typed: tm, credit, total: o.length, spelling, flags };
 }
 
 function summaryOf(a: Attempt): Summary {
@@ -449,12 +459,12 @@ export const sample = {
     return { attempt: { ...a }, answers: [...answers.get(a.id)!.values()].sort((x, y) => x.idx - y.idx) };
   },
 
-  answer(attemptId: number, idx: number, kind: AnswerKind, typed: string, flags: Flagged[], plays: number, seconds: number): Answer {
+  answer(attemptId: number, idx: number, kind: AnswerKind, typed: string, plays: number, seconds: number): Answer {
     const a = attemptById(attemptId);
     const original = transcripts.get(a.itemId)?.sentences[idx]?.text;
     if (original === undefined) throw new Error(`Sentence ${idx + 1} isn't transcribed yet.`);
     const ad = kind === "ad";
-    const comparison = ad ? null : roughCompare(original, typed, flags);
+    const comparison = ad ? null : roughCompare(original, typed);
     const ans: Answer = {
       idx,
       kind,
@@ -465,7 +475,7 @@ export const sample = {
       total: comparison?.total ?? 0,
       spelling: comparison?.spelling ?? 0,
       comparison,
-      flags: ad ? [] : flags,
+      flags: comparison?.flags ?? [],
     };
     answers.get(a.id)!.set(idx, ans);
     sample.savePosition(attemptId, idx + 1, seconds);
@@ -473,7 +483,7 @@ export const sample = {
   },
 
   markAds(attemptId: number, from: number, to: number, seconds: number) {
-    for (let i = from; i < to; i++) sample.answer(attemptId, i, "ad", "", [], 0, 0);
+    for (let i = from; i < to; i++) sample.answer(attemptId, i, "ad", "", 0, 0);
     sample.savePosition(attemptId, to, seconds);
   },
 

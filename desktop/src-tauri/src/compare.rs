@@ -64,6 +64,9 @@ pub struct Comparison {
     /// Words that count: the original's, without fillers.
     pub total: u32,
     pub spelling: u32,
+    /// The learner's marks, on the original's written words.
+    #[serde(default)]
+    pub flags: Vec<Flagged>,
 }
 
 impl Comparison {
@@ -77,7 +80,9 @@ impl Comparison {
 }
 
 /// Compares the learner's text with the original sentence.
-/// What the learner marked in the original once it was shown: a word or a phrase, written words `from..=to`.
+/// What the learner marked, typed in the box like Markdown: `<didn't know>`, `[didn't catch]`,
+/// `{unexpected}`, `~spelling~`, `*worth keeping*` (full-width forms too: 《》【】｛｝～＊).
+/// Stored on the original's written words `from..=to`, through the alignment.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Flag {
@@ -100,25 +105,120 @@ pub struct Flagged {
     pub flag: Flag,
 }
 
-pub fn compare(original: &str, typed: &str) -> Comparison {
-    compare_flagged(original, typed, &[])
+const MARKUP: &[(Flag, &[char], &[char])] = &[
+    (Flag::Unknown, &['<', '《', '〈', '＜'], &['>', '》', '〉', '＞']),
+    (Flag::Missed, &['[', '【', '［'], &[']', '】', '］']),
+    (Flag::Unexpected, &['{', '｛'], &['}', '｝']),
+    (Flag::Spelling, &['~', '～'], &[]),
+    (Flag::Keep, &['*', '＊'], &[]),
+];
+
+fn markup_char(c: char) -> Option<(Flag, bool)> {
+    MARKUP.iter().find_map(|(f, open, close)| {
+        if open.contains(&c) {
+            Some((*f, true))
+        } else if close.contains(&c) {
+            Some((*f, false))
+        } else {
+            None
+        }
+    })
 }
 
-/// The comparison, with the learner's marks applied: each word scores the worse of what the comparison
-/// found and how the learner marked it.
-pub fn compare_flagged(original: &str, typed: &str, flags: &[Flagged]) -> Comparison {
-    let (o_words, o) = tokens(original, false);
-    let (t_words, t) = tokens(typed, true);
-    let (mut o_marks, t_marks) = align(&o, &t, &o_words, &t_words);
-
-    for (tok, m) in o.iter().zip(o_marks.iter_mut()) {
-        let on = |f: &Flagged| f.from <= tok.to && tok.from <= f.to;
-        if flags.iter().any(|f| on(f) && matches!(f.flag, Flag::Unknown | Flag::Missed | Flag::Unexpected)) {
-            if matches!(m, Mark::Correct | Mark::Spelling) {
-                *m = Mark::Wrong;
+/// Takes the learner's marks out of the typed text: the plain text, and the marks on its written words.
+/// `~` and `*` open and close by turns (`**bold**` counts once); an unclosed mark runs to the end.
+pub fn parse_markup(typed: &str) -> (String, Vec<Flagged>) {
+    let mut plain: Vec<String> = Vec::new();
+    let mut flags = Vec::new();
+    let mut open: Vec<(Flag, usize)> = Vec::new();
+    for raw in typed.split_whitespace() {
+        let idx = plain.len();
+        let mut word = String::new();
+        let mut closing: Vec<Flag> = Vec::new();
+        let mut prev: Option<char> = None;
+        for c in raw.chars() {
+            let Some((flag, opens)) = markup_char(c) else {
+                word.push(c);
+                prev = Some(c);
+                continue;
+            };
+            let toggle = matches!(flag, Flag::Spelling | Flag::Keep);
+            if toggle && prev == Some(c) {
+                continue; // "**"
             }
-        } else if flags.iter().any(|f| on(f) && f.flag == Flag::Spelling) && *m == Mark::Correct {
-            *m = Mark::Spelling;
+            prev = Some(c);
+            let is_open = open.iter().any(|(f, _)| *f == flag);
+            if (toggle && !is_open) || (!toggle && opens) {
+                open.push((flag, idx));
+            } else if is_open {
+                closing.push(flag);
+            }
+        }
+        let real = !word.is_empty();
+        if real {
+            plain.push(word);
+        }
+        for flag in closing {
+            if let Some(k) = open.iter().rposition(|(f, _)| *f == flag) {
+                let (_, from) = open.remove(k);
+                let to = if real { idx } else { idx.saturating_sub(1) };
+                if from <= to && from < plain.len() {
+                    flags.push(Flagged { from, to, flag });
+                }
+            }
+        }
+    }
+    for (flag, from) in open {
+        if from < plain.len() {
+            flags.push(Flagged { from, to: plain.len() - 1, flag });
+        }
+    }
+    flags.sort_by_key(|f| f.from);
+    (plain.join(" "), flags)
+}
+
+/// The typed text (with any marks in it) compared with the original. The marks apply to the words of the
+/// original they line up with, and each scores the worse of what the comparison found and the mark:
+/// didn't know, didn't catch and unexpected are wrong, spelling is half a word, worth keeping changes nothing.
+pub fn compare(original: &str, typed: &str) -> Comparison {
+    let (plain, typed_flags) = parse_markup(typed);
+    let (o_words, o) = tokens(original, false);
+    let (t_words, t) = tokens(&plain, true);
+    let (mut o_marks, t_marks, pairs) = align(&o, &t, &o_words, &t_words);
+
+    // Typed words come out of `tokens` re-split after gap marks, so map them back by position in `plain`.
+    let plain_words: Vec<&str> = plain.split_whitespace().collect();
+    let t_word_of = typed_word_index(&plain_words, &t_words);
+    let mut o_flag: Vec<Option<Flag>> = vec![None; o.len()];
+    for (oi, tj) in pairs {
+        let words = t[tj].from..=t[tj].to;
+        let flag = words.filter_map(|w| t_word_of[w]).find_map(|pw| typed_flags.iter().find(|f| f.from <= pw && pw <= f.to).map(|f| f.flag));
+        if flag.is_some() && o_flag[oi].is_none() {
+            o_flag[oi] = flag;
+        }
+    }
+    for (m, f) in o_marks.iter_mut().zip(&o_flag) {
+        match f {
+            Some(Flag::Unknown | Flag::Missed | Flag::Unexpected) if matches!(m, Mark::Correct | Mark::Spelling) => *m = Mark::Wrong,
+            Some(Flag::Spelling) if *m == Mark::Correct => *m = Mark::Spelling,
+            _ => {}
+        }
+    }
+    // The marks on the original's written words, a run of words with the same mark as one.
+    let mut word_flag: Vec<Option<Flag>> = vec![None; o_words.len()];
+    for (tok, f) in o.iter().zip(&o_flag) {
+        if let Some(f) = f {
+            for w in tok.from..=tok.to {
+                word_flag[w].get_or_insert(*f);
+            }
+        }
+    }
+    let mut flags: Vec<Flagged> = Vec::new();
+    for (w, f) in word_flag.iter().enumerate() {
+        let Some(f) = *f else { continue };
+        match flags.last_mut() {
+            Some(last) if last.flag == f && last.to + 1 == w => last.to = w,
+            _ => flags.push(Flagged { from: w, to: w, flag: f }),
         }
     }
 
@@ -140,7 +240,32 @@ pub fn compare_flagged(original: &str, typed: &str, flags: &[Flagged]) -> Compar
         credit,
         total: o.len() as u32,
         spelling,
+        flags,
     }
+}
+
+/// For each written word after gap marking, the word of the plain text it came from ("I_go" is one plain
+/// word but three written ones; a separate "_" is its own word in both).
+fn typed_word_index(plain: &[&str], written: &[String]) -> Vec<Option<usize>> {
+    let mut out = Vec::with_capacity(written.len());
+    let (mut p, mut used) = (0usize, 0usize);
+    for w in written {
+        while p < plain.len() && used >= plain[p].chars().filter(|c| !c.is_whitespace()).count() {
+            p += 1;
+            used = 0;
+        }
+        if w == "_" {
+            // A gap mark replaced "_", "…" or dots; it consumes them from the plain word.
+            let rest: String = plain.get(p).map(|s| s.chars().skip(used).collect()).unwrap_or_default();
+            let n = rest.chars().take_while(|&c| c == '_' || c == '…' || c == '.').count().max(1);
+            out.push(plain.get(p).map(|_| p));
+            used += n;
+        } else {
+            out.push(plain.get(p).map(|_| p));
+            used += w.chars().count();
+        }
+    }
+    out
 }
 
 // ---------- tokens ----------
@@ -730,7 +855,8 @@ enum Step {
 }
 
 /// Lines the typed tokens up against the original's with the fewest mistakes; returns a mark per token.
-fn align(o: &[Tok], t: &[Tok], o_words: &[String], t_words: &[String]) -> (Vec<Mark>, Vec<Mark>) {
+/// The marks on both sides, and which typed token each original token lined up with.
+fn align(o: &[Tok], t: &[Tok], o_words: &[String], t_words: &[String]) -> (Vec<Mark>, Vec<Mark>, Vec<(usize, usize)>) {
     let (n, m) = (o.len(), t.len());
     const SPELL: f64 = 0.5;
     const GAP: f64 = 0.01;
@@ -792,6 +918,7 @@ fn align(o: &[Tok], t: &[Tok], o_words: &[String], t_words: &[String]) -> (Vec<M
 
     let mut om = vec![Mark::Missing; n];
     let mut tm = vec![Mark::Extra; m];
+    let mut pairs = Vec::new();
     let (mut i, mut j) = (n, m);
     while i > 0 || j > 0 {
         match step[i][j] {
@@ -806,12 +933,14 @@ fn align(o: &[Tok], t: &[Tok], o_words: &[String], t_words: &[String]) -> (Vec<M
                 };
                 om[i - 1] = mark;
                 tm[j - 1] = mark;
+                pairs.push((i - 1, j - 1));
                 i -= 1;
                 j -= 1;
             }
             Step::UnderGap => {
                 om[i - 1] = Mark::Missing;
                 tm[j - 1] = Mark::Gap;
+                pairs.push((i - 1, j - 1));
                 i -= 1;
             }
             Step::Miss => {
@@ -825,13 +954,16 @@ fn align(o: &[Tok], t: &[Tok], o_words: &[String], t_words: &[String]) -> (Vec<M
             Step::Words(a, b) => {
                 om[a..i].fill(Mark::Correct);
                 tm[b..j].fill(Mark::Correct);
+                for k in a..i {
+                    pairs.push((k, (b + k - a).min(j - 1)));
+                }
                 i = a;
                 j = b;
             }
             Step::Start => break,
         }
     }
-    (om, tm)
+    (om, tm, pairs)
 }
 
 /// Marks per written word: the worst of its tokens'.
@@ -1038,18 +1170,42 @@ mod tests {
     }
 
     #[test]
+    fn marks_are_typed_like_markdown() {
+        let (plain, f) = parse_markup("I'm [gonna] grab a {coffee}, ~honestly~ *a nice one* <x");
+        assert_eq!(plain, "I'm gonna grab a coffee, honestly a nice one x");
+        let got: Vec<(usize, usize, Flag)> = f.iter().map(|f| (f.from, f.to, f.flag)).collect();
+        assert_eq!(
+            got,
+            vec![(1, 1, Flag::Missed), (4, 4, Flag::Unexpected), (5, 5, Flag::Spelling), (6, 8, Flag::Keep), (9, 9, Flag::Unknown)]
+        );
+        // Brackets on their own, bold, and full-width forms from a Chinese keyboard.
+        let (plain, f) = parse_markup("【 welcome to 】 **six** 《minute》");
+        assert_eq!(plain, "welcome to six minute");
+        let got: Vec<(usize, usize, Flag)> = f.iter().map(|f| (f.from, f.to, f.flag)).collect();
+        assert_eq!(got, vec![(0, 1, Flag::Missed), (2, 2, Flag::Keep), (3, 3, Flag::Unknown)]);
+    }
+
+    #[test]
     fn the_learners_marks_count_as_mistakes() {
         let o = "I'm gonna grab a coffee, honestly.";
-        let f = |from, to, flag| Flagged { from, to, flag };
         // Shown and copied, nothing marked: all right.
-        assert_eq!(compare_flagged(o, o, &[]).credit, 7.0);
+        assert_eq!(compare(o, o).credit, 7.0);
         // Didn't catch "gonna"; "honestly" was spelled differently from what the learner thought.
-        let c = compare_flagged(o, o, &[f(1, 1, Flag::Missed), f(5, 5, Flag::Spelling), f(3, 4, Flag::Keep)]);
+        let c = compare(o, "I'm [gonna] grab *a coffee*, ~honestly~.");
         assert_eq!((c.credit, c.total, c.spelling), (5.5, 7, 1));
         assert_eq!(marks(&c.original), "I'm !gonna grab a coffee, ~honestly.");
+        let got: Vec<(usize, usize, Flag)> = c.flags.iter().map(|f| (f.from, f.to, f.flag)).collect();
+        assert_eq!(got, vec![(1, 1, Flag::Missed), (3, 4, Flag::Keep), (5, 5, Flag::Spelling)]);
         // The worse of the two: a word already missed stays missed, not "spelling".
-        let c = compare_flagged(o, "I'm gonna grab a coffee", &[f(5, 5, Flag::Spelling)]);
+        let c = compare(o, "I'm gonna grab a coffee ~_~");
         assert_eq!(marks(&c.original), "I'm gonna grab a coffee, -honestly.");
+        // A gap the learner marks "didn't know" marks the original words under it.
+        let c = compare("It was ubiquitous then.", "It was <_> then");
+        assert_eq!(c.flags, vec![Flagged { from: 2, to: 2, flag: Flag::Unknown }]);
+        // Marks on typed words follow them to the original, even when the typing differs.
+        let c = compare("We met in nineteen ninety.", "We {met} in 1990");
+        assert_eq!(c.flags, vec![Flagged { from: 1, to: 1, flag: Flag::Unexpected }]);
+        assert_eq!(c.credit, (c.total - 1) as f64);
     }
 
     #[test]

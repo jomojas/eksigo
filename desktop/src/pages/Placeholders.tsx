@@ -37,7 +37,7 @@ export function Today() {
                 key={p.attemptId}
                 className="tr"
                 style={{ gridTemplateColumns: "minmax(0,1fr) 90px 110px 110px", height: 56 }}
-                onClick={() => navigate(dictationPath(p.itemId))}
+                onClick={() => navigate(`/library/${p.itemId}`)}
               >
                 <span style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
                   <Art url={p.artworkUrl} size={32} file={p.source === "My files"} />
@@ -53,7 +53,14 @@ export function Today() {
                 </span>
                 <span>{whenDay(p.updatedAt)}</span>
                 <span style={{ textAlign: "right" }}>
-                  <button type="button" className="btn btn-sm btn-primary">
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-primary"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate(dictationPath(p.itemId));
+                    }}
+                  >
                     Resume
                   </button>
                 </span>

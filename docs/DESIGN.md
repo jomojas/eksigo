@@ -63,7 +63,7 @@ Many desktop dictation apps exist, so making money is not the goal. The project 
 | `Ctrl+P` | Play anyway, past the maximum |
 | `Enter` | A new line in the typing box |
 | `Shift+Enter` | Finish this sentence and go to the next |
-| `Shift+Tab` | **Show the original**: it appears above the box, and fills the box if nothing is typed yet; select words in it and press `1`–`5` to mark them (`0` clears) |
+| `Shift+Tab` | **Show the original**: it appears above the box, and fills the box if nothing is typed yet; mark words by typing around them (below) |
 | `Ctrl+R` | Play once, slower (see Slower above) |
 | `Ctrl+−` / `Ctrl+=` / `Ctrl+0` | Speed 0.05 slower, faster, back to 1.0× |
 | `Ctrl+←` / `Ctrl+→` | Previous or next sentence |
@@ -77,15 +77,17 @@ Many desktop dictation apps exist, so making money is not the goal. The project 
 
 The screen shows *Sentence 25 of 90* and the sentences just before it, done or *not done yet*, so it is always clear where the learner is. The progress in the top bar counts **sentences done** ("20 / 90 done"), not the position.
 
-**Typing or showing the original, one score (decided 2026-11-11).** Not every learner wants to type every sentence. A sentence can be typed, or the original shown with `Shift+Tab` and then marked, or both: typed first, then shown to check. Either way, **what is in the box when the sentence is finished is compared with the original**, and the learner's marks count as mistakes. Each word scores the worse of what the comparison found and how it was marked:
+**Typing or showing the original, one score (decided 2026-11-11).** Not every learner wants to type every sentence. A sentence can be typed, or the original shown with `Shift+Tab` and then marked, or both: typed first, then shown to check. Either way, **what is in the box when the sentence is finished is compared with the original**, and the learner's marks count as mistakes. **Marks are typed in the box, like Markdown**, around a word or phrase, so the keyboard is enough; a preview under the box shows how they will be read. They apply to the words of the original they line up with, and each word scores the worse of what the comparison found and how it was marked:
 
-| Key | Mark | Shown as | Counts as |
+| Type | Mark | Shown as | Counts as |
 |---|---|---|---|
-| `1` | **Didn't know** the word or phrase | ⟨angle brackets⟩ | wrong |
-| `2` | **Didn't catch** it: known, but not heard in the audio (speed, linking, accent) | [square brackets] | wrong |
-| `3` | **Unexpected**: expected something else | highlighted | wrong |
-| `4` | **Spelling**: spelled differently from what the learner thought | dotted underline | half a word, like a misspelling |
-| `5` | **Worth keeping**: a good expression | double underline | no change |
+| `<word>` | **Didn't know** the word or phrase | ⟨angle brackets⟩ | wrong |
+| `[word]` | **Didn't catch** it: known, but not heard in the audio (speed, linking, accent) | [square brackets] | wrong |
+| `{word}` | **Unexpected**: expected something else | highlighted | wrong |
+| `~word~` | **Spelling**: spelled differently from what the learner thought | dotted underline | half a word, like a misspelling |
+| `*word*` | **Worth keeping**: a good expression | double underline | no change |
+
+The full-width forms a Chinese keyboard types count too (《》【】｛｝～＊), `**bold**` counts as `*`, and a mark left open runs to the end of the sentence. `<_>` marks a part not caught at all as *didn't know*.
 
 A shown sentence with nothing marked counts as all correct: the learner's honesty is the measure, and results tag such sentences *shown*. On day 5 the marks feed My words: by default *didn't know*, *didn't catch*, *unexpected* and *worth keeping* are added automatically and *spelling* isn't, each switchable in Settings; *didn't catch* keeps the sentence's audio, since replaying it is what helps.
 
@@ -96,6 +98,8 @@ A shown sentence with nothing marked counts as all correct: the learner's honest
 - The real-word check uses an English word list (SCOWL, American and British, sizes 10–60) bundled in the app. The comparison runs in the app, not on the server.
 
 **Stopping partway.** `Esc` or Stop asks: **See the results so far** (default) or **Save and continue later**. Progress is saved either way, and seeing partial results doesn't end the episode: the learner can resume at the next sentence, and the results grow.
+
+**Today's Continue list:** clicking a row opens the episode's page; **Resume** opens dictation.
 
 **Results: the original and the learner's text side by side**, sentence by sentence like a split diff, each row with a play button. Words the learner missed are marked in the original; wrong words are red in the learner's text. Above: accuracy, sentences done, original shown, with mistakes, time; a filter for sentences with mistakes; **Resume** and **Practise these again**. The same results open later from the Episode page.
 - **Selecting a word or phrase** in either column shows its offline dictionary meaning and pronunciation, **Add to My words** (`A`), and later, with an AI key, *Explain in this sentence*.
