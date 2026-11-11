@@ -1,0 +1,78 @@
+/* Design tokens. Dark values come from the Linear design system (linear-design skill, tokens.json);
+   the light theme is Eksigo's own, derived from it (see the Style guide board on the design canvas).
+   Lavender (--primary) is only for the one main action per view, focus rings and links. */
+
+:root,
+[data-theme="dark"] {
+  --primary: #5e6ad2;
+  --on-primary: #ffffff;
+  --primary-hover: #828fff;
+  --canvas: #010102;
+  --surface-1: #0f1011;
+  --surface-2: #141516;
+  --surface-3: #18191a;
+  --surface-4: #191a1b;
+  --hairline: #23252a;
+  --hairline-strong: #34343a;
+  --hairline-tertiary: #3e3e44;
+  --ink: #f7f8f8;
+  --ink-muted: #d0d6e0;
+  --ink-subtle: #8a8f98;
+  --ink-tertiary: #62666d;
+  --semantic-success: #27a644;
+  /* Not in the Linear source: Eksigo additions for marking mistakes, selection and dialogs. */
+  --semantic-error: #eb5757;
+  --error-fill: rgba(235, 87, 87, 0.14);
+  --select-fill: rgba(94, 106, 210, 0.32);
+  --selected: #1c1d20;
+  --miss-fill: rgba(255, 255, 255, 0.08);
+  --scrim: rgba(1, 1, 2, 0.66);
+  --focus-ring: 0 0 0 2px rgba(94, 105, 209, 0.5);
+  color-scheme: dark;
+}
+
+[data-theme="light"] {
+  --canvas: #fcfcfd;
+  --surface-1: #f5f5f7;
+  --surface-2: #efeff2;
+  --surface-3: #e9e9ed;
+  --surface-4: #e3e3e8;
+  --hairline: #e3e3e8;
+  --hairline-strong: #d2d2d9;
+  --hairline-tertiary: #c2c2ca;
+  --ink: #121316;
+  --ink-muted: #3a3d44;
+  --ink-subtle: #62666f;
+  --ink-tertiary: #9a9da5;
+  --semantic-success: #1f8a3a;
+  --semantic-error: #d33f45;
+  --error-fill: rgba(211, 63, 69, 0.1);
+  --select-fill: rgba(94, 106, 210, 0.22);
+  --selected: #e6e6ec;
+  --miss-fill: rgba(18, 19, 22, 0.07);
+  --scrim: rgba(18, 19, 22, 0.32);
+  color-scheme: light;
+}
+
+:root {
+  --space-xxs: 4px;
+  --space-xs: 8px;
+  --space-sm: 12px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-xxl: 48px;
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-pill: 9999px;
+  /* Inter and JetBrains Mono are bundled with the app (no network needed); Linear's own faces are proprietary. */
+  --font-display: Inter, "SF Pro Display", -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
+  --font-text: Inter, "SF Pro Text", -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  /* Motion is not defined by the source; quick and quiet. */
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --fast: 120ms;
+}
