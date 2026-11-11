@@ -58,7 +58,7 @@ export function EpisodeScreen({ from }: { from: "podcasts" | "library" }) {
   return (
     <Page crumbs={crumbs} keys={ready ? [["Space", "Preview"], ["← →", "5 seconds"]] : []}>
       <div style={{ display: "flex", minHeight: "100%" }}>
-        <div className="page page-read" style={{ flexGrow: 1, minWidth: 0, gap: 26 }}>
+        <div className="page" style={{ flexGrow: 1, minWidth: 0, gap: 26 }}>
           {error && (
             <div className="notice notice-error" role="alert">
               {error}
@@ -72,7 +72,7 @@ export function EpisodeScreen({ from }: { from: "podcasts" | "library" }) {
                   <div className="eyebrow">
                     {show ? `${show.title} · ${shortDate(episode?.publishedAt)}` : `My files · added ${whenDay(item?.addedAt)}`}
                   </div>
-                  <h1 className="h1 selectable" style={{ fontSize: 26, letterSpacing: -0.6 }}>
+                  <h1 className="h1 selectable" style={{ fontSize: 26, letterSpacing: -0.6, maxWidth: 820 }}>
                     {title}
                   </h1>
                   <div style={{ fontSize: 12 }} className="mono">

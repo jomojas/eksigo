@@ -37,7 +37,7 @@ export function Settings() {
             </button>
           ))}
         </nav>
-        <div className="page" style={{ maxWidth: 680 }}>
+        <div className="page" style={{ flexGrow: 1, minWidth: 0 }}>
           {section === "General" && <General />}
           {section === "Speech" && <Speech />}
           {section === "About" && <About />}
