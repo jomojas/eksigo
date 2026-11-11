@@ -520,7 +520,7 @@ impl Worker {
         if matches!(next, Next::Yield) {
             let _ = db.conn().execute("UPDATE transcripts SET state = 'queued' WHERE item_id = ?1 AND state = 'running'", [item_id]);
         }
-        eprintln!("item {item_id}: chunk work took {:?}", started.elapsed());
+        eprintln!("item {item_id}: transcription stopped or finished after {:?}", started.elapsed());
         Ok(next)
     }
 
