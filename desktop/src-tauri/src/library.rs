@@ -21,6 +21,7 @@ use tokio::io::AsyncWriteExt;
 use crate::{
     audio,
     db::Db,
+    dictation::{self, Practice},
     podcasts::{self, Feed, Listing},
 };
 
@@ -62,6 +63,8 @@ pub struct Episode {
     /// Set when the episode is in the Library.
     pub item_id: Option<i64>,
     pub item_state: Option<String>,
+    /// The latest dictation of it, when there is one.
+    pub practice: Option<Practice>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -85,6 +88,8 @@ pub struct Item {
     /// The transcript: "none", "queued", "running", "done" or "failed", and how far it has got.
     pub transcript_state: String,
     pub transcript_done_ms: i64,
+    /// The latest dictation of it, when there is one.
+    pub practice: Option<Practice>,
 }
 
 const SHOW_COLS: &str = "s.id, s.feed_url, s.apple_id, s.title, s.author, s.description, s.artwork_url,
@@ -125,6 +130,7 @@ fn episode_from(r: &Row) -> rusqlite::Result<Episode> {
         artwork_url: r.get(8)?,
         item_id: r.get(9)?,
         item_state: r.get(10)?,
+        practice: None,
     })
 }
 
@@ -158,6 +164,7 @@ fn item_from(r: &Row) -> rusqlite::Result<Item> {
         artwork_url: r.get(13)?,
         transcript_state: r.get(14)?,
         transcript_done_ms: r.get(15)?,
+        practice: None,
     })
 }
 
@@ -234,12 +241,15 @@ pub fn episodes(conn: &Connection, show_id: i64) -> Result<Vec<Episode>> {
         "SELECT {EPISODE_COLS} FROM episodes e JOIN shows s ON s.id = e.show_id LEFT JOIN items i ON i.episode_id = e.id
          WHERE e.show_id = ?1 ORDER BY e.published_at DESC NULLS LAST, e.id DESC"
     ))?;
-    let rows = st.query_map([show_id], episode_from)?.collect::<rusqlite::Result<_>>()?;
+    let mut rows: Vec<Episode> = st.query_map([show_id], episode_from)?.collect::<rusqlite::Result<_>>()?;
+    for e in rows.iter_mut() {
+        e.practice = e.item_id.map(|i| dictation::practice(conn, i)).transpose()?.flatten();
+    }
     Ok(rows)
 }
 
 pub fn episode(conn: &Connection, id: i64) -> Result<Episode> {
-    conn.query_row(
+    let mut e = conn.query_row(
         &format!(
             "SELECT {EPISODE_COLS} FROM episodes e JOIN shows s ON s.id = e.show_id LEFT JOIN items i ON i.episode_id = e.id
              WHERE e.id = ?1"
@@ -248,7 +258,9 @@ pub fn episode(conn: &Connection, id: i64) -> Result<Episode> {
         episode_from,
     )
     .optional()?
-    .ok_or_else(|| anyhow!("That episode isn't saved on this computer."))
+    .ok_or_else(|| anyhow!("That episode isn't saved on this computer."))?;
+    e.practice = e.item_id.map(|i| dictation::practice(conn, i)).transpose()?.flatten();
+    Ok(e)
 }
 
 // ---------- the Library ----------
@@ -257,14 +269,20 @@ pub fn items(conn: &Connection) -> Result<Vec<Item>> {
     let mut st = conn.prepare(&format!(
         "SELECT {ITEM_COLS} FROM {ITEM_FROM} ORDER BY COALESCE(i.last_practised_at, i.added_at) DESC, i.id DESC"
     ))?;
-    let rows = st.query_map([], item_from)?.collect::<rusqlite::Result<_>>()?;
+    let mut rows: Vec<Item> = st.query_map([], item_from)?.collect::<rusqlite::Result<_>>()?;
+    for i in rows.iter_mut() {
+        i.practice = dictation::practice(conn, i.id)?;
+    }
     Ok(rows)
 }
 
 pub fn item(conn: &Connection, id: i64) -> Result<Item> {
-    conn.query_row(&format!("SELECT {ITEM_COLS} FROM {ITEM_FROM} WHERE i.id = ?1"), [id], item_from)
+    let mut i = conn
+        .query_row(&format!("SELECT {ITEM_COLS} FROM {ITEM_FROM} WHERE i.id = ?1"), [id], item_from)
         .optional()?
-        .ok_or_else(|| anyhow!("That item is no longer in your library."))
+        .ok_or_else(|| anyhow!("That item is no longer in your library."))?;
+    i.practice = dictation::practice(conn, i.id)?;
+    Ok(i)
 }
 
 /// Space used by downloaded episodes (own files stay where they are and aren't counted).

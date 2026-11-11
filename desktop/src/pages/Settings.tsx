@@ -5,8 +5,10 @@ import { useTheme, type ThemeChoice } from "../lib/theme";
 import { Page, useAppInfo } from "../components/Shell";
 import { bytes } from "../lib/format";
 import { useActivity } from "../lib/transcripts";
+import { PlaybackSettings } from "../components/DictationSettings";
+import { useDictationSettings } from "../lib/dictation";
 
-const SECTIONS = ["General", "Speech", "About"] as const;
+const SECTIONS = ["General", "Dictation", "Speech", "About"] as const;
 type Section = (typeof SECTIONS)[number];
 
 export function Settings() {
@@ -39,6 +41,7 @@ export function Settings() {
         </nav>
         <div className="page" style={{ flexGrow: 1, minWidth: 0 }}>
           {section === "General" && <General />}
+          {section === "Dictation" && <Dictation />}
           {section === "Speech" && <Speech />}
           {section === "About" && <About />}
         </div>
@@ -56,6 +59,23 @@ function Row({ label, hint, children }: { label: string; hint?: string; children
       </div>
       {children}
     </div>
+  );
+}
+
+function Dictation() {
+  const [settings, update] = useDictationSettings();
+  return (
+    <section aria-labelledby="dictation">
+      <h1 id="dictation" className="h1">
+        Dictation
+      </h1>
+      <p className="muted" style={{ marginTop: 8, lineHeight: 1.5 }}>
+        How each sentence plays. The same settings are beside every dictation, where changes also become these defaults.
+      </p>
+      <div style={{ marginTop: 20 }}>
+        <PlaybackSettings settings={settings} update={update} />
+      </div>
+    </section>
   );
 }
 

@@ -1,7 +1,7 @@
 // Playing audio from the interface: one player for the whole app, in the Rust core.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { backend, on } from "./backend";
+import { backend, on, type Sentence } from "./backend";
 
 /** Slowest first, like a dial. 1.25× is for when an episode feels easy. */
 export const SPEEDS = [0.7, 0.85, 1, 1.25] as const;
@@ -53,4 +53,21 @@ export function usePlayer(path: string | null) {
   }, []);
 
   return { ...state, play, stop };
+}
+
+/** Where `ms` is in the transcript: the last sentence starting at or before it, or -1. */
+export function sentenceAt(sentences: Sentence[], ms: number): number {
+  let lo = 0;
+  let hi = sentences.length - 1;
+  let found = -1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (sentences[mid].startMs <= ms) {
+      found = mid;
+      lo = mid + 1;
+    } else hi = mid - 1;
+  }
+  // Past the last sentence written so far (the transcript is still growing): no sentence.
+  if (found === sentences.length - 1 && found >= 0 && ms > sentences[found].endMs + 2000) return -1;
+  return found;
 }

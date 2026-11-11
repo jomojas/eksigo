@@ -6,10 +6,11 @@ import { useNavigate, useParams } from "react-router";
 import { Art } from "../components/Art";
 import { Icon } from "../components/Icon";
 import { Kbd, Page } from "../components/Shell";
-import { backend, type Episode, type Item, type Sentence, type Show, type TranscriptStatus } from "../lib/backend";
+import { backend, on, type Episode, type Item, type Sentence, type Show, type Summary, type TranscriptStatus } from "../lib/backend";
+import { dictationPath, percent, progressLabel } from "../lib/dictation";
 import { fraction, useDownloads, useLibraryChanged } from "../lib/downloads";
-import { bytes, clock, shortDate, whenDay } from "../lib/format";
-import { SPEEDS, usePlayer } from "../lib/playback";
+import { bytes, clock, plural, shortDate, whenDay } from "../lib/format";
+import { sentenceAt, SPEEDS, usePlayer } from "../lib/playback";
 import { isBusy, transcribed, useActivity, useTranscript } from "../lib/transcripts";
 
 type Data = { episode: Episode | null; show: Show | null; item: Item | null };
@@ -83,6 +84,8 @@ export function EpisodeScreen({ from }: { from: "podcasts" | "library" }) {
 
               <Actions episode={episode} item={item} onChange={load} onError={setError} />
 
+              {item && <Attempts item={item} />}
+
               {ready && <Listen item={item} durationS={item.durationS ?? episode?.durationS ?? null} />}
 
               {episode?.description && (
@@ -106,12 +109,14 @@ export function EpisodeScreen({ from }: { from: "podcasts" | "library" }) {
 
 function Actions({ episode, item, onChange, onError }: { episode: Episode | null; item: Item | null; onChange: () => void; onError: (e: string) => void }) {
   const progress = useDownloads().get(item?.id ?? -1);
+  const navigate = useNavigate();
 
-  const download = async () => {
+  const download = async (open = false) => {
     if (!episode) return;
     try {
-      await backend.download(episode.id);
-      onChange();
+      const itemId = await backend.download(episode.id);
+      if (open) navigate(dictationPath(itemId));
+      else onChange();
     } catch (e) {
       onError(String(e));
     }
@@ -119,12 +124,15 @@ function Actions({ episode, item, onChange, onError }: { episode: Episode | null
 
   if (!item) {
     return (
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <button type="button" className="btn btn-primary" onClick={download}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <button type="button" className="btn btn-primary" onClick={() => download(true)} title="Downloads the episode and opens dictation">
+          Practise
+        </button>
+        <button type="button" className="btn" onClick={() => download()}>
           <Icon name="download" size={14} stroke={1.8} />
           Download{episode?.audioBytes ? ` · ${bytes(episode.audioBytes)}` : ""}
         </button>
-        <span style={{ fontSize: 12 }}>Downloaded episodes stay in your Library until you remove them.</span>
+        <span style={{ fontSize: 12, marginLeft: 4 }}>Downloaded episodes stay in your Library until you remove them.</span>
       </div>
     );
   }
@@ -142,6 +150,10 @@ function Actions({ episode, item, onChange, onError }: { episode: Episode | null
         <button type="button" className="btn btn-sm btn-ghost" onClick={() => backend.cancelDownload(item.id)}>
           Cancel
         </button>
+        <span style={{ flexGrow: 1 }} />
+        <button type="button" className="btn" onClick={() => navigate(dictationPath(item.id))} title="Dictation opens when the download is done">
+          Practise
+        </button>
       </div>
     );
   }
@@ -150,7 +162,7 @@ function Actions({ episode, item, onChange, onError }: { episode: Episode | null
     return (
       <div className="notice notice-error" role="alert">
         <span style={{ flexGrow: 1 }}>{item.error ?? "The download failed."}</span>
-        <button type="button" className="btn btn-sm" onClick={download}>
+        <button type="button" className="btn btn-sm" onClick={() => download()}>
           Try again
         </button>
       </div>
@@ -165,31 +177,77 @@ function Actions({ episode, item, onChange, onError }: { episode: Episode | null
     );
   }
 
+  const p = item.practice;
+  const open = (again: boolean) => navigate(dictationPath(item.id), again ? { state: { again: true } } : undefined);
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      <button type="button" className="btn btn-primary" disabled title="Dictation arrives on day 4">
-        Start dictation
-      </button>
-      <span className="badge badge-next">Arrives day 4</span>
+      {p && !p.finished && p.position > 0 ? (
+        <>
+          <button type="button" className="btn btn-primary" onClick={() => open(false)}>
+            Resume at sentence {p.position + 1}
+          </button>
+          <button type="button" className="btn" onClick={() => open(true)}>
+            Start over
+          </button>
+          <span style={{ fontSize: 12, marginLeft: 4 }}>{progressLabel(p)} sentences done so far.</span>
+        </>
+      ) : p?.finished ? (
+        <button type="button" className="btn btn-primary" onClick={() => open(true)}>
+          Practise again
+        </button>
+      ) : (
+        <>
+          <button type="button" className="btn btn-primary" onClick={() => open(false)}>
+            Start dictation
+          </button>
+          <span style={{ fontSize: 12, marginLeft: 4 }}>
+            {item.transcriptState === "done" ? "One sentence at a time, typed from what you hear." : "Starts about half a minute in; the rest is transcribed while you type."}
+          </span>
+        </>
+      )}
     </div>
   );
 }
 
-/** Where `ms` is in the transcript: the last sentence starting at or before it, or -1. */
-function sentenceAt(sentences: Sentence[], ms: number): number {
-  let lo = 0;
-  let hi = sentences.length - 1;
-  let found = -1;
-  while (lo <= hi) {
-    const mid = (lo + hi) >> 1;
-    if (sentences[mid].startMs <= ms) {
-      found = mid;
-      lo = mid + 1;
-    } else hi = mid - 1;
-  }
-  // Past the last sentence written so far (the transcript is still growing): no sentence.
-  if (found === sentences.length - 1 && found >= 0 && ms > sentences[found].endMs + 2000) return -1;
-  return found;
+/** Every attempt at this episode, newest first. The full results view for each arrives on day 5. */
+function Attempts({ item }: { item: Item }) {
+  const [list, setList] = useState<Summary[]>([]);
+  useEffect(() => {
+    const load = () => backend.attempts(item.id).then(setList, () => {});
+    load();
+    return on("practice", load);
+  }, [item.id]);
+  const shown = list.filter((s) => s.done > 0 || s.attempt.finishedAt);
+  if (shown.length === 0) return null;
+  return (
+    <section aria-labelledby="attempts">
+      <h2 id="attempts" className="eyebrow" style={{ marginBottom: 8 }}>
+        Your attempts
+      </h2>
+      <div className="panel" style={{ overflow: "hidden" }}>
+        {shown.map((s) => (
+          <div key={s.attempt.id} className="tr" style={{ gridTemplateColumns: "120px minmax(0,1fr) 90px 80px 110px", borderBottom: "1px solid var(--hairline)" }}>
+            <span>{whenDay(s.attempt.startedAt)}</span>
+            <span>
+              {plural(s.done, "sentence")}
+              {s.transcriptDone ? ` of ${s.sentences - s.ads}` : ""}
+              {s.known > 0 && ` · ${s.known} known`}
+            </span>
+            <b className="mono" style={{ fontSize: 12 }}>
+              {percent(s.accuracy)}
+            </b>
+            <span className="mono" style={{ fontSize: 12 }}>
+              {clock(s.attempt.seconds)}
+            </span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <span className={s.attempt.finishedAt ? "dot dot-ok" : "dot dot-ring"} />
+              {!s.attempt.finishedAt ? "In progress" : s.transcriptDone && s.attempt.position >= s.sentences ? "Finished" : "Stopped"}
+            </span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
 }
 
 /** Back this far into a sentence, "Replay sentence" goes to the one before instead, like a music player. */

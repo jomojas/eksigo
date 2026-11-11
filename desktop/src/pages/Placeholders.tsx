@@ -2,9 +2,12 @@
 // until then they show what a new learner would see with nothing added yet.
 
 import { useNavigate } from "react-router";
+import { Art } from "../components/Art";
 import { Icon } from "../components/Icon";
 import { addAudio, Kbd, Page } from "../components/Shell";
 import { inApp } from "../lib/backend";
+import { dictationPath, progressLabel, useInProgress } from "../lib/dictation";
+import { whenDay } from "../lib/format";
 
 function greeting(): string {
   const h = new Date().getHours();
@@ -17,16 +20,48 @@ function Soon({ day }: { day: string }) {
 
 export function Today() {
   const navigate = useNavigate();
+  const continuing = useInProgress();
   return (
     <Page crumbs={["Today"]} keys={[["Mod O", "Add audio"]]}>
       <div className="page">
         <div>
           <div className="eyebrow">{greeting()}</div>
           <h1 className="h1" style={{ marginTop: 6 }}>
-            Nothing to continue yet
+            {continuing.length ? "Continue where you stopped" : "Nothing to continue yet"}
           </h1>
         </div>
-        <div className="empty">
+        {continuing.length > 0 && (
+          <section aria-label="Continue" className="panel" style={{ overflow: "hidden" }}>
+            {continuing.map((p) => (
+              <div
+                key={p.attemptId}
+                className="tr"
+                style={{ gridTemplateColumns: "minmax(0,1fr) 90px 110px 110px", height: 56 }}
+                onClick={() => navigate(dictationPath(p.itemId))}
+              >
+                <span style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+                  <Art url={p.artworkUrl} size={32} file={p.source === "My files"} />
+                  <span style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
+                    <b className="ell">{p.title}</b>
+                    <span className="ell" style={{ fontSize: 12 }}>
+                      {p.source}
+                    </span>
+                  </span>
+                </span>
+                <span className="mono" style={{ fontSize: 12 }}>
+                  {progressLabel(p)}
+                </span>
+                <span>{whenDay(p.updatedAt)}</span>
+                <span style={{ textAlign: "right" }}>
+                  <button type="button" className="btn btn-sm btn-primary">
+                    Resume
+                  </button>
+                </span>
+              </div>
+            ))}
+          </section>
+        )}
+        <div className="empty" style={continuing.length ? { display: "none" } : undefined}>
           <h2 className="h2">Start with an episode</h2>
           <p>
             Find a podcast you like, or add an audio or video file of your own. Eksigo transcribes it on this computer, then

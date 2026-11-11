@@ -74,6 +74,32 @@ const MIGRATIONS: &[&str] = &[
         words    TEXT NOT NULL,             -- JSON: [[start_ms, end_ms, \"word\"], ...]
         PRIMARY KEY (item_id, idx)
     );",
+    // 4: dictation. An attempt is one go through an episode; it stays open until the last sentence, and
+    // progress is saved with every sentence. Answers keep the sentence as it was then.
+    "CREATE TABLE attempts (
+        id          INTEGER PRIMARY KEY,
+        item_id     INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+        started_at  INTEGER NOT NULL,
+        updated_at  INTEGER NOT NULL,
+        finished_at INTEGER,
+        position    INTEGER NOT NULL DEFAULT 0,   -- the sentence to carry on from
+        seconds     INTEGER NOT NULL DEFAULT 0    -- time spent dictating
+    );
+    CREATE INDEX attempts_by_item ON attempts (item_id, started_at DESC);
+    CREATE TABLE answers (
+        attempt_id INTEGER NOT NULL REFERENCES attempts(id) ON DELETE CASCADE,
+        idx        INTEGER NOT NULL,              -- the sentence
+        kind       TEXT NOT NULL,                 -- 'typed', 'known' (I know this one) or 'ad' (left out)
+        original   TEXT NOT NULL,
+        typed      TEXT NOT NULL DEFAULT '',
+        plays      INTEGER NOT NULL DEFAULT 0,
+        credit     REAL NOT NULL DEFAULT 0,       -- correct words, half for each spelling mistake
+        total      INTEGER NOT NULL DEFAULT 0,
+        spelling   INTEGER NOT NULL DEFAULT 0,
+        marks      TEXT,                          -- JSON: the word-by-word comparison
+        answered_at INTEGER NOT NULL,
+        PRIMARY KEY (attempt_id, idx)
+    );",
 ];
 
 pub struct Db(pub Mutex<Connection>);

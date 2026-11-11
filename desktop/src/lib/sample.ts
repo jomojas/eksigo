@@ -1,7 +1,29 @@
 // Stand-ins for the Rust core in a plain browser (`npm run dev`, the preview pane): a few shows, episodes
 // and Library items kept in memory, with downloads and playback simulated by timers. Never used in the app.
 
-import type { Added, EpisodePage, Episode, Item, LibraryPage, Listing, ModelInfo, PlaybackEvent, Sentence, Show, ShowPage, TranscriptStatus } from "./backend";
+import type {
+  Added,
+  Answer,
+  AnswerKind,
+  Attempt,
+  Comparison,
+  EpisodePage,
+  Episode,
+  InProgress,
+  Item,
+  LibraryPage,
+  Listing,
+  Marked,
+  ModelInfo,
+  PlaybackEvent,
+  Practice,
+  Sentence,
+  Session,
+  Show,
+  ShowPage,
+  Summary,
+  TranscriptStatus,
+} from "./backend";
 import learnersJson from "../../src-tauri/data/learners.json";
 
 type Learner = { appleId: string; title: string; author: string; feedUrl: string; artworkUrl: string; blurb: string };
@@ -161,6 +183,68 @@ let playTimer: number | null = null;
 
 const notFound = (what: string) => new Error(`That ${what} isn't in the sample data.`);
 
+// ---------- dictation ----------
+
+const attempts: Attempt[] = [];
+const answers = new Map<number, Map<number, Answer>>();
+
+/** A rough stand-in for compare.rs: exact words only, lined up by longest common subsequence. */
+function roughCompare(original: string, typed: string): Comparison {
+  const norm = (w: string) => w.toLowerCase().replace(/[^a-z0-9']/g, "");
+  const o = original.split(/\s+/).filter(Boolean);
+  const t = typed.split(/\s+/).filter(Boolean);
+  const L = Array.from({ length: o.length + 1 }, () => new Array<number>(t.length + 1).fill(0));
+  for (let i = o.length - 1; i >= 0; i--)
+    for (let j = t.length - 1; j >= 0; j--) L[i][j] = norm(o[i]) === norm(t[j]) ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+  const om: Marked[] = o.map((text) => ({ text, mark: "missing" }));
+  const tm: Marked[] = t.map((text) => ({ text, mark: text === "_" ? "gap" : "extra" }));
+  for (let i = 0, j = 0; i < o.length && j < t.length; ) {
+    if (norm(o[i]) === norm(t[j])) {
+      om[i].mark = tm[j].mark = "correct";
+      i++;
+      j++;
+    } else if (L[i + 1][j] >= L[i][j + 1]) i++;
+    else j++;
+  }
+  const credit = om.filter((m) => m.mark === "correct").length;
+  return { original: om, typed: tm, credit, total: o.length, spelling: 0 };
+}
+
+function summaryOf(a: Attempt): Summary {
+  const list = [...(answers.get(a.id)?.values() ?? [])];
+  const scored = list.filter((x) => x.kind !== "ad");
+  const credit = scored.reduce((n, x) => n + x.credit, 0);
+  const total = scored.reduce((n, x) => n + x.total, 0);
+  const t = transcripts.get(a.itemId);
+  return {
+    attempt: { ...a },
+    done: scored.length,
+    known: list.filter((x) => x.kind === "known").length,
+    withMistakes: list.filter((x) => x.kind === "typed" && x.credit < x.total).length,
+    ads: list.length - scored.length,
+    credit,
+    total,
+    spelling: 0,
+    accuracy: total ? credit / total : null,
+    sentences: t?.sentences.length ?? 0,
+    transcriptDone: t?.state === "done",
+  };
+}
+
+function practiceOf(itemId: number | null): Practice | null {
+  const mine = attempts.filter((x) => x.itemId === itemId);
+  const a = mine[mine.length - 1];
+  if (!a) return null;
+  const s = summaryOf(a);
+  return { attemptId: a.id, position: a.position, done: s.done, sentences: s.sentences, transcriptDone: s.transcriptDone, finished: a.finishedAt !== null, accuracy: s.accuracy };
+}
+
+function attemptById(id: number): Attempt {
+  const a = attempts.find((x) => x.id === id);
+  if (!a) throw notFound("dictation");
+  return a;
+}
+
 export const sample = {
   learners,
 
@@ -188,7 +272,7 @@ export const sample = {
   showPage(id: number): ShowPage {
     const show = shows.find((s) => s.id === id);
     if (!show) throw notFound("show");
-    return { show: { ...show }, episodes: episodes.filter((e) => e.showId === id).map((e) => ({ ...e, artworkUrl: e.artworkUrl ?? show.artworkUrl })) };
+    return { show: { ...show }, episodes: episodes.filter((e) => e.showId === id).map((e) => ({ ...e, artworkUrl: e.artworkUrl ?? show.artworkUrl, practice: practiceOf(e.itemId) })) };
   },
 
   subscribe(id: number, on: boolean) {
@@ -203,7 +287,11 @@ export const sample = {
     if (!episode) throw notFound("episode");
     const show = shows.find((s) => s.id === episode.showId)!;
     const item = items.find((i) => i.id === episode.itemId) ?? null;
-    return { episode: { ...episode, artworkUrl: episode.artworkUrl ?? show.artworkUrl }, show: { ...show }, item: item && { ...item } };
+    return {
+      episode: { ...episode, artworkUrl: episode.artworkUrl ?? show.artworkUrl, practice: practiceOf(episode.itemId) },
+      show: { ...show },
+      item: item && { ...item, practice: practiceOf(item.id) },
+    };
   },
 
   download(episodeId: number): number {
@@ -245,14 +333,14 @@ export const sample = {
     items: items
       .slice()
       .sort((a, b) => (b.lastPractisedAt ?? b.addedAt) - (a.lastPractisedAt ?? a.addedAt))
-      .map((i) => ({ ...i })),
+      .map((i) => ({ ...i, practice: practiceOf(i.id) })),
     downloadsBytes: items.filter((i) => !i.ownFile && i.state === "ready").reduce((n, i) => n + (i.bytes ?? 0), 0),
   }),
 
   item(id: number): Item {
     const item = items.find((i) => i.id === id);
     if (!item) throw notFound("item");
-    return { ...item };
+    return { ...item, practice: practiceOf(item.id) };
   },
 
   addFiles: (): Added => ({ ids: [], skipped: [] }),
@@ -340,6 +428,84 @@ export const sample = {
       update();
     }, 700);
   },
+
+  startDictation(itemId: number, again: boolean): Session {
+    let a = attempts.find((x) => x.itemId === itemId && x.finishedAt === null);
+    if (a && again) a.finishedAt = now();
+    if (!a || again) {
+      a = { id: attempts.length + 1, itemId, startedAt: now(), updatedAt: now(), finishedAt: null, position: 0, seconds: 0 };
+      attempts.push(a);
+      answers.set(a.id, new Map());
+    }
+    emit("practice", null);
+    return { attempt: { ...a }, answers: [...answers.get(a.id)!.values()].sort((x, y) => x.idx - y.idx) };
+  },
+
+  answer(attemptId: number, idx: number, kind: AnswerKind, typed: string, plays: number, seconds: number): Answer {
+    const a = attemptById(attemptId);
+    const original = transcripts.get(a.itemId)?.sentences[idx]?.text;
+    if (original === undefined) throw new Error(`Sentence ${idx + 1} isn't transcribed yet.`);
+    const comparison = kind === "typed" ? roughCompare(original, typed) : kind === "known" ? { ...roughCompare(original, original), typed: [] } : null;
+    const ans: Answer = {
+      idx,
+      kind,
+      original,
+      typed: kind === "typed" ? typed.trim() : "",
+      plays,
+      credit: comparison?.credit ?? 0,
+      total: comparison?.total ?? 0,
+      spelling: 0,
+      comparison,
+    };
+    answers.get(a.id)!.set(idx, ans);
+    sample.savePosition(attemptId, idx + 1, seconds);
+    return ans;
+  },
+
+  markAds(attemptId: number, from: number, to: number, seconds: number) {
+    for (let i = from; i < to; i++) sample.answer(attemptId, i, "ad", "", 0, 0);
+    sample.savePosition(attemptId, to, seconds);
+  },
+
+  savePosition(attemptId: number, position: number, seconds: number) {
+    const a = attemptById(attemptId);
+    a.position = position;
+    a.seconds += Math.min(180, Math.max(0, seconds));
+    a.updatedAt = now();
+    const item = items.find((i) => i.id === a.itemId);
+    if (item) item.lastPractisedAt = now();
+    emit("practice", null);
+  },
+
+  finishDictation(attemptId: number): Summary {
+    const a = attemptById(attemptId);
+    a.finishedAt ??= now();
+    emit("practice", null);
+    return summaryOf(a);
+  },
+
+  summary: (attemptId: number): Summary => summaryOf(attemptById(attemptId)),
+  attempts: (itemId: number): Summary[] => attempts.filter((a) => a.itemId === itemId).reverse().map(summaryOf),
+  inProgress: (): InProgress[] =>
+    attempts
+      .filter((a) => a.finishedAt === null)
+      .sort((x, y) => y.updatedAt - x.updatedAt)
+      .map((a) => {
+        const item = items.find((i) => i.id === a.itemId);
+        const s = summaryOf(a);
+        return {
+          itemId: a.itemId,
+          attemptId: a.id,
+          title: item?.title ?? "",
+          source: item?.source ?? "",
+          artworkUrl: item?.artworkUrl ?? null,
+          position: a.position,
+          done: s.done,
+          sentences: s.sentences,
+          transcriptDone: s.transcriptDone,
+          updatedAt: a.updatedAt,
+        };
+      }),
 
   play(args: { id: number; startMs: number; endMs: number | null; speed: number }) {
     sample.stop();

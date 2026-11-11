@@ -5,7 +5,8 @@ import { useNavigate, useParams } from "react-router";
 import { Art } from "../components/Art";
 import { Icon } from "../components/Icon";
 import { Page } from "../components/Shell";
-import { backend, type Episode, type ShowPage } from "../lib/backend";
+import { backend, on, type Episode, type Practice, type ShowPage } from "../lib/backend";
+import { percent, progressLabel } from "../lib/dictation";
 import { fraction, useDownloads, useLibraryChanged } from "../lib/downloads";
 import { clock, plural, shortDate } from "../lib/format";
 
@@ -29,6 +30,7 @@ export function ShowScreen() {
     backend.getShow(id).then(setPage, (e) => setError(String(e)));
   }, [id]);
   useLibraryChanged(reload);
+  useEffect(() => on("practice", reload), [reload]);
 
   useEffect(() => {
     let live = true;
@@ -198,7 +200,7 @@ function EpisodeRow({ episode: e, on, onOpen, onDownload }: { episode: Episode; 
         {clock(e.durationS)}
       </span>
       <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-        <PracticeStatus itemId={e.itemId} state={e.itemState} />
+        <PracticeStatus itemId={e.itemId} state={e.itemState} practice={e.practice} />
       </span>
       <span style={{ textAlign: "right" }}>
         {!e.itemId && (
@@ -219,8 +221,8 @@ function EpisodeRow({ episode: e, on, onOpen, onDownload }: { episode: Episode; 
   );
 }
 
-/** An episode's state in the Library: downloading, downloaded, failed. Practice progress arrives on day 4. */
-export function PracticeStatus({ itemId, state }: { itemId: number | null; state: string | null }) {
+/** An episode's state in the Library: downloading, failed, or how far the learner has got with it. */
+export function PracticeStatus({ itemId, state, practice }: { itemId: number | null; state: string | null; practice?: Practice | null }) {
   const p = useDownloads().get(itemId ?? -1);
   if (!itemId || !state) return <span style={{ color: "var(--ink-tertiary)" }}>—</span>;
   if (state === "downloading") {
@@ -236,6 +238,28 @@ export function PracticeStatus({ itemId, state }: { itemId: number | null; state
   }
   if (state === "failed") return <span style={{ color: "var(--semantic-error)" }}>Download failed</span>;
   if (state === "missing") return <span style={{ color: "var(--semantic-error)" }}>File not found</span>;
+  if (practice?.finished && practice.transcriptDone && practice.position >= practice.sentences)
+    return (
+      <>
+        <span className="dot dot-ok" />
+        Finished{practice.accuracy !== null && ` · ${percent(practice.accuracy)}`}
+      </>
+    );
+  if (practice && practice.done > 0) {
+    const f = practice.transcriptDone && practice.sentences ? practice.done / practice.sentences : null;
+    return (
+      <>
+        {f !== null && (
+          <span className="track" style={{ width: 60 }}>
+            <span className="fill" style={{ display: "block", width: `${Math.round(f * 100)}%` }} />
+          </span>
+        )}
+        <span className="mono" style={{ fontSize: 12 }}>
+          {progressLabel(practice)}
+        </span>
+      </>
+    );
+  }
   return (
     <>
       <span className="dot" />

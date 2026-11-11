@@ -13,6 +13,7 @@ import { Shell } from "./components/Shell";
 import { DownloadsProvider } from "./lib/downloads";
 import { ThemeProvider } from "./lib/theme";
 import { TranscriptsProvider } from "./lib/transcripts";
+import { DictationScreen } from "./pages/Dictation";
 import { EpisodeScreen } from "./pages/Episode";
 import { Library } from "./pages/Library";
 import { Progress, Today, Words } from "./pages/Placeholders";
@@ -31,6 +32,7 @@ const router = createHashRouter([
       { path: "podcasts/episode/:episodeId", element: <EpisodeScreen from="podcasts" /> },
       { path: "library", element: <Library /> },
       { path: "library/:itemId", element: <EpisodeScreen from="library" /> },
+      { path: "library/:itemId/dictation", element: <DictationScreen /> },
       { path: "words", element: <Words /> },
       { path: "progress", element: <Progress /> },
       { path: "settings", element: <Settings /> },

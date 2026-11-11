@@ -47,11 +47,12 @@ Many desktop dictation apps exist, so making money is not the goal. The project 
 
 **Starting an episode:** dictation starts after about 30 seconds while transcription continues in the background (section 3).
 
-**Playback, saved as defaults and changeable during a session:**
-- **Mode.** *Manual* (default): each sentence plays once; the learner presses `Tab` to hear it again, up to the maximum. The next sentence never starts by itself. *Auto*: the sentence plays the maximum number of times in a row with a pause between plays.
-- **Speed:** 0.7 to 1.5 (0.85, 1.0, 1.2 …).
+**Playback, saved as defaults and changeable during a session (decided 2026-11-11):**
+- **Mode.** *Manual* (default): each sentence plays when the learner presses `Tab`, again up to the maximum. *Auto*: one `Tab` plays the sentence the maximum number of times in a row, with a pause between plays. In both modes the next sentence never starts by itself: it waits for `Tab`.
+- **Speed:** 0.5× to 1.5× in steps of 0.05, with a slider and `Ctrl −` / `Ctrl =` (one step slower or faster), `Ctrl 0` back to 1.0×. A change applies at once, to the sentence playing. (The Episode page's Preview keeps its four listening speeds.)
 - **Maximum plays per sentence:** 1 to 5. The learner can move on before using them all; a counter shows "1 / 3".
-- **Pause between plays:** Auto mode only.
+- **Pause between plays** (Auto only): either as long as the sentence times 1, 1.5 or 2 (long sentences get more typing time), or a fixed 1–10 seconds.
+- **Slower** (`Ctrl R`): plays the sentence once at a slow speed, 0.75× by default, without changing the speed setting; at or below that speed already, 0.15 slower. It counts as one of the plays.
 - **Show the original text:** *when I stop or finish* (default), or after every sentence.
 
 **The dictation loop, one sentence at a time.** Built for the keyboard:
@@ -62,14 +63,21 @@ Many desktop dictation apps exist, so making money is not the goal. The project 
 | `Enter` | A new line in the typing box |
 | `Shift+Enter` | Finish this sentence and go to the next |
 | `Shift+Tab` | **I know this one**: fill in the sentence and move on |
-| `Ctrl+R` | Play again, slower |
+| `Ctrl+R` | Play once, slower (see Slower above) |
+| `Ctrl+−` / `Ctrl+=` / `Ctrl+0` | Speed 0.05 slower, faster, back to 1.0× |
 | `Ctrl+←` / `Ctrl+→` | Previous or next sentence |
-| `Ctrl+K` | Skip section: mark the following sentences as an ad, leave them out of the score |
+| `Ctrl+K` | Skip section: the episode plays on from this sentence; `Ctrl+K` again when it is back marks the sentences in between as an ad, left out of the score (`Esc` cancels) |
 | `_` or `...` | A gap in a partly understood sentence ("I _ to the store") |
 | `Esc` | Stop (see below); also leaves the typing box |
 | `Ctrl+\` | Focus mode: hide the sidebar and the side panel |
 
 (On Mac, `Cmd` instead of `Ctrl`.) Inside the typing box `Tab` is used for playback, so `Esc` is the way out for keyboard navigation.
+
+**Comparison (decided 2026-11-11).** Lenient about what doesn't show whether the learner heard the words: case, punctuation, fillers (*um, uh*), contractions (*don't = do not*, *I'd = I would / I had*, *dont = don't*), numbers (*15 = fifteen*, *1990 = nineteen ninety*, *21st = twenty-first*, *50% = fifty percent*), British and American spellings (*colour, realise, centre, travelled*), hyphens. Each word of the original is then **correct**, **missing**, **wrong** or **spelling**:
+- **Wrong:** a real English word that isn't the one said, however close (*their/there*, *live/leave*), or a non-word too far off to say the learner knew the word (*ubikwitus*).
+- **Spelling:** not a real word, and only a letter or two from the right one: 1 letter for words of 4–8 letters, 2 for longer ones, none for words of 3 letters or fewer (*recieve*). It counts **half a word**, shown in its own colour.
+- Accuracy = (correct + ½ spelling) ÷ words in the original. Extra typed words are marked but cost nothing; a gap (`_`) makes the words under it missing but keeps the rest lined up. "I know this one" counts as all correct; ad sections count for nothing.
+- The real-word check uses an English word list (SCOWL, American and British, sizes 10–60) bundled in the app. The comparison runs in the app, not on the server.
 
 **Stopping partway.** `Esc` or Stop asks: **See the results so far** (default) or **Save and continue later**. Progress is saved either way, and seeing partial results doesn't end the episode: the learner can resume at the next sentence, and the results grow.
 
