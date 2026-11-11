@@ -141,7 +141,7 @@ export function Podcasts() {
 
   return (
     <Page crumbs={["Podcasts"]} keys={[["/", "Search"], ["Enter", "Open"]]}>
-      <div className="page" style={{ maxWidth: 1080, gap: 28 }}>
+      <div className="page" style={{ gap: 28 }}>
         <form
           onSubmit={(e) => {
             e.preventDefault();

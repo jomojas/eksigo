@@ -57,7 +57,7 @@ export function EpisodeScreen({ from }: { from: "podcasts" | "library" }) {
   return (
     <Page crumbs={crumbs} keys={ready ? [["Space", "Preview"], ["← →", "5 seconds"]] : []}>
       <div style={{ display: "flex", minHeight: "100%" }}>
-        <div className="page" style={{ flexGrow: 1, minWidth: 0, maxWidth: 820, gap: 26 }}>
+        <div className="page page-read" style={{ flexGrow: 1, minWidth: 0, gap: 26 }}>
           {error && (
             <div className="notice notice-error" role="alert">
               {error}

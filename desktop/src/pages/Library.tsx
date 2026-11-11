@@ -99,7 +99,7 @@ export function Library() {
 
   return (
     <Page crumbs={["Library"]} keys={[["Enter", "Open"], ["Mod O", "Add audio"], ["Del", "Remove"]]} status={statusLine}>
-      <div className="page" style={{ maxWidth: "none", padding: "20px 32px 32px", gap: 14 }}>
+      <div className="page" style={{ padding: "20px 32px 32px", gap: 14 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <div className="pills" role="group" aria-label="Show">
             {(

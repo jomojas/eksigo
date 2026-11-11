@@ -367,14 +367,15 @@ textarea,
 }
 
 /* ---------- page bodies ---------- */
+/* Pages fill the window; long text keeps a readable line length (.page-read, or its own max-width). */
 .page {
   padding: 28px 32px 40px;
-  max-width: 960px;
   display: flex;
   flex-direction: column;
   gap: 24px;
 }
 .empty {
+  max-width: 760px;
   border: 1px dashed var(--hairline-strong);
   border-radius: var(--radius-lg);
   padding: 32px;
@@ -544,9 +545,13 @@ select.btn {
   overflow-y: auto;
 }
 
+.page-read > * {
+  max-width: 820px;
+}
+
 .tiles {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
   gap: 16px;
 }
 .tile {

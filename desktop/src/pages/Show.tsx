@@ -101,7 +101,7 @@ export function ShowScreen() {
       keys={[["↑ ↓", "Move"], ["Enter", "Open"], ["D", "Download"]]}
       status={refreshing ? "Checking for new episodes…" : ""}
     >
-      <div className="page" style={{ maxWidth: 1080 }}>
+      <div className="page">
         {error && (
           <div className="notice notice-error" role="alert">
             {error}
