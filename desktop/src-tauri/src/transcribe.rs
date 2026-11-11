@@ -7,7 +7,10 @@
 use std::{
     collections::VecDeque,
     path::Path,
-    sync::{atomic::AtomicBool, mpsc},
+    sync::{
+        atomic::{AtomicBool, AtomicI64, Ordering},
+        mpsc, Arc,
+    },
     time::Instant,
 };
 
@@ -33,6 +36,21 @@ const SAFE_MARGIN_MS: i64 = 1_500;
 
 // ---------- whisper.cpp ----------
 
+/// Asked often while Whisper works; returning true stops it within a fraction of a second.
+pub type ShouldStop = Arc<dyn Fn() -> bool + Send + Sync>;
+
+/// Whisper was stopped by `ShouldStop`, not by a failure.
+#[derive(Debug)]
+pub struct Stopped;
+
+impl std::fmt::Display for Stopped {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("stopped")
+    }
+}
+
+impl std::error::Error for Stopped {}
+
 pub struct Engine {
     pub model_id: &'static str,
     ctx: WhisperContext,
@@ -56,7 +74,10 @@ impl Engine {
 
     /// Timed words in 16 kHz `samples` that start `offset_ms` into the file. `prompt` is the text just
     /// before, which keeps spelling and punctuation consistent across chunks.
-    pub fn words(&self, state: &mut WhisperState, samples: &[f32], offset_ms: i64, prompt: &str) -> Result<Vec<Word>> {
+    pub fn words(&self, state: &mut WhisperState, samples: &[f32], offset_ms: i64, prompt: &str, stop: &ShouldStop) -> Result<Vec<Word>> {
+        if stop() {
+            return Err(Stopped.into());
+        }
         let mut p = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
         p.set_n_threads(whisper::threads());
         p.set_language(Some("en"));
@@ -70,7 +91,22 @@ impl Engine {
         if !prompt.is_empty() {
             p.set_initial_prompt(prompt);
         }
-        state.full(p, samples).map_err(|e| anyhow!("transcribing: {e}"))?;
+        // Not `set_abort_callback_safe`: in whisper-rs 0.16 it boxes the closure as one type and reads it
+        // back as another, which crashes release builds. `stop` outlives `full`, which is all this needs.
+        unsafe extern "C" fn asked(data: *mut std::ffi::c_void) -> bool {
+            // SAFETY: `data` is the `&ShouldStop` below, alive until `full` returns.
+            unsafe { (*(data as *const ShouldStop))() }
+        }
+        // SAFETY: as above; the callback only reads.
+        unsafe {
+            p.set_abort_callback(Some(asked));
+            p.set_abort_callback_user_data(stop as *const ShouldStop as *mut std::ffi::c_void);
+        }
+        let done = state.full(p, samples);
+        if stop() {
+            return Err(Stopped.into());
+        }
+        done.map_err(|e| anyhow!("transcribing: {e}"))?;
 
         let eot = self.ctx.token_eot();
         // Words as bytes first: a token can hold half of a multi-byte character.
@@ -118,13 +154,15 @@ pub struct Pcm {
     /// Where `out[0]` is in the file.
     base_ms: i64,
     pub eof: bool,
+    /// Checked between blocks, so a stop doesn't wait for minutes of audio to be decoded.
+    pub stop: Option<ShouldStop>,
 }
 
 impl Pcm {
     pub fn open(path: &Path, from_ms: i64) -> Result<Self> {
         let mut reader = Reader::open(path)?;
         reader.seek_ms(from_ms.max(0) as u64)?;
-        Ok(Pcm { reader, pending: Vec::new(), out: Vec::new(), base_ms: from_ms.max(0), eof: false })
+        Ok(Pcm { reader, pending: Vec::new(), out: Vec::new(), base_ms: from_ms.max(0), eof: false, stop: None })
     }
 
     fn end_ms(&self) -> i64 {
@@ -134,6 +172,9 @@ impl Pcm {
     /// Decodes until `ms` is covered or the file ends.
     fn fill(&mut self, ms: i64) -> Result<()> {
         while !self.eof && self.end_ms() < ms {
+            if self.stop.as_ref().is_some_and(|stop| stop()) {
+                return Err(Stopped.into());
+            }
             let block = 10 * self.reader.rate.max(8_000) as usize;
             while self.pending.len() < block {
                 if !self.reader.read_into(&mut self.pending)? {
@@ -178,9 +219,11 @@ pub struct Chunk {
 }
 
 /// Transcribes `path` from `from_ms`. `on_chunk` saves each chunk and says whether to go on.
-pub fn run(engine: &Engine, path: &Path, from_ms: i64, prompt: &str, mut on_chunk: impl FnMut(Chunk) -> Result<bool>) -> Result<()> {
+/// `stop` interrupts it in the middle of a chunk, with the error `Stopped`.
+pub fn run(engine: &Engine, path: &Path, from_ms: i64, prompt: &str, stop: &ShouldStop, mut on_chunk: impl FnMut(Chunk) -> Result<bool>) -> Result<()> {
     let mut state = engine.state()?;
     let mut pcm = Pcm::open(path, from_ms)?;
+    pcm.stop = Some(stop.clone());
     let mut start = from_ms;
     let mut prompt = prompt.to_string();
     let mut first = from_ms == 0;
@@ -198,7 +241,7 @@ pub fn run(engine: &Engine, path: &Path, from_ms: i64, prompt: &str, mut on_chun
             return Ok(());
         }
         let real_end = start + samples.len() as i64 * 1000 / WHISPER_RATE as i64;
-        let words = engine.words(&mut state, &samples, start, &prompt)?;
+        let words = engine.words(&mut state, &samples, start, &prompt, stop)?;
 
         let mut sentences = sentences::split(&words);
         let next_start = if last {
@@ -346,24 +389,31 @@ enum Msg {
 
 pub struct Transcriber {
     tx: mpsc::Sender<Msg>,
+    /// The item whose transcription should stop now, mid-chunk; 0 for none.
+    stop: Arc<AtomicI64>,
 }
 
 impl Transcriber {
     pub fn start(app: AppHandle) -> Self {
         let (tx, rx) = mpsc::channel();
+        let stop = Arc::new(AtomicI64::new(0));
+        let worker = Worker { app, rx, queue: VecDeque::new(), engine: None, stop: stop.clone() };
         std::thread::Builder::new()
             .name("eksigo-transcribe".into())
-            .spawn(move || Worker { app, rx, queue: VecDeque::new(), engine: None }.run())
+            .spawn(move || worker.run())
             .expect("starting the transcription thread");
-        Transcriber { tx }
+        Transcriber { tx, stop }
     }
 
     pub fn request(&self, item_id: i64, first: bool) {
         let _ = self.tx.send(Msg::Request { item_id, first });
     }
 
+    /// Stops at once, even in the middle of a chunk, and deletes what was transcribed.
     pub fn cancel(&self, item_id: i64) {
+        // The message first, so the worker finds it when Whisper stops.
         let _ = self.tx.send(Msg::Cancel(item_id));
+        self.stop.store(item_id, Ordering::SeqCst);
     }
 }
 
@@ -372,6 +422,7 @@ struct Worker {
     rx: mpsc::Receiver<Msg>,
     queue: VecDeque<i64>,
     engine: Option<Engine>,
+    stop: Arc<AtomicI64>,
 }
 
 enum Next {
@@ -432,6 +483,7 @@ impl Worker {
             }
             Msg::Cancel(item_id) => {
                 self.queue.retain(|&i| i != item_id);
+                let _ = self.stop.compare_exchange(item_id, 0, Ordering::SeqCst, Ordering::SeqCst);
                 Some(item_id) == current
             }
         }
@@ -487,7 +539,9 @@ impl Worker {
         let mut first_chunk = true;
         let rx = &self.rx;
         let mut pending: Vec<Msg> = Vec::new();
-        run(engine, Path::new(path), from_ms, &prompt, |chunk| {
+        let flag = self.stop.clone();
+        let stop: ShouldStop = Arc::new(move || flag.load(Ordering::Relaxed) == item_id);
+        let result = run(engine, Path::new(path), from_ms, &prompt, &stop, |chunk| {
             save_chunk(&mut app.state::<Db>().conn(), item_id, &chunk)?;
             if first_chunk {
                 first_chunk = false;
@@ -501,8 +555,19 @@ impl Worker {
                 pending.push(m);
             }
             Ok(pending.is_empty() || !pending.iter().any(|m| matches!(m, Msg::Cancel(i) if *i == item_id) || matches!(m, Msg::Request { item_id: i, first: true } if *i != item_id)))
-        })
-        .with_context(|| format!("transcribing {}", Path::new(path).file_name().map(|n| n.to_string_lossy()).unwrap_or_default()))?;
+        });
+        match result {
+            // Stopped mid-chunk: the Cancel message that asked for it is waiting.
+            Err(e) if e.is::<Stopped>() => {
+                while let Ok(m) = rx.try_recv() {
+                    pending.push(m);
+                }
+                if !pending.iter().any(|m| matches!(m, Msg::Cancel(i) if *i == item_id)) {
+                    pending.push(Msg::Cancel(item_id));
+                }
+            }
+            r => r.with_context(|| format!("transcribing {}", Path::new(path).file_name().map(|n| n.to_string_lossy()).unwrap_or_default()))?,
+        }
 
         for m in pending {
             if let Msg::Cancel(i) = m
@@ -510,6 +575,7 @@ impl Worker {
             {
                 let _ = db.conn().execute("DELETE FROM transcripts WHERE item_id = ?1", [item_id]);
                 let _ = db.conn().execute("DELETE FROM sentences WHERE item_id = ?1", [item_id]);
+                let _ = self.stop.compare_exchange(item_id, 0, Ordering::SeqCst, Ordering::SeqCst);
                 next = Next::Cancelled;
                 continue;
             }
@@ -588,6 +654,35 @@ mod tests {
         // Removing the item removes its transcript.
         conn.execute("DELETE FROM items WHERE id = 1", []).unwrap();
         assert_eq!(status(&conn, 1).unwrap().state, "none");
+    }
+
+    /// Stop takes effect in the middle of a chunk:
+    /// `EKSIGO_TEST_MODEL=ggml-base.en.bin EKSIGO_TEST_AUDIO=episode.mp3 cargo test --release stops_mid_chunk -- --ignored`.
+    #[test]
+    #[ignore = "needs EKSIGO_TEST_MODEL and EKSIGO_TEST_AUDIO"]
+    fn stops_mid_chunk() {
+        let engine = Engine::load(Path::new(&std::env::var("EKSIGO_TEST_MODEL").unwrap()), "test").unwrap();
+        let audio = std::env::var("EKSIGO_TEST_AUDIO").unwrap();
+        let flag = Arc::new(AtomicBool::new(false));
+        let f = flag.clone();
+        let stop: ShouldStop = Arc::new(move || f.load(Ordering::Relaxed));
+        // Start from a minute in, so the first chunk is a long one, and ask to stop after half a second.
+        let asker = flag.clone();
+        let asked_at = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            asker.store(true, Ordering::Relaxed);
+            Instant::now()
+        });
+        let mut chunks = 0;
+        let r = run(&engine, Path::new(&audio), 60_000, "", &stop, |_| {
+            chunks += 1;
+            Ok(true)
+        });
+        let stopped_at = Instant::now();
+        let delay = stopped_at - asked_at.join().unwrap();
+        println!("stopped {delay:?} after being asked, {chunks} chunks done");
+        assert!(r.unwrap_err().is::<Stopped>());
+        assert!(delay < std::time::Duration::from_millis(300), "took {delay:?}");
     }
 
     #[test]

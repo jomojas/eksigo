@@ -29,7 +29,8 @@ fn bench(model: &PathBuf, file: &PathBuf) -> anyhow::Result<()> {
     let mut first_ms = None;
     let mut count = 0;
     let mut chunks = 0;
-    transcribe::run(&engine, file, 0, "", |chunk| {
+    let never: transcribe::ShouldStop = std::sync::Arc::new(|| false);
+    transcribe::run(&engine, file, 0, "", &never, |chunk| {
         first_ms.get_or_insert(t.elapsed().as_millis());
         chunks += 1;
         for s in &chunk.sentences {

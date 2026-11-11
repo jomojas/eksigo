@@ -207,7 +207,17 @@ function Listen({ item, durationS }: { item: Item; durationS: number | null }) {
   const pos = player.playing ? player.positionMs : at;
 
   const [initial, setInitial] = useState<TranscriptStatus | null>(null);
-  const status = useTranscript(item.id, initial);
+  const live = useTranscript(item.id, initial);
+  // Stop looks done the moment it's clicked; the core confirms a moment later.
+  const [stopping, setStopping] = useState(false);
+  useEffect(() => {
+    if (live && !isBusy(live.state)) setStopping(false);
+  }, [live]);
+  const status = live && stopping && isBusy(live.state) ? { ...live, state: "none" as const, sentences: 0, doneMs: 0 } : live;
+  const stop = useCallback(() => {
+    setStopping(true);
+    backend.cancelTranscript(item.id);
+  }, [item.id]);
   const [sentences, setSentences] = useState<Sentence[]>([]);
   useEffect(() => {
     backend.transcriptStatus(item.id).then(setInitial);
@@ -404,7 +414,17 @@ function Listen({ item, durationS }: { item: Item; durationS: number | null }) {
           </p>
         </section>
       </div>
-      <Transcript item={item} status={status} sentences={sentences} current={current} onPick={pick} />
+      <Transcript
+        status={status}
+        sentences={sentences}
+        current={current}
+        onPick={pick}
+        onStop={stop}
+        onStart={() => {
+          setStopping(false);
+          backend.transcribe(item.id);
+        }}
+      />
     </>
   );
 }
@@ -426,17 +446,19 @@ function transcriptLabel(state: string | undefined): string {
 
 /** The transcript: start it, watch it grow, and click any sentence to listen from there. */
 function Transcript({
-  item,
   status,
   sentences,
   current,
   onPick,
+  onStop,
+  onStart,
 }: {
-  item: Item;
   status: TranscriptStatus | null;
   sentences: Sentence[];
   current: number;
   onPick: (i: number) => void;
+  onStop: () => void;
+  onStart: () => void;
 }) {
   const { model } = useActivity();
   if (!status) return null;
@@ -463,7 +485,7 @@ function Transcript({
             Eksigo writes out the episode on this computer, sentence by sentence, so dictation can play one sentence at a time. It takes a
             few seconds to start; you can listen to the sentences as they arrive.
           </p>
-          <button type="button" className="btn" onClick={() => backend.transcribe(item.id)}>
+          <button type="button" className="btn" onClick={onStart}>
             Transcribe
           </button>
         </div>
@@ -492,7 +514,7 @@ function Transcript({
           ) : (
             <span style={{ flexGrow: 1 }}>{status.state === "model" ? "Getting the speech model ready…" : "Waiting for another episode to finish…"}</span>
           )}
-          <button type="button" className="btn btn-sm btn-ghost" onClick={() => backend.cancelTranscript(item.id)}>
+          <button type="button" className="btn btn-sm btn-ghost" onClick={onStop}>
             Stop
           </button>
         </div>
@@ -501,7 +523,7 @@ function Transcript({
       {status.state === "failed" && (
         <div className="notice notice-error" role="alert">
           <span style={{ flexGrow: 1 }}>{status.error ?? "Transcription failed."}</span>
-          <button type="button" className="btn btn-sm" onClick={() => backend.transcribe(item.id)}>
+          <button type="button" className="btn btn-sm" onClick={onStart}>
             Try again
           </button>
         </div>
