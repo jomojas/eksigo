@@ -116,7 +116,7 @@ export function ShowScreen() {
               </h1>
               {show.author && <div style={{ fontSize: 13 }}>{show.author}</div>}
               {show.description && (
-                <p className="clamp-3 selectable" style={{ fontSize: 14, lineHeight: 1.55, maxWidth: 680 }} title={show.description}>
+                <p className="clamp-3 selectable" style={{ fontSize: 14, lineHeight: 1.55 }} title={show.description}>
                   {show.description}
                 </p>
               )}

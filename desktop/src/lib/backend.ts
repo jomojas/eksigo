@@ -17,18 +17,22 @@ export type AppInfo = {
   whisperBackend: string; // "Metal" | "CPU" | "—"
 };
 
-export type Segment = { startMs: number; endMs: number; text: string };
+export type TranscriptState = "none" | "queued" | "model" | "running" | "done" | "failed";
 
-export type BenchReport = {
-  audioSeconds: number;
-  decodeMs: number;
-  loadModelMs: number;
-  transcribeMs: number;
-  speed: number;
-  backend: string;
-  threads: number;
-  segments: Segment[];
+export type TranscriptStatus = {
+  itemId: number;
+  title: string;
+  state: TranscriptState;
+  doneMs: number;
+  durationMs: number | null;
+  sentences: number;
+  error: string | null;
 };
+
+export type Sentence = { idx: number; startMs: number; endMs: number; text: string };
+
+export type ModelInfo = { id: string; name: string; bytes: number; installed: boolean; available: boolean; path: string };
+export type ModelProgress = { id: string; received: number; total: number; state: "downloading" | "done" | "failed" | "cancelled"; error: string | null };
 
 /** A show in search results, charts or recommendations. */
 export type Listing = {
@@ -85,6 +89,8 @@ export type Item = {
   addedAt: number;
   lastPractisedAt: number | null;
   artworkUrl: string | null;
+  transcriptState: TranscriptState;
+  transcriptDoneMs: number;
 };
 
 export type ShowPage = { show: Show; episodes: Episode[] };
@@ -128,10 +134,15 @@ export const backend = {
   getSetting: async (key: string) => (await call<string | null>("get_setting", { key }, () => localGet(key))) ?? null,
   setSetting: (key: string, value: string) => call<void>("set_setting", { key, value }, () => localSet(key, value)),
 
-  whisperBench: (modelPath: string, audioPath: string) =>
-    call<BenchReport>("whisper_bench", { modelPath, audioPath }, () => {
-      throw new Error("Transcription only runs in the app, not in the browser preview.");
-    }),
+  // Speech models and transcripts
+  models: () => call<ModelInfo[]>("models_list", {}, () => sample.models()),
+  downloadModel: () => call<void>("model_download", {}, () => sample.downloadModel()),
+  cancelModel: () => call<void>("model_cancel", {}, () => undefined),
+  deleteModel: (id: string) => call<void>("model_delete", { id }, () => sample.deleteModel()),
+  transcribe: (itemId: number) => call<void>("transcribe", { itemId }, () => sample.transcribe(itemId)),
+  cancelTranscript: (itemId: number) => call<void>("transcribe_cancel", { itemId }, () => undefined),
+  transcriptStatus: (itemId: number) => call<TranscriptStatus>("transcript_status", { itemId }, () => sample.transcriptStatus(itemId)),
+  sentences: (itemId: number) => call<Sentence[]>("transcript_sentences", { itemId }, () => sample.sentences(itemId)),
 
   // Podcasts
   forLearners: () => call<Listing[]>("podcasts_for_learners", {}, () => sample.learners),
@@ -166,12 +177,15 @@ export const backend = {
     return Array.isArray(picked) ? picked : [picked];
   },
 
-  async pickFile(title: string, extensions: string[]): Promise<string | null> {
-    return (await backend.pickFiles(title, extensions))[0] ?? null;
-  },
 };
 
-type Events = { download: DownloadProgress; library: null; playback: PlaybackEvent };
+type Events = {
+  download: DownloadProgress;
+  library: null;
+  playback: PlaybackEvent;
+  transcript: TranscriptStatus;
+  "model-download": ModelProgress;
+};
 
 /** Listens to an event from the Rust core (sample.ts plays them in a browser). Returns the unlisten function. */
 export function on<K extends keyof Events>(event: K, handler: (payload: Events[K]) => void): () => void {

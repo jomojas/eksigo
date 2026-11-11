@@ -1,11 +1,17 @@
 pub mod audio;
 pub mod db;
 pub mod library;
+pub mod models;
 pub mod player;
 pub mod podcasts;
+pub mod sentences;
+pub mod transcribe;
 pub mod whisper;
 
-use std::path::PathBuf;
+use std::{
+    path::PathBuf,
+    sync::atomic::{AtomicBool, Ordering},
+};
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -14,6 +20,7 @@ use db::Db;
 use library::{Downloads, Episode, Item, Show};
 use player::Player;
 use podcasts::Listing;
+use transcribe::Transcriber;
 
 /// Errors cross to the interface as plain sentences.
 type CmdResult<T> = Result<T, String>;
@@ -54,15 +61,69 @@ fn set_setting(db: State<Db>, key: String, value: String) -> CmdResult<()> {
     db.set_setting(&key, &value).map_err(err)
 }
 
-/// Transcribes a file and times it. Runs off the main thread so the window stays responsive.
+// ---------- speech models and transcripts ----------
+
 #[tauri::command]
-async fn whisper_bench(model_path: String, audio_path: String) -> CmdResult<whisper::BenchReport> {
-    tauri::async_runtime::spawn_blocking(move || {
-        whisper::bench(&PathBuf::from(model_path), &PathBuf::from(audio_path))
+fn models_list(app: AppHandle) -> CmdResult<Vec<models::ModelInfo>> {
+    Ok(models::list(&transcribe::model_dir(&app).map_err(err)?))
+}
+
+/// Set to stop a model download from Settings.
+#[derive(Default)]
+struct ModelCancel(AtomicBool);
+
+/// Downloads the speech model from Settings; progress arrives as `model-download` events.
+#[tauri::command]
+async fn model_download(app: AppHandle, cancel: State<'_, ModelCancel>) -> CmdResult<()> {
+    cancel.0.store(false, Ordering::Relaxed);
+    let dir = transcribe::model_dir(&app).map_err(err)?;
+    let m = models::find(models::DEFAULT).map_err(err)?;
+    let a = app.clone();
+    let result = models::download(&dir, m, &cancel.0, &move |p| {
+        let _ = a.emit("model-download", p);
     })
-    .await
-    .map_err(err)?
-    .map_err(err)
+    .await;
+    if let Err(e) = &result {
+        let state = if cancel.0.load(Ordering::Relaxed) { "cancelled" } else { "failed" };
+        let _ = app.emit("model-download", models::ModelProgress { id: m.id, received: 0, total: m.bytes, state, error: Some(format!("{e:#}")) });
+    }
+    result.map(|_| ()).map_err(err)
+}
+
+#[tauri::command]
+fn model_cancel(cancel: State<ModelCancel>) {
+    cancel.0.store(true, Ordering::Relaxed);
+}
+
+#[tauri::command]
+fn model_delete(app: AppHandle, id: String) -> CmdResult<()> {
+    let m = models::find(&id).map_err(err)?;
+    let path = models::path(&transcribe::model_dir(&app).map_err(err)?, m);
+    if path.exists() {
+        std::fs::remove_file(path).map_err(err)?;
+    }
+    Ok(())
+}
+
+/// Transcribes a Library item in the background, ahead of anything else waiting.
+#[tauri::command]
+fn transcribe(transcriber: State<Transcriber>, item_id: i64) {
+    transcriber.request(item_id, true);
+}
+
+#[tauri::command]
+fn transcribe_cancel(transcriber: State<Transcriber>, item_id: i64) {
+    transcriber.cancel(item_id);
+}
+
+#[tauri::command]
+fn transcript_status(db: State<Db>, item_id: i64) -> CmdResult<transcribe::Status> {
+    transcribe::status(&db.conn(), item_id).map_err(err)
+}
+
+#[tauri::command]
+fn transcript_sentences(db: State<Db>, item_id: i64) -> CmdResult<Vec<transcribe::StoredSentence>> {
+    transcribe::sentences(&db.conn(), item_id).map_err(err)
 }
 
 // ---------- podcasts ----------
@@ -252,8 +313,9 @@ async fn library_add_files(app: AppHandle, paths: Vec<String>) -> CmdResult<Adde
 
 /// Takes an item out of the Library; a downloaded episode's file is deleted, the learner's own files never are.
 #[tauri::command]
-fn library_remove(app: AppHandle, db: State<Db>, downloads: State<Downloads>, id: i64) -> CmdResult<()> {
+fn library_remove(app: AppHandle, db: State<Db>, downloads: State<Downloads>, transcriber: State<Transcriber>, id: i64) -> CmdResult<()> {
     downloads.cancel(id);
+    transcriber.cancel(id);
     let file = library::remove_item(&db.conn(), id).map_err(err)?;
     if let Some(f) = file {
         let _ = std::fs::remove_file(f);
@@ -301,13 +363,27 @@ pub fn run() {
             app.manage(Player::new(move |e| {
                 let _ = handle.emit("playback", e);
             }));
+            app.manage(ModelCancel::default());
+            let transcriber = Transcriber::start(app.handle().clone());
+            // Transcripts interrupted by quitting carry on where they stopped.
+            for item_id in transcribe::unfinished(&app.state::<Db>().conn())? {
+                transcriber.request(item_id, false);
+            }
+            app.manage(transcriber);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             app_info,
             get_setting,
             set_setting,
-            whisper_bench,
+            models_list,
+            model_download,
+            model_cancel,
+            model_delete,
+            transcribe,
+            transcribe_cancel,
+            transcript_status,
+            transcript_sentences,
             podcasts_for_learners,
             podcasts_search,
             podcasts_chart,

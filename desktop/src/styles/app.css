@@ -346,6 +346,8 @@ textarea,
   flex-grow: 1;
   min-height: 0;
   overflow-y: auto;
+  /* So a side panel can be exactly as tall as the visible area (100cqh) and stay put while the page scrolls. */
+  container-type: size;
 }
 
 .statusbar {
@@ -367,7 +369,8 @@ textarea,
 }
 
 /* ---------- page bodies ---------- */
-/* Pages fill the window; long text keeps a readable line length (.page-read, or its own max-width). */
+/* Pages fill the window with the same margin on both sides. Only running text gets a max-width, for a
+   readable line length; boxes and panels never do, or a wide window leaves a gap on the right only. */
 .page {
   padding: 28px 32px 40px;
   display: flex;
@@ -375,7 +378,6 @@ textarea,
   gap: 24px;
 }
 .empty {
-  max-width: 760px;
   border: 1px dashed var(--hairline-strong);
   border-radius: var(--radius-lg);
   padding: 32px;
@@ -534,6 +536,11 @@ select.btn {
 }
 
 .insp {
+  /* Stays put while the page beside it scrolls. */
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  height: 100cqh;
   width: 296px;
   flex-shrink: 0;
   border-left: 1px solid var(--hairline);
@@ -545,9 +552,6 @@ select.btn {
   overflow-y: auto;
 }
 
-.page-read > * {
-  max-width: 820px;
-}
 
 .tiles {
   display: grid;
@@ -660,4 +664,54 @@ select.btn {
   background: var(--surface-2);
   border-color: var(--hairline-strong);
   color: var(--ink-tertiary);
+}
+
+/* ---------- the transcript: click a sentence to listen from there ---------- */
+.sent {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 5px 8px 5px 0;
+  border-radius: var(--radius-md);
+  color: var(--ink-muted);
+  cursor: pointer;
+  transition: background-color 120ms ease-out, color 120ms ease-out;
+}
+.sent:hover {
+  background: var(--surface-2);
+}
+.sent-on,
+.sent-on:hover {
+  background: var(--selected);
+  color: var(--ink);
+}
+.sent:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.sent-icon {
+  width: 28px;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+  padding-top: 5px;
+  color: var(--ink-subtle);
+  visibility: hidden;
+}
+.sent:hover .sent-icon,
+.sent-on .sent-icon {
+  visibility: visible;
+}
+.sent-on .sent-icon {
+  color: var(--ink);
+}
+.sent-time {
+  width: 40px;
+  flex-shrink: 0;
+  padding-top: 3px;
+  font-size: 11px;
+  color: var(--ink-subtle);
+}
+.sent-text {
+  line-height: 1.5;
 }

@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { backend, on } from "./backend";
 
-export const SPEEDS = [1, 0.85, 0.7] as const;
+/** Slowest first, like a dial. 1.25× is for when an episode feels easy. */
+export const SPEEDS = [0.7, 0.85, 1, 1.25] as const;
 
 let nextId = 1;
 /** The playback the interface last asked for; events from older ones are ignored. */

@@ -12,6 +12,7 @@ import "./styles/app.css";
 import { Shell } from "./components/Shell";
 import { DownloadsProvider } from "./lib/downloads";
 import { ThemeProvider } from "./lib/theme";
+import { TranscriptsProvider } from "./lib/transcripts";
 import { EpisodeScreen } from "./pages/Episode";
 import { Library } from "./pages/Library";
 import { Progress, Today, Words } from "./pages/Placeholders";
@@ -41,7 +42,9 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <ThemeProvider>
       <DownloadsProvider>
-        <RouterProvider router={router} />
+        <TranscriptsProvider>
+          <RouterProvider router={router} />
+        </TranscriptsProvider>
       </DownloadsProvider>
     </ThemeProvider>
   </React.StrictMode>,

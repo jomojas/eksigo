@@ -1,7 +1,7 @@
 // Stand-ins for the Rust core in a plain browser (`npm run dev`, the preview pane): a few shows, episodes
 // and Library items kept in memory, with downloads and playback simulated by timers. Never used in the app.
 
-import type { Added, EpisodePage, Episode, Item, LibraryPage, Listing, PlaybackEvent, Show, ShowPage } from "./backend";
+import type { Added, EpisodePage, Episode, Item, LibraryPage, Listing, ModelInfo, PlaybackEvent, Sentence, Show, ShowPage, TranscriptStatus } from "./backend";
 import learnersJson from "../../src-tauri/data/learners.json";
 
 type Learner = { appleId: string; title: string; author: string; feedUrl: string; artworkUrl: string; blurb: string };
@@ -88,6 +88,8 @@ function addItem(ep: Episode, state: Item["state"], lastPractisedDaysAgo: number
     addedAt: now() - 3 * DAY,
     lastPractisedAt: lastPractisedDaysAgo === null ? null : now() - lastPractisedDaysAgo * DAY,
     artworkUrl: show.artworkUrl,
+    transcriptState: "none",
+    transcriptDoneMs: 0,
   };
   items.push(item);
   ep.itemId = item.id;
@@ -113,7 +115,39 @@ items.push({
   addedAt: now() - DAY,
   lastPractisedAt: now() - 3600,
   artworkUrl: null,
+  transcriptState: "none",
+  transcriptDoneMs: 0,
 });
+
+// ---------- transcripts ----------
+
+const SAMPLE_TEXT = [
+  "Hello, welcome to 6 Minute English from BBC Learning English.",
+  "I'm Phil. And I'm Georgie.",
+  "When was the last time you had a vaccination, and what was it for?",
+  "Many of us get vaccinations when we are children or when we go travelling.",
+  "But did you know that scientists have been developing vaccines that can be personalised?",
+  "They help your body keep itself clear of some specific cancer types.",
+  "Tom says that the development of the cancer vaccine has been a long time coming.",
+  "This means that it's taken a lot of time to achieve.",
+  "Tom also says there have been some false dawns.",
+  "An expression meaning that something looks like it's improving when it's actually not.",
+];
+
+const transcripts = new Map<number, { state: TranscriptStatus["state"]; sentences: Sentence[]; doneMs: number }>();
+let modelInstalled = false;
+
+function makeSentences(durationMs: number, upToMs: number): Sentence[] {
+  const out: Sentence[] = [];
+  let t = 500;
+  for (let i = 0; t < upToMs && t < durationMs; i++) {
+    const text = SAMPLE_TEXT[i % SAMPLE_TEXT.length];
+    const len = 1500 + text.length * 55;
+    out.push({ idx: i, startMs: t, endMs: t + len, text });
+    t += len + 200;
+  }
+  return out;
+}
 
 // ---------- events ----------
 
@@ -233,6 +267,78 @@ export const sample = {
       ep.itemState = null;
     }
     emit("library", null);
+  },
+
+  models: (): ModelInfo[] => [
+    { id: "base.en", name: "Fast", bytes: 147_964_211, installed: modelInstalled, available: true, path: "(browser preview)/models/ggml-base.en.bin" },
+    { id: "small.en", name: "Accurate", bytes: 487_614_201, installed: false, available: false, path: "(browser preview)/models/ggml-small.en.bin" },
+  ],
+
+  downloadModel(): Promise<void> {
+    return new Promise((resolve) => {
+      let received = 0;
+      const total = 147_964_211;
+      const t = window.setInterval(() => {
+        received = Math.min(total, received + total / 12);
+        const done = received >= total;
+        emit("model-download", { id: "base.en", received, total, state: done ? "done" : "downloading", error: null });
+        if (done) {
+          window.clearInterval(t);
+          modelInstalled = true;
+          resolve();
+        }
+      }, 200);
+    });
+  },
+
+  deleteModel() {
+    modelInstalled = false;
+  },
+
+  transcriptStatus(itemId: number): TranscriptStatus {
+    const item = items.find((i) => i.id === itemId);
+    const t = transcripts.get(itemId);
+    return {
+      itemId,
+      title: item?.title ?? "",
+      state: t?.state ?? "none",
+      doneMs: t?.doneMs ?? 0,
+      durationMs: item?.durationS ? item.durationS * 1000 : null,
+      sentences: t?.sentences.length ?? 0,
+      error: null,
+    };
+  },
+
+  sentences: (itemId: number): Sentence[] => transcripts.get(itemId)?.sentences ?? [],
+
+  async transcribe(itemId: number) {
+    const item = items.find((i) => i.id === itemId);
+    if (!item || transcripts.get(itemId)?.state === "running") return;
+    const duration = (item.durationS ?? 300) * 1000;
+    const t = { state: "queued" as TranscriptStatus["state"], sentences: [] as Sentence[], doneMs: 0 };
+    transcripts.set(itemId, t);
+    const update = () => {
+      item.transcriptState = t.state;
+      item.transcriptDoneMs = t.doneMs;
+      emit("transcript", sample.transcriptStatus(itemId));
+    };
+    update();
+    if (!modelInstalled) {
+      t.state = "model";
+      update();
+      await sample.downloadModel();
+    }
+    t.state = "running";
+    update();
+    const timer = window.setInterval(() => {
+      t.doneMs = Math.min(duration, t.doneMs + (t.doneMs === 0 ? 30_000 : 90_000));
+      t.sentences = makeSentences(duration, t.doneMs);
+      if (t.doneMs >= duration) {
+        t.state = "done";
+        window.clearInterval(timer);
+      }
+      update();
+    }, 700);
   },
 
   play(args: { id: number; startMs: number; endMs: number | null; speed: number }) {

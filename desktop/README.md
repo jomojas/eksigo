@@ -35,7 +35,10 @@ The interface alone at http://localhost:1420, in any browser. `src/lib/backend.t
 | `src-tauri/src/player.rs` | Playback of an exact stretch at 0.7–1.5× with the pitch unchanged (Signalsmith Stretch) |
 | `src-tauri/src/podcasts.rs` | Apple podcast search and charts, the *Good for learners* list (`data/learners.json`), RSS |
 | `src-tauri/src/library.rs` | Shows, episodes and the Library in SQLite; downloads; the learner's own files |
-| `src-tauri/src/whisper.rs` | whisper.cpp (Metal on Mac, CPU on Windows) |
+| `src-tauri/src/models.rs` | The speech models, downloaded once and checked by SHA-256 |
+| `src-tauri/src/transcribe.rs` | Background transcription in chunks, saved as it goes and resumed after quitting |
+| `src-tauri/src/sentences.rs` | Timed words into sentences sized for dictation |
+| `src-tauri/src/whisper.rs` | Which whisper.cpp build runs: Metal on Mac, CPU on Windows |
 
 ## Tests
 
@@ -57,6 +60,6 @@ They read every feed on the learners list, check that seeking in a real MP3 land
 cd src-tauri && cargo run --release --bin whisper-bench -- <ggml-model.bin> <audio file>
 ```
 
-`EKSIGO_WHISPER_CPU=1` turns off the GPU, to estimate a computer without one. CI runs it on macOS and Windows for every pull request and puts the timing in the job summary.
+Transcribes a file the way the app does (in chunks, split into sentences) and prints the sentences, how long the first ones took and the whole file's speed. `EKSIGO_WHISPER_CPU=1` turns off the GPU, to estimate a computer without one. CI runs it on macOS and Windows for every pull request and puts the timing in the job summary.
 
 The app keeps its data (database, models, downloads) in the system's app data folder; Settings → About shows where.

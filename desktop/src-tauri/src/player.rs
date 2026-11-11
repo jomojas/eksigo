@@ -119,7 +119,8 @@ struct Job {
 }
 
 enum Source {
-    Stream { reader: Reader, stretch: Option<Stretch>, remaining: Option<u64>, pending: Vec<f32> },
+    /// `skip`: output still to be dropped, the silence the stretcher puts first.
+    Stream { reader: Reader, stretch: Option<Stretch>, remaining: Option<u64>, pending: Vec<f32>, skip: usize },
 }
 
 impl Job {
@@ -158,9 +159,23 @@ fn start(req: &Request, out: &mut Vec<Vec<f32>>) -> Result<Job> {
                 return Ok(job);
             }
             job.rate = reader.rate;
-            let remaining = remaining.map(|ms| ms * reader.rate as u64 / 1000);
-            let stretch = (speed != 1.0).then(|| Stretch::preset_default(1, reader.rate));
-            job.source = Some(Source::Stream { reader, stretch, remaining, pending });
+            let mut remaining = remaining.map(|ms| ms * reader.rate as u64 / 1000);
+            let mut stretch = (speed != 1.0).then(|| Stretch::preset_default(1, reader.rate));
+            let mut skip = 0;
+            if let Some(s) = stretch.as_mut() {
+                // Prime the stretcher with the first few milliseconds, as `exact` does, and drop the silence it
+                // then puts first, so the sound starts at once instead of after about 60 ms of nothing.
+                skip = s.output_latency();
+                let lat = s.input_latency();
+                while pending.len() < lat && reader.read_into(&mut pending)? {}
+                let lat = lat.min(pending.len());
+                s.seek(&pending[..lat], speed as f64);
+                pending.drain(..lat);
+                if let Some(left) = remaining.as_mut() {
+                    *left = left.saturating_sub(lat as u64);
+                }
+            }
+            job.source = Some(Source::Stream { reader, stretch, remaining, pending, skip });
             Ok(job)
         }
     }
@@ -178,7 +193,7 @@ pub fn stretch_whole(samples: Vec<f32>, rate: u32, speed: f32) -> Vec<f32> {
 
 /// Decodes and stretches the next block of a streaming job. Returns the samples, or `None` at the end.
 fn next_block(job: &mut Job) -> Result<Option<Vec<f32>>> {
-    let Some(Source::Stream { reader, stretch, remaining, pending }) = job.source.as_mut() else {
+    let Some(Source::Stream { reader, stretch, remaining, pending, skip }) = job.source.as_mut() else {
         return Ok(None);
     };
     let block = (BLOCK_SECS * job.rate as f64) as usize;
@@ -206,6 +221,9 @@ fn next_block(job: &mut Job) -> Result<Option<Vec<f32>>> {
                 s.flush(&mut tail);
                 out.extend(tail);
             }
+            let drop = (*skip).min(out.len());
+            out.drain(..drop);
+            *skip -= drop;
             out
         }
     };
@@ -254,6 +272,8 @@ fn audio_thread(rx: mpsc::Receiver<Cmd>, notify: impl Fn(PlaybackEvent)) {
                         for samples in first {
                             append(player, &mut j, samples);
                         }
+                        // Have the first half second queued before starting, rather than waiting for the next tick.
+                        fill(player, &mut j, BLOCK_SECS, &notify);
                         player.play();
                         notify(PlaybackEvent { id: j.id, playing: true, position_ms: j.start_ms, error: None });
                         job = Some(j);
@@ -267,16 +287,7 @@ fn audio_thread(rx: mpsc::Receiver<Cmd>, notify: impl Fn(PlaybackEvent)) {
         }
 
         let (Some(j), Some((_, player))) = (job.as_mut(), device.as_ref()) else { continue };
-        while j.source.is_some() && j.ahead_secs() < AHEAD_SECS {
-            match next_block(j) {
-                Ok(Some(samples)) => append(player, j, samples),
-                Ok(None) => break,
-                Err(e) => {
-                    j.source = None;
-                    notify(error_event(j.id, j.position_ms(), &format!("{e:#}")));
-                }
-            }
-        }
+        fill(player, j, AHEAD_SECS, &notify);
         if j.finished() {
             notify(PlaybackEvent { id: j.id, playing: false, position_ms: j.position_ms(), error: None });
             job = None;
@@ -285,6 +296,20 @@ fn audio_thread(rx: mpsc::Receiver<Cmd>, notify: impl Fn(PlaybackEvent)) {
         ticks += 1;
         if ticks % 5 == 0 {
             notify(PlaybackEvent { id: j.id, playing: true, position_ms: j.position_ms(), error: None });
+        }
+    }
+}
+
+/// Decodes ahead until `secs` of sound is queued.
+fn fill(player: &rodio::Player, j: &mut Job, secs: f64, notify: &impl Fn(PlaybackEvent)) {
+    while j.source.is_some() && j.ahead_secs() < secs {
+        match next_block(j) {
+            Ok(Some(samples)) => append(player, j, samples),
+            Ok(None) => break,
+            Err(e) => {
+                j.source = None;
+                notify(error_event(j.id, j.position_ms(), &format!("{e:#}")));
+            }
         }
     }
 }
@@ -328,6 +353,57 @@ mod tests {
     fn normal_speed_is_untouched() {
         let s = vec![0.1, -0.2, 0.3];
         assert_eq!(stretch_whole(s.clone(), 16_000, 1.0), s);
+    }
+
+    fn tone_wav(dir: &std::path::Path) -> PathBuf {
+        let rate = 16_000u32;
+        let n = rate * 4;
+        let mut b = Vec::new();
+        for (tag, v) in [(b"RIFF", 36 + n * 2), (b"WAVE", 0)] {
+            b.extend_from_slice(tag);
+            if v > 0 {
+                b.extend_from_slice(&v.to_le_bytes());
+            }
+        }
+        b.extend_from_slice(b"fmt ");
+        for v in [16u32] {
+            b.extend_from_slice(&v.to_le_bytes());
+        }
+        for v in [1u16, 1] {
+            b.extend_from_slice(&v.to_le_bytes());
+        }
+        b.extend_from_slice(&rate.to_le_bytes());
+        b.extend_from_slice(&(rate * 2).to_le_bytes());
+        for v in [2u16, 16] {
+            b.extend_from_slice(&v.to_le_bytes());
+        }
+        b.extend_from_slice(b"data");
+        b.extend_from_slice(&(n * 2).to_le_bytes());
+        for i in 0..n {
+            let v = ((i as f32 * 440.0 * std::f32::consts::TAU / rate as f32).sin() * 16_000.0) as i16;
+            b.extend_from_slice(&v.to_le_bytes());
+        }
+        let p = dir.join("tone.wav");
+        std::fs::write(&p, b).unwrap();
+        p
+    }
+
+    fn rms(s: &[f32]) -> f32 {
+        (s.iter().map(|v| v * v).sum::<f32>() / s.len() as f32).sqrt()
+    }
+
+    #[test]
+    fn slowed_playback_from_a_point_starts_without_a_fade_in() {
+        let dir = crate::audio::tests::temp_dir("player-start");
+        let path = tone_wav(&dir);
+        let mut first = Vec::new();
+        let mut job = start(&Request { id: 1, path, start_ms: 1_000, end_ms: None, speed: 0.7 }, &mut first).unwrap();
+        let block = next_block(&mut job).unwrap().unwrap();
+        // The first 20 ms should be about as loud as the rest (a 0.5 amplitude sine is 0.35 RMS).
+        let head = rms(&block[..320]);
+        let body = rms(&block[block.len() / 2..]);
+        assert!(head > body * 0.6, "starts quiet: {head:.3} against {body:.3}");
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     /// Plays a real stretch on the sound device and checks the events:
