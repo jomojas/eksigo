@@ -92,7 +92,7 @@ export function EpisodeScreen({ from }: { from: "podcasts" | "library" }) {
                   <h2 id="about" className="eyebrow" style={{ marginBottom: 8 }}>
                     About this episode
                   </h2>
-                  <p className="selectable" style={{ fontSize: 14, lineHeight: 1.6, maxWidth: 640 }}>
+                  <p className="selectable" style={{ fontSize: 14, lineHeight: 1.6 }}>
                     {episode.description}
                   </p>
                 </section>
