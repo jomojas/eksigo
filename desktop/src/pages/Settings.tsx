@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { backend, inApp, type BenchReport } from "../lib/backend";
 import { useTheme, type ThemeChoice } from "../lib/theme";
+import { Icon } from "../components/Icon";
 import { Page, useAppInfo } from "../components/Shell";
+import { SPEEDS, usePlayer } from "../lib/playback";
 
 const SECTIONS = ["General", "Speech", "About"] as const;
 type Section = (typeof SECTIONS)[number];
@@ -90,6 +92,13 @@ function Speech() {
   const [running, setRunning] = useState(false);
   const [report, setReport] = useState<BenchReport | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [speed, setSpeed] = useState(1);
+  const [playing, setPlaying] = useState<number | null>(null);
+  const player = usePlayer(audio);
+
+  useEffect(() => {
+    if (!player.playing) setPlaying(null);
+  }, [player.playing]);
 
   const run = async () => {
     if (!model || !audio) return;
@@ -152,13 +161,38 @@ function Speech() {
             <div className="prop">Decoding · loading the model<b className="mono">{report.decodeMs} ms · {report.loadModelMs} ms</b></div>
             <div className="prop">Engine<b className="mono">{report.backend} · {report.threads} threads</b></div>
           </div>
-          <div className="panel selectable" style={{ padding: 16, maxHeight: 320, overflowY: "auto", lineHeight: 1.6 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <p className="muted" style={{ flexGrow: 1 }}>Play a line to hear exactly that stretch of the audio.</p>
+            <div className="seg" role="group" aria-label="Speed">
+              {SPEEDS.map((v) => (
+                <button key={v} type="button" aria-pressed={speed === v} onClick={() => setSpeed(v)}>
+                  {v === 1 ? "1.0" : v}×
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="panel selectable" style={{ padding: "8px 8px 8px 4px", maxHeight: 360, overflowY: "auto", lineHeight: 1.6 }}>
             {report.segments.map((s, i) => (
-              <div key={i} style={{ display: "flex", gap: 12 }}>
-                <span className="mono muted" style={{ fontSize: 11, width: 52, flexShrink: 0, paddingTop: 2 }}>
+              <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-ghost"
+                  style={{ width: 28, padding: 0, flexShrink: 0 }}
+                  aria-label={playing === i ? "Stop" : `Play line ${i + 1}`}
+                  onClick={() => {
+                    if (playing === i) player.stop();
+                    else {
+                      setPlaying(i);
+                      player.play(s.startMs, s.endMs, speed);
+                    }
+                  }}
+                >
+                  <Icon name={playing === i ? "pause" : "play"} size={11} stroke={playing === i ? 2.4 : 1.6} />
+                </button>
+                <span className="mono muted" style={{ fontSize: 11, width: 44, flexShrink: 0, paddingTop: 6 }}>
                   {(s.startMs / 1000).toFixed(1)}s
                 </span>
-                <span style={{ color: "var(--ink)" }}>{s.text}</span>
+                <span style={{ color: playing === i ? "var(--ink)" : "var(--ink-muted)", paddingTop: 3 }}>{s.text}</span>
               </div>
             ))}
           </div>
