@@ -37,57 +37,59 @@ Many desktop dictation apps exist, so making money is not the goal. The project 
 3. AI: *None for now* / *Use my own key* / *Eksigo Premium*. Everything except the AI features in section 5 works with *None*.
 4. Sign-in, optional, only for syncing with the phone. Apple or Google, the same accounts as the iPhone app. Sign in with Apple on Windows uses Apple's web sign-in (needs a Services ID and a return URL on the server).
 
-**Home:**
-- **Today:** the episodes listened to on the phone today (needs sign-in).
-- **Continue:** practice in progress ("sentence 34 of 120").
-- **Podcasts:** Apple podcast search, add an RSS feed, subscriptions.
-- **Library:** downloaded practice copies (section 4), with disk use.
+**Navigation (decided 2026-11-10).** Sidebar: Today, Podcasts, Library, My words, Progress, then an *In progress* list of unfinished episodes, and Settings at the bottom. Every piece of audio lives in the Library, so Dictation is not a sidebar item: it opens from Today, Podcasts, the Library or *In progress*, the sidebar keeps **Library** selected, and the top bar shows the path (`Library / show / episode`).
+- **Today:** Continue, episodes heard on the phone today (needs sign-in), new episodes from subscriptions. Each has **Practise**.
+- **Podcasts:** search (Apple podcast directory) or paste an RSS link; *Your shows*; recommendations (*Good for learners*, a short list we choose, plus Apple's top charts by country and category). → **Show** page: description, Subscribe, the episode list with each episode's practice status. → **Episode** page.
+- **Library:** everything that can be practised: downloaded episodes **and the learner's own audio or video files** (Add audio or drag and drop; MP3, M4A, WAV, MP4; they stay on the computer and are transcribed by local Whisper). Each row shows the source, length, progress (*Not started*, *31/100*, *Finished*), accuracy and when it was last practised. Filters replace a separate History page.
+- **Episode page** (the same page from Podcasts or the Library): **Start**, **Resume at sentence 32** or **Practise again**, **Preview**, and every past attempt with its results.
+- **Practise** on an episode that isn't downloaded downloads it and opens Dictation; transcription starts in the background.
+- **Settings** is a page in the main area, like VS Code (`Ctrl+,`), with its own section list and search; changes save as they are made.
 
-**Starting an episode:** pick it, download it and transcribe it (section 3). Dictation starts after about 30 seconds while transcription continues in the background.
-- **Session settings, saved as defaults:**
-  - plays per sentence (3 or 5)
-  - gap between plays
-  - speed (1.0 / 0.85 / 0.7)
-  - show the answer after each sentence, or only at the end
+**Starting an episode:** dictation starts after about 30 seconds while transcription continues in the background (section 3).
 
-**The dictation loop, one sentence at a time.** The sentence plays N times and the learner types what they heard. It's built for the keyboard:
+**Playback, saved as defaults and changeable during a session:**
+- **Mode.** *Manual* (default): each sentence plays once; the learner presses `Tab` to hear it again, up to the maximum. The next sentence never starts by itself. *Auto*: the sentence plays the maximum number of times in a row with a pause between plays.
+- **Speed:** 0.7 to 1.5 (0.85, 1.0, 1.2 …).
+- **Maximum plays per sentence:** 1 to 5. The learner can move on before using them all; a counter shows "1 / 3".
+- **Pause between plays:** Auto mode only.
+- **Show the original text:** *when I stop or finish* (default), or after every sentence.
+
+**The dictation loop, one sentence at a time.** Built for the keyboard:
 
 | Key | Action |
 |---|---|
-| `Enter` | Submit, show the comparison, go to the next sentence |
-| `Tab` | **I know this one**: fill in the sentence and move on. By default the learner is assumed to know a sentence, so a known one costs one key |
-| `Ctrl+R` | Replay |
-| `Ctrl+↓` | Play slower |
+| `Tab` | Play the sentence, or play it again (up to the maximum) |
+| `Enter` | A new line in the typing box |
+| `Shift+Enter` | Finish this sentence and go to the next |
+| `Shift+Tab` | **I know this one**: fill in the sentence and move on |
+| `Ctrl+R` | Play again, slower |
 | `Ctrl+←` / `Ctrl+→` | Previous or next sentence |
 | `Ctrl+K` | Skip section: mark the following sentences as an ad, leave them out of the score |
 | `_` or `...` | A gap in a partly understood sentence ("I _ to the store") |
+| `Esc` | Stop (see below); also leaves the typing box |
+| `Ctrl+\` | Focus mode: hide the sidebar and the side panel |
 
-(On Mac, `Cmd` instead of `Ctrl`.)
+(On Mac, `Cmd` instead of `Ctrl`.) Inside the typing box `Tab` is used for playback, so `Esc` is the way out for keyboard navigation.
 
-**After each sentence:**
-- The learner's text is compared with the transcript word by word, in the app, without AI. Missed and wrong words are highlighted.
-- The learner can:
-  - **click words or a phrase** to save it to My words, with its sentence and timestamp
-  - mark **"the transcript is wrong here"**, which doesn't count against them
-  - **adjust the sentence's start or end**, or merge or split sentences, when the split is wrong
+**Stopping partway.** `Esc` or Stop asks: **See the results so far** (default) or **Save and continue later**. Progress is saved either way, and seeing partial results doesn't end the episode: the learner can resume at the next sentence, and the results grow.
 
-**End of the episode, review:**
-- Accuracy, plus how many sentences were known, partly understood or missed.
-- The list of missed sentences: audio, correct text, what was typed.
-- **Mistakes grouped by rules, without AI:**
-  - dropped small words (weak forms: *to, of, have, can*)
-  - numbers
-  - names
-  - similar-sounding words (*can/can't, fifteen/fifty*), found with a pronunciation dictionary
-  - dropped endings (*-ed, -s*)
-- **Practise only what I missed**, and **Practise again later**.
+**Results: the original and the learner's text side by side**, sentence by sentence like a split diff, each row with a play button. Words the learner missed are marked in the original; wrong words are red in the learner's text. Above: accuracy, sentences done, known, with mistakes, time; a filter for sentences with mistakes; **Resume** and **Practise these again**. The same results open later from the Episode page.
+- **Selecting a word or phrase** in either column shows its offline dictionary meaning and pronunciation, **Add to My words** (`A`), and later, with an AI key, *Explain in this sentence*.
+- Later: mark **"the transcript is wrong here"** (doesn't count against the learner), adjust a sentence's start or end, merge or split sentences.
+- Later: **mistakes grouped by rules, without AI**: dropped small words (weak forms: *to, of, have, can*), numbers, names, similar-sounding words (*can/can't, fifteen/fifty*, from a pronunciation dictionary), dropped endings (*-ed, -s*).
 - *(AI, optional)* a written review in the learner's language (section 5).
+
+**My words.** Each saved word or phrase keeps its meaning, every sentence it was heard in (with the original audio and what the learner typed) and a level: *New → Learning → Familiar → Known*, moved by spaced repetition (FSRS, shared with the iPhone), or **I know this** to take it out of practice. **Practice, without AI:**
+1. **Listen and type** (default): hear the original sentence with the word missing and type it; checked exactly.
+2. **Listen and recall:** hear it, recall the meaning, reveal it, grade *Again / Hard / Good / Easy*.
+3. **Pick the meaning:** four choices, the wrong ones taken from the learner's other words.
+Checking a typed translation needs an LLM, so it can only come later, as an AI feature.
 
 **Speaking, after the review, optional:**
 - **Shadowing:** play a sentence, record yourself, then compare the two. Local Whisper turns the recording into text and shows which words came through clearly. Free.
 - **Retell:** summarise the episode out loud. *(AI)* feedback on content and grammar, plus a better version.
 
-**Progress:** attempts per episode, accuracy over time, minutes practised, a daily streak, the most common mistake types.
+**Progress:** a year grid like GitHub's (a square per day, darker for more minutes), the streak, minutes this week, accuracy over time, words known, and later the most common mistake types.
 
 ---
 
@@ -345,13 +347,16 @@ Releases go to GitHub Releases, built by a `tauri-action` workflow on every vers
 
 ## 13. Desktop MVP and build order
 
+The detailed milestones are in [ROADMAP.md](ROADMAP.md).
+
+
 1. **New repository** (decided 2026-11-10). `jomojas/eksigo`, private until this step is done. Copy from v1 only what still fits, reviewing each part:
    - **server:** sign-in (Apple, Google), accounts, the database setup, Docker, deploy and CI
    - **iPhone:** the playback engine, RSS and podcast search, downloads, local storage, the sign-in client
    - **website:** `site/`, rewritten for v2 (privacy policy included)
 
    Point the VPS at the new server image and delete v1's clips and lesson data there. Choose the licenses, add the README and contribution files, then make the repo public.
-2. **Visual design:** one theme for both apps, from the Claude-style brand tokens (cream canvas, serif headlines at regular weight, flat surfaces, one sparing accent, light and dark). Eksigo keeps its own name and icon and never uses Claude's. Mockups of the key screens (desktop dictation and review, iPhone Listen and Review) are agreed before code.
+2. **Visual design** (changed 2026-11-10): the Linear-style design system instead of the Claude brand: a dark, IDE-like look with a near-black canvas, grey surfaces and hairlines, one sparing accent, plus a derived light theme. Mockups of the desktop, iPhone and website screens are on the design canvas (https://claude.ai/artifact/9ZrDQTW2L9JBaDHDnwDC6f) and are agreed before code.
 3. **Desktop MVP:**
    - podcast search and RSS
    - download as a practice copy
@@ -377,7 +382,7 @@ Releases go to GitHub Releases, built by a `tauri-action` workflow on every vers
 
 ## 14. Open questions
 
-- **Accent colour:** Claude's coral, or Eksigo's own (for example a deep green or ink blue), so the app doesn't look like an Anthropic product. Fonts: EB Garamond and Inter (free to bundle), or Apple's New York serif on iPhone.
+- **Accent colour:** Linear's lavender as in the design canvas, or Eksigo's own colour so the app doesn't look like Linear. Fonts: Inter and JetBrains Mono (free to bundle) stand in for Linear's own faces.
 - **Licenses:** MIT plus AGPL as proposed in section 10, or one license for everything?
 - **Premium:** a monthly plan or credit packs, the exact price and allowance. Check current AI prices first.
 - **Offline dictionaries** for Japanese, Korean, Spanish and French speakers, with licenses that allow bundling.

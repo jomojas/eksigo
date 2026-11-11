@@ -1,0 +1,109 @@
+# Eksigo — Roadmap
+
+The order we build v2 in, desktop first. It expands [DESIGN.md](DESIGN.md) section 13.
+
+**Goal (decided 2026-11-10): ship desktop v0.1.0 within one week.** Jomo directs each step; Claude builds it. One branch and one PR per day's work, reviewed and merged by Jomo.
+
+**Design reference:** the Linear-style canvas, https://claude.ai/artifact/9ZrDQTW2L9JBaDHDnwDC6f. Each desktop screen is marked *v0.1* or *next*.
+
+## v0.1.0 in seven days
+
+The riskiest parts come first: Whisper building on both systems, then the dictation loop.
+
+| Day | Build | Done when |
+|---|---|---|
+| 1 | **Skeleton and the Whisper test.** Tauri 2 (React, TypeScript, Rust) in `desktop/`; design tokens with light and dark mode; the app layout (sidebar, top bar, status bar); SQLite; CI building on macOS and Windows. whisper.cpp linked from Rust with Metal on Mac and CPU on Windows, timed on a sample episode. | The app opens on both systems, CI is green, and Whisper transcribes a test file on both |
+| 2 | **Podcasts and library.** Apple podcast search, add an RSS feed, the Show and Episode pages, download with progress, the Library with filters and delete, **adding your own audio or video files**, cover art via `GET /v1/art`, playing an exact stretch of audio at 1.0 / 0.85 / 0.7 without changing the pitch. | An episode can be found, downloaded and played sentence-sized |
+| 3 | **Transcription.** The *Fast* model downloaded on first use; background transcription in chunks with word timestamps; sentence splitting; progress in the status bar. | Dictation can start about 30 seconds after starting a 30-minute episode |
+| 4 | **Dictation loop.** Manual and Auto playback, speed and maximum plays; the typing box; `Tab` to play, `Shift Enter` to finish, `Shift Tab` for I know this one, `Ctrl R`, `Ctrl ←/→`, `Ctrl K`, `_` for gaps, `Esc` to stop; word-by-word comparison; stop and resume. | A whole episode can be dictated with the keyboard alone; the comparison has unit tests |
+| 5 | **Results and My words.** The side-by-side results (original and your text, missed and wrong words marked) after stopping or finishing, also from the Episode page; select words to look them up and save them; My words list with meanings from the offline dictionary (`GET /v1/dictionaries`); a simple Today page (Continue and the library). | Stopping shows the results so far and resuming continues; a saved word shows its meaning |
+| 6 | **First launch and release.** Choose the language and download the speech model; Settings (theme, playback defaults, storage); `tauri-action` release workflow on version tags, Mac signed and notarised, Windows unsigned; the updater. | A test tag produces installable builds for both systems |
+| 7 | **Test and ship.** Install on a clean Mac and Windows machine, fix what breaks, tag **v0.1.0**. Point the eksigo.com download buttons at the release. | v0.1.0 is on GitHub Releases and downloadable from eksigo.com |
+
+### Left out of v0.1.0, added in the following weeks
+
+- Publisher transcripts (`podcast:transcript`) and their alignment
+- The *Accurate* speech model
+- Mistakes grouped by type (weak forms, numbers, names, similar sounds, endings)
+- Word practice and levels in My words
+- Recommendations beyond the *Good for learners* list
+- Adjusting, merging or splitting sentences, and "the transcript is wrong here"
+- The Progress page (the year grid, streak, accuracy)
+- Interface translations (English only at first)
+- CSV export of My words
+- The full website redesign (only the download buttons change on day 7)
+
+### Jomo's part, as early as possible
+
+- **Day 1:** the list of design fixes from the canvas, and the accent colour (keep lavender or choose another).
+- **By day 5:** an Apple **Developer ID Application** certificate (exported as .p12) and an app-specific password, added as GitHub secrets for notarisation. Creating the certificate can take a day.
+- **By day 6:** the licenses, so the repo can be made public with the release.
+- **Day 7:** a Windows machine for the install test (an older laptop, ideally, to check Whisper speed).
+
+### Risks
+
+- **Whisper on Windows** is the most likely to slip, which is why it is tested on day 1. If the CPU build is too slow, v0.1.0 ships with the smallest model for Windows.
+- **Unsigned Windows builds** show a SmartScreen warning. The download page says how to get past it.
+- If a day overruns, the next day's least important item moves to the list above rather than the release date moving.
+
+---
+
+# After v0.1.0
+
+Rough times; the order can change with feedback from the first users.
+
+## Website v2 (1–2 days)
+
+- Rewrite `site/` from the canvas design: hero, how it works, features, pricing and download.
+- Download buttons point at the latest GitHub release for Mac and Windows.
+- Privacy policy updated for v2 (local audio, optional accounts, the learner's own AI key).
+
+**Done when:** eksigo.com serves the new page and both download buttons work.
+
+## AI with your own key (about 1 week)
+
+- Settings → AI: provider (OpenAI, DeepSeek, Anthropic, Groq or any OpenAI-compatible URL), key stored in the Keychain or the Credential Manager, *Test key*, estimated cost per episode.
+- One OpenAI-compatible client in the Rust core.
+- Episode review, word or phrase in context, sentence explanation, all in the learner's language. Only the aligned mistakes are sent.
+
+**Done when:** with a DeepSeek key, the AI review on the review screen and *Explain* on a word both work, and the key never appears in any file or log.
+
+## Accounts and sync, server and desktop (about 1 week)
+
+- Desktop sign-in with Apple and Google through the system browser. Jomo sets up Apple's Services ID and return URL and Google's desktop OAuth client.
+- Server: sync endpoints for listening history, saved words, missed sentences and practice summaries (section 7), with tests, in `backend/` and `docs/API.md`.
+- Desktop syncs when it opens and after each session.
+- *Today* shows the episodes listened to on the phone.
+
+**Done when:** words saved on the desktop appear through the API for the same account, and history posted for the phone shows up in *Today*.
+
+## iPhone v2 (2–3 weeks)
+
+- Reuse v1's playback engine, RSS and search, downloads, storage and sign-in client.
+- New screens from the canvas, with tabs Listen, Discover, Review and Me.
+- Missed-sentence playlist (exact file match first), spaced-repetition word review (FSRS), My words, history and progress, all view only.
+- Free, with no AI and no in-app purchase. TestFlight, then the App Store as an update to `com.eksigo.app`.
+
+**Done when:** last night's missed sentences play on the phone the next morning, and the update passes App Store review.
+
+## Premium (about 1 week)
+
+- Web checkout through Paddle or Lemon Squeezy, with a webhook on the server.
+- *Eksigo (Premium)* as one more provider: the server forwards AI requests within the allowance.
+- Server transcription with Groq for slow computers.
+- **Before this step:** the price and allowance (section 14), checked against current AI prices.
+
+**Done when:** a test purchase turns on Premium, and the AI review works without a key.
+
+## Speaking (about 1 week)
+
+- Shadowing: record a sentence and compare it with local Whisper. Free.
+- Retell: summarise the episode out loud, with AI feedback.
+
+## Later
+
+- Audio fingerprint matching on the phone
+- Automatic ad detection
+- The shared transcript cache
+- A web page for My words and history for Android users
+- `winget` and Homebrew
