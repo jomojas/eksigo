@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router";
-import { backend, inApp, type BenchReport } from "../lib/backend";
+import { backend, on, type ModelInfo } from "../lib/backend";
 import { useTheme, type ThemeChoice } from "../lib/theme";
-import { Icon } from "../components/Icon";
 import { Page, useAppInfo } from "../components/Shell";
-import { SPEEDS, usePlayer } from "../lib/playback";
+import { bytes } from "../lib/format";
+import { useActivity } from "../lib/transcripts";
 
 const SECTIONS = ["General", "Speech", "About"] as const;
 type Section = (typeof SECTIONS)[number];
@@ -84,119 +84,109 @@ function General() {
   );
 }
 
-/** Day 1 check that whisper.cpp works on this computer, and how fast. */
+/** The speech model: Whisper runs on this computer with a model downloaded once. */
 function Speech() {
   const info = useAppInfo();
-  const [model, setModel] = useState<string | null>(null);
-  const [audio, setAudio] = useState<string | null>(null);
-  const [running, setRunning] = useState(false);
-  const [report, setReport] = useState<BenchReport | null>(null);
+  const { model: progress } = useActivity();
+  const [models, setModels] = useState<ModelInfo[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [speed, setSpeed] = useState(1);
-  const [playing, setPlaying] = useState<number | null>(null);
-  const player = usePlayer(audio);
+  const [confirm, setConfirm] = useState(false);
 
-  useEffect(() => {
-    if (!player.playing) setPlaying(null);
-  }, [player.playing]);
+  const load = useCallback(() => {
+    backend.models().then(setModels);
+  }, []);
+  useEffect(load, [load]);
+  useEffect(() => on("model-download", (p) => p.state !== "downloading" && load()), [load]);
 
-  const run = async () => {
-    if (!model || !audio) return;
-    setRunning(true);
+  const download = async () => {
     setError(null);
-    setReport(null);
     try {
-      setReport(await backend.whisperBench(model, audio));
+      await backend.downloadModel();
     } catch (e) {
-      setError(String(e instanceof Error ? e.message : e));
-    } finally {
-      setRunning(false);
+      setError(String(e));
     }
+    load();
   };
-
-  const name = (p: string | null) => (p ? p.split(/[\\/]/).pop() : "None chosen");
 
   return (
     <section aria-labelledby="speech">
       <h1 id="speech" className="h1">Speech</h1>
-      <p className="muted" style={{ marginTop: 8, fontSize: 14 }}>
-        Transcription runs on this computer with Whisper ({info?.whisperBackend ?? "…"}). The model download arrives on day 3; for
-        now, test with a model file you already have.
+      <p className="muted" style={{ marginTop: 8, fontSize: 14, lineHeight: 1.5 }}>
+        Episodes are transcribed on this computer with Whisper ({info?.whisperBackend === "Metal" ? "on the graphics chip" : "on the processor"}).
+        The audio never leaves it. The model is downloaded once, the first time you transcribe.
       </p>
       <div style={{ marginTop: 16 }}>
-        <Row label="Model" hint={name(model)}>
-          <button className="btn" disabled={!inApp} onClick={async () => setModel((await backend.pickFile("Whisper model", ["bin"])) ?? model)}>
-            Choose…
-          </button>
-        </Row>
-        <Row label="Audio" hint={name(audio)}>
-          <button
-            className="btn"
-            disabled={!inApp}
-            onClick={async () => setAudio((await backend.pickFile("Audio or video", ["mp3", "m4a", "mp4", "aac", "wav", "flac", "ogg"])) ?? audio)}
+        {models?.map((m) => (
+          <Row
+            key={m.id}
+            label={m.name}
+            hint={
+              m.available
+                ? `English · ${bytes(m.bytes)} · ${m.id === "base.en" ? "quick on any computer, good for clear speech" : ""}`
+                : "Better with fast or unclear speech · arrives after v0.1"
+            }
           >
-            Choose…
-          </button>
-        </Row>
+            {!m.available ? (
+              <span className="badge badge-next">Later</span>
+            ) : progress && progress.id === m.id ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span className="track" style={{ width: 120 }}>
+                  <span className="fill" style={{ display: "block", width: `${Math.round((progress.received / progress.total) * 100)}%` }} />
+                </span>
+                <span className="mono" style={{ fontSize: 12 }}>
+                  {Math.round((progress.received / progress.total) * 100)}%
+                </span>
+                <button type="button" className="btn btn-sm btn-ghost" onClick={() => backend.cancelModel()}>
+                  Cancel
+                </button>
+              </div>
+            ) : m.installed ? (
+              confirm ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 12 }}>Transcripts you have stay.</span>
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    onClick={async () => {
+                      await backend.deleteModel(m.id);
+                      setConfirm(false);
+                      load();
+                    }}
+                  >
+                    Delete
+                  </button>
+                  <button type="button" className="btn btn-sm btn-ghost" onClick={() => setConfirm(false)}>
+                    Keep
+                  </button>
+                </div>
+              ) : (
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <span className="dot dot-ok" />
+                    Downloaded
+                  </span>
+                  <button type="button" className="btn btn-sm btn-ghost" onClick={() => setConfirm(true)}>
+                    Delete
+                  </button>
+                </div>
+              )
+            ) : (
+              <button type="button" className="btn" onClick={download}>
+                Download
+              </button>
+            )}
+          </Row>
+        ))}
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 20 }}>
-        <button className="btn btn-primary" disabled={!model || !audio || running} onClick={run}>
-          {running ? "Transcribing…" : "Test transcription"}
-        </button>
-        {!inApp && <span className="muted">Only in the app, not in the browser preview.</span>}
-      </div>
-
       {error && (
         <p role="alert" style={{ marginTop: 16, color: "var(--semantic-error)" }}>
           {error}
         </p>
       )}
-
-      {report && (
-        <div style={{ marginTop: 24, display: "flex", flexDirection: "column", gap: 16 }}>
-          <div className="panel" style={{ padding: "8px 16px" }}>
-            <div className="prop">Speed<b className="mono">{report.speed.toFixed(1)}× real time</b></div>
-            <div className="prop">Audio<b className="mono">{report.audioSeconds.toFixed(1)} s</b></div>
-            <div className="prop">Transcribing<b className="mono">{(report.transcribeMs / 1000).toFixed(1)} s</b></div>
-            <div className="prop">Decoding · loading the model<b className="mono">{report.decodeMs} ms · {report.loadModelMs} ms</b></div>
-            <div className="prop">Engine<b className="mono">{report.backend} · {report.threads} threads</b></div>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <p className="muted" style={{ flexGrow: 1 }}>Play a line to hear exactly that stretch of the audio.</p>
-            <div className="seg" role="group" aria-label="Speed">
-              {SPEEDS.map((v) => (
-                <button key={v} type="button" aria-pressed={speed === v} onClick={() => setSpeed(v)}>
-                  {v === 1 ? "1.0" : v}×
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="panel selectable" style={{ padding: "8px 8px 8px 4px", maxHeight: 360, overflowY: "auto", lineHeight: 1.6 }}>
-            {report.segments.map((s, i) => (
-              <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-                <button
-                  type="button"
-                  className="btn btn-sm btn-ghost"
-                  style={{ width: 28, padding: 0, flexShrink: 0 }}
-                  aria-label={playing === i ? "Stop" : `Play line ${i + 1}`}
-                  onClick={() => {
-                    if (playing === i) player.stop();
-                    else {
-                      setPlaying(i);
-                      player.play(s.startMs, s.endMs, speed);
-                    }
-                  }}
-                >
-                  <Icon name={playing === i ? "pause" : "play"} size={11} stroke={playing === i ? 2.4 : 1.6} />
-                </button>
-                <span className="mono muted" style={{ fontSize: 11, width: 44, flexShrink: 0, paddingTop: 6 }}>
-                  {(s.startMs / 1000).toFixed(1)}s
-                </span>
-                <span style={{ color: playing === i ? "var(--ink)" : "var(--ink-muted)", paddingTop: 3 }}>{s.text}</span>
-              </div>
-            ))}
-          </div>
-        </div>
+      {models?.[0] && (
+        <p className="muted" style={{ marginTop: 16, fontSize: 12 }}>
+          Kept in <span className="mono selectable">{models[0].path.replace(/[\\/][^\\/]+$/, "")}</span>
+        </p>
       )}
     </section>
   );

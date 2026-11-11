@@ -53,6 +53,27 @@ const MIGRATIONS: &[&str] = &[
         added_at          INTEGER NOT NULL,
         last_practised_at INTEGER
     );",
+    // 3: transcripts. A transcript belongs to one Library item, that is one exact audio file (DESIGN.md
+    // section 4), and grows a chunk at a time; `done_ms` is how far it has got.
+    "CREATE TABLE transcripts (
+        item_id     INTEGER PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
+        model       TEXT NOT NULL,
+        state       TEXT NOT NULL,          -- 'queued', 'running', 'done' or 'failed'
+        done_ms     INTEGER NOT NULL DEFAULT 0,
+        duration_ms INTEGER,
+        error       TEXT,
+        started_at  INTEGER NOT NULL,
+        finished_at INTEGER
+    );
+    CREATE TABLE sentences (
+        item_id  INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+        idx      INTEGER NOT NULL,
+        start_ms INTEGER NOT NULL,
+        end_ms   INTEGER NOT NULL,
+        text     TEXT NOT NULL,
+        words    TEXT NOT NULL,             -- JSON: [[start_ms, end_ms, \"word\"], ...]
+        PRIMARY KEY (item_id, idx)
+    );",
 ];
 
 pub struct Db(pub Mutex<Connection>);

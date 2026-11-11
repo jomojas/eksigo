@@ -82,6 +82,9 @@ pub struct Item {
     pub added_at: i64,
     pub last_practised_at: Option<i64>,
     pub artwork_url: Option<String>,
+    /// The transcript: "none", "queued", "running", "done" or "failed", and how far it has got.
+    pub transcript_state: String,
+    pub transcript_done_ms: i64,
 }
 
 const SHOW_COLS: &str = "s.id, s.feed_url, s.apple_id, s.title, s.author, s.description, s.artwork_url,
@@ -126,8 +129,10 @@ fn episode_from(r: &Row) -> rusqlite::Result<Episode> {
 }
 
 const ITEM_COLS: &str = "i.id, i.episode_id, e.show_id, i.title, i.source, i.own_file, i.path, i.bytes, i.duration_s,
-    i.state, i.error, i.added_at, i.last_practised_at, COALESCE(e.artwork_url, s.artwork_url)";
-const ITEM_FROM: &str = "items i LEFT JOIN episodes e ON e.id = i.episode_id LEFT JOIN shows s ON s.id = e.show_id";
+    i.state, i.error, i.added_at, i.last_practised_at, COALESCE(e.artwork_url, s.artwork_url),
+    COALESCE(t.state, 'none'), COALESCE(t.done_ms, 0)";
+const ITEM_FROM: &str = "items i LEFT JOIN episodes e ON e.id = i.episode_id LEFT JOIN shows s ON s.id = e.show_id
+    LEFT JOIN transcripts t ON t.item_id = i.id";
 
 fn item_from(r: &Row) -> rusqlite::Result<Item> {
     let own_file: bool = r.get(5)?;
@@ -151,6 +156,8 @@ fn item_from(r: &Row) -> rusqlite::Result<Item> {
         added_at: r.get(11)?,
         last_practised_at: r.get(12)?,
         artwork_url: r.get(13)?,
+        transcript_state: r.get(14)?,
+        transcript_done_ms: r.get(15)?,
     })
 }
 

@@ -8,6 +8,7 @@ import { addAudio, Kbd, Page } from "../components/Shell";
 import { backend, onFileDrop, inApp, type Added, type Item, type LibraryPage } from "../lib/backend";
 import { useLibraryChanged } from "../lib/downloads";
 import { bytes, clock, plural, whenDay } from "../lib/format";
+import { isBusy, transcribed, useTranscript } from "../lib/transcripts";
 import { PracticeStatus } from "./Show";
 
 const COLS = "minmax(0,1fr) 160px 64px 190px 72px 110px";
@@ -195,7 +196,7 @@ export function Library() {
                   {clock(it.durationS)}
                 </span>
                 <span style={{ display: "flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}>
-                  <PracticeStatus itemId={it.id} state={it.state} />
+                  <ItemProgress item={it} />
                 </span>
                 <span className="mono" style={{ fontSize: 12 }}>
                   —
@@ -223,6 +224,24 @@ export function Library() {
       </div>
     </Page>
   );
+}
+
+/** Downloading, transcribing, or (from day 4) how far the learner has got. */
+function ItemProgress({ item }: { item: Item }) {
+  const live = useTranscript(item.id, null);
+  const t = live ?? { state: item.transcriptState, doneMs: item.transcriptDoneMs, durationMs: item.durationS ? item.durationS * 1000 : null };
+  if (item.state === "ready" && isBusy(t.state)) {
+    const f = transcribed(t);
+    return (
+      <>
+        <span className="track" style={{ width: 60 }}>
+          <span className="fill" style={{ display: "block", width: `${Math.round(f * 100)}%`, background: "var(--ink-subtle)" }} />
+        </span>
+        <span style={{ fontSize: 12 }}>{t.state === "running" ? `Transcribing ${Math.round(f * 100)}%` : t.state === "model" ? "Getting the model" : "Waiting"}</span>
+      </>
+    );
+  }
+  return <PracticeStatus itemId={item.id} state={item.state} />;
 }
 
 function AddedNotice({ added, onClose }: { added: Added; onClose: () => void }) {

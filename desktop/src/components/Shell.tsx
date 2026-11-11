@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import { NavLink, Outlet, useNavigate } from "react-router";
 import { AUDIO_EXTENSIONS, backend, type Added, type AppInfo } from "../lib/backend";
 import { fraction, useDownloads } from "../lib/downloads";
+import { isBusy, transcribed, useActivity } from "../lib/transcripts";
 import { isMac, keyLabel, modKey } from "../lib/platform";
 import { Icon, type IconName } from "./Icon";
 
@@ -106,6 +107,7 @@ export function Shell() {
             {info?.whisperBackend === "—" ? "Browser preview · no speech engine" : `Whisper · ${info?.whisperBackend ?? "…"} on this computer`}
           </span>
           {downloads.size > 0 && <DownloadStatus />}
+          <TranscriptActivity />
           {status && <span>{status}</span>}
           <span style={{ flexGrow: 1 }} />
           {keys.map(([k, label]) => (
@@ -134,6 +136,39 @@ function DownloadStatus() {
       </span>
       Downloading {downloads.length > 1 ? `${downloads.length} episodes` : "an episode"}
       {pct !== null && ` · ${pct}%`}
+    </span>
+  );
+}
+
+function TranscriptActivity() {
+  const { transcripts, model } = useActivity();
+  if (model) {
+    return (
+      <span>
+        <Bar fraction={model.received / model.total} />
+        Downloading the speech model · {Math.round((model.received / model.total) * 100)}%
+      </span>
+    );
+  }
+  const busy = [...transcripts.values()].filter((t) => isBusy(t.state));
+  const running = busy.find((t) => t.state === "running");
+  if (!running) return null;
+  const f = transcribed(running);
+  return (
+    <span title={running.title}>
+      <Bar fraction={f} />
+      <span className="ell" style={{ maxWidth: 260 }}>
+        Transcribing {running.title}
+      </span>
+      · {Math.round(f * 100)}%{busy.length > 1 && ` · ${busy.length - 1} waiting`}
+    </span>
+  );
+}
+
+function Bar({ fraction }: { fraction: number }) {
+  return (
+    <span className="track" style={{ width: 48 }} aria-hidden="true">
+      <span className="fill" style={{ display: "block", width: `${Math.round(fraction * 100)}%` }} />
     </span>
   );
 }

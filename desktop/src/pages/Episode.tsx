@@ -6,10 +6,11 @@ import { useNavigate, useParams } from "react-router";
 import { Art } from "../components/Art";
 import { Icon } from "../components/Icon";
 import { Kbd, Page } from "../components/Shell";
-import { backend, type Episode, type Item, type Show } from "../lib/backend";
+import { backend, type Episode, type Item, type Sentence, type Show, type TranscriptStatus } from "../lib/backend";
 import { fraction, useDownloads, useLibraryChanged } from "../lib/downloads";
 import { bytes, clock, shortDate, whenDay } from "../lib/format";
 import { SPEEDS, usePlayer } from "../lib/playback";
+import { isBusy, transcribed, useActivity, useTranscript } from "../lib/transcripts";
 
 type Data = { episode: Episode | null; show: Show | null; item: Item | null };
 
@@ -83,6 +84,8 @@ export function EpisodeScreen({ from }: { from: "podcasts" | "library" }) {
               <Actions episode={episode} item={item} onChange={load} onError={setError} />
 
               {ready && <Preview path={item.path!} durationS={item.durationS ?? episode?.durationS ?? null} />}
+
+              {ready && <Transcript item={item} />}
 
               {episode?.description && (
                 <section aria-labelledby="about">
@@ -288,8 +291,157 @@ function Preview({ path, durationS }: { path: string; durationS: number | null }
   );
 }
 
+function transcriptLabel(state: string | undefined): string {
+  switch (state) {
+    case "done":
+      return "Whisper Fast";
+    case "running":
+    case "queued":
+    case "model":
+      return "In progress";
+    case "failed":
+      return "Failed";
+    default:
+      return "Not yet";
+  }
+}
+
+/** The transcript: start it, watch it grow, and listen to any sentence exactly as dictation will play it. */
+function Transcript({ item }: { item: Item }) {
+  const [initial, setInitial] = useState<TranscriptStatus | null>(null);
+  const status = useTranscript(item.id, initial);
+  const { model } = useActivity();
+  const [sentences, setSentences] = useState<Sentence[]>([]);
+  const [speed, setSpeed] = useState(1);
+  const [playing, setPlaying] = useState<number | null>(null);
+  const player = usePlayer(item.path);
+
+  useEffect(() => {
+    backend.transcriptStatus(item.id).then(setInitial);
+  }, [item.id]);
+
+  // New sentences arrive a chunk at a time.
+  const count = status?.sentences ?? 0;
+  useEffect(() => {
+    if (count > 0) backend.sentences(item.id).then(setSentences);
+    else setSentences([]);
+  }, [item.id, count]);
+
+  useEffect(() => {
+    if (!player.playing) setPlaying(null);
+  }, [player.playing]);
+
+  if (!status) return null;
+  const f = transcribed(status);
+  const busy = isBusy(status.state);
+  const minutes = (ms: number | null) => (ms ? Math.max(1, Math.round(ms / 60_000)) : 0);
+
+  return (
+    <section aria-labelledby="transcript" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, minHeight: 28 }}>
+        <h2 id="transcript" className="eyebrow" style={{ flexGrow: 1 }}>
+          Transcript
+        </h2>
+        {sentences.length > 0 && (
+          <div className="seg" role="group" aria-label="Speed">
+            {SPEEDS.map((v) => (
+              <button key={v} type="button" aria-pressed={speed === v} onClick={() => setSpeed(v)}>
+                {v === 1 ? "1.0" : v}×
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {status.state === "none" && (
+        <div className="panel" style={{ padding: 16, display: "flex", alignItems: "center", gap: 16 }}>
+          <p style={{ flexGrow: 1, lineHeight: 1.5 }}>
+            Eksigo writes out the episode on this computer, sentence by sentence, so dictation can play one sentence at a time. It takes a
+            few seconds to start; you can listen to the sentences as they arrive.
+          </p>
+          <button type="button" className="btn" onClick={() => backend.transcribe(item.id)}>
+            Transcribe
+          </button>
+        </div>
+      )}
+
+      {busy && (
+        <div className="panel" style={{ padding: "12px 16px", display: "flex", alignItems: "center", gap: 12 }}>
+          {status.state === "model" && model ? (
+            <>
+              <span className="track" style={{ width: 160 }}>
+                <span className="fill" style={{ display: "block", width: `${Math.round((model.received / model.total) * 100)}%` }} />
+              </span>
+              <span style={{ flexGrow: 1 }}>
+                Downloading the speech model, once · {bytes(model.received)} of {bytes(model.total)}
+              </span>
+            </>
+          ) : status.state === "running" ? (
+            <>
+              <span className="track" style={{ width: 160 }}>
+                <span className="fill" style={{ display: "block", width: `${Math.round(f * 100)}%` }} />
+              </span>
+              <span style={{ flexGrow: 1 }}>
+                {minutes(status.doneMs)} of {minutes(status.durationMs)} min · {status.sentences} sentences so far
+              </span>
+            </>
+          ) : (
+            <span style={{ flexGrow: 1 }}>{status.state === "model" ? "Getting the speech model ready…" : "Waiting for another episode to finish…"}</span>
+          )}
+          <button type="button" className="btn btn-sm btn-ghost" onClick={() => backend.cancelTranscript(item.id)}>
+            Stop
+          </button>
+        </div>
+      )}
+
+      {status.state === "failed" && (
+        <div className="notice notice-error" role="alert">
+          <span style={{ flexGrow: 1 }}>{status.error ?? "Transcription failed."}</span>
+          <button type="button" className="btn btn-sm" onClick={() => backend.transcribe(item.id)}>
+            Try again
+          </button>
+        </div>
+      )}
+
+      {status.state === "done" && <p style={{ fontSize: 12 }}>{status.sentences} sentences · transcribed on this computer with Whisper Fast.</p>}
+
+      {sentences.length > 0 && (
+        <ol className="panel selectable" style={{ listStyle: "none", margin: 0, padding: "6px 6px 6px 2px" }} aria-label="Sentences">
+          {sentences.map((s) => (
+            <li key={s.idx} style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "3px 0" }}>
+              <button
+                type="button"
+                className="btn btn-sm btn-ghost"
+                style={{ width: 28, padding: 0, flexShrink: 0 }}
+                aria-label={playing === s.idx ? "Stop" : `Play sentence ${s.idx + 1}`}
+                onClick={() => {
+                  if (playing === s.idx) player.stop();
+                  else {
+                    setPlaying(s.idx);
+                    player.play(s.startMs, s.endMs, speed);
+                  }
+                }}
+              >
+                <Icon name={playing === s.idx ? "pause" : "play"} size={11} stroke={playing === s.idx ? 2.4 : 1.6} />
+              </button>
+              <span className="mono" style={{ fontSize: 11, width: 40, flexShrink: 0, paddingTop: 7, color: "var(--ink-subtle)" }}>
+                {clock(s.startMs / 1000)}
+              </span>
+              <span style={{ paddingTop: 4, lineHeight: 1.5, color: playing === s.idx ? "var(--ink)" : "var(--ink-muted)" }}>{s.text}</span>
+            </li>
+          ))}
+          {busy && (
+            <li style={{ padding: "6px 0 4px 76px", fontSize: 12, color: "var(--ink-subtle)" }}>More sentences on the way…</li>
+          )}
+        </ol>
+      )}
+    </section>
+  );
+}
+
 function Details({ episode, item, onRemoved }: { episode: Episode | null; item: Item | null; onRemoved: () => void }) {
   const [confirming, setConfirming] = useState(false);
+  const liveTranscript = useTranscript(item?.id ?? null, null);
   const remove = async () => {
     if (!item) return;
     await backend.remove(item.id);
@@ -317,7 +469,7 @@ function Details({ episode, item, onRemoved }: { episode: Episode | null; item: 
           <b className="mono">{item?.state === "ready" ? bytes(item.bytes) : episode?.audioBytes ? bytes(episode.audioBytes) : "—"}</b>
         </div>
         <div className="prop">
-          Transcript<b>Arrives day 3</b>
+          Transcript<b>{transcriptLabel(liveTranscript?.state ?? item?.transcriptState)}</b>
         </div>
         {item?.ownFile && item.path && (
           <div className="prop" style={{ flexDirection: "column", alignItems: "flex-start", gap: 6 }}>
