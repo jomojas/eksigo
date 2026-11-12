@@ -243,7 +243,9 @@ textarea,
 }
 
 .side {
-  width: 224px;
+  /* The side columns grow and shrink with the window, so a small window keeps most of its width for the page:
+     184px at the smallest window (960), 224px from 1400 up. */
+  width: clamp(184px, 16vw, 224px);
   flex-shrink: 0;
   background: var(--surface-1);
   border-right: 1px solid var(--hairline);
@@ -541,7 +543,8 @@ select.btn {
   top: 0;
   align-self: flex-start;
   height: 100cqh;
-  width: 296px;
+  /* 240px at the smallest window, 280 at the default 1280, at most 304 on a wide screen. */
+  width: clamp(240px, 22vw, 304px);
   flex-shrink: 0;
   border-left: 1px solid var(--hairline);
   background: var(--surface-1);
