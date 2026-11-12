@@ -8,6 +8,7 @@ import type {
   PracticeCounts,
   NewEpisode,
   Week,
+  Progress,
   PracticeItem,
   DictInfo,
   DictionaryList,
@@ -561,6 +562,40 @@ export const sample = {
   },
 
   // Word practice, with fixed intervals instead of FSRS.
+  progress(): Progress {
+    const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const today = new Date();
+    today.setHours(12, 0, 0, 0);
+    const monday = new Date(today.getTime() - ((today.getDay() + 6) % 7) * 86_400_000);
+    const from = new Date(monday.getTime() - 52 * 7 * 86_400_000);
+    // A made-up year that starts slowly and gets more regular.
+    const days: Progress["days"] = [];
+    for (let t = from.getTime(), i = 0; t <= today.getTime(); t += 86_400_000, i++) {
+      const r = Math.abs(Math.sin(i * 12.9898) * 43758.5453) % 1;
+      if (r < 0.75 - (i / 371) * 0.45) continue;
+      const minutes = Math.round(5 + r * 55);
+      days.push({ day: iso(new Date(t)), seconds: minutes * 60 });
+    }
+    const weeks = Array.from({ length: 12 }, (_, i) => ({
+      start: iso(new Date(monday.getTime() - (11 - i) * 7 * 86_400_000)),
+      accuracy: 0.62 + i * 0.016 + (i % 3 === 1 ? -0.02 : 0),
+      sentences: 80 + i * 6,
+    }));
+    const recent = days.filter((d) => d.day >= iso(new Date(today.getTime() - 6 * 86_400_000)));
+    return {
+      streak: 4,
+      bestStreak: 19,
+      weekSeconds: recent.reduce((n, d) => n + d.seconds, 0),
+      monthAccuracy: 0.79,
+      lastMonthAccuracy: 0.73,
+      wordsKnown: savedWords.filter((w) => w.level === "known").length,
+      wordsTotal: savedWords.length,
+      from: iso(from),
+      yearSeconds: days.reduce((n, d) => n + d.seconds, 0),
+      days,
+      weeks,
+    };
+  },
   week(): Week {
     const minutes = [20, 40, 0, 50, 30, 15, 25];
     const days = minutes.map((m, i) => {
