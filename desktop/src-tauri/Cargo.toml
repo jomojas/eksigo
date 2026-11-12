@@ -16,6 +16,16 @@ default-run = "eksigo"
 name = "eksigo_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+# The Whisper speed test the desktop checks run (`cargo build --features bench`). Behind a feature so release
+# builds leave it out: the installer would otherwise try to bundle it.
+[[bin]]
+name = "whisper-bench"
+path = "src/bin/whisper-bench.rs"
+required-features = ["bench"]
+
+[features]
+bench = []
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
