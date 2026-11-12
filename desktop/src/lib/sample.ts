@@ -5,6 +5,9 @@ import type {
   Added,
   Answer,
   AnswerKind,
+  Lookup,
+  NewWord,
+  SavedWord,
   Attempt,
   Comparison,
   EpisodePage,
@@ -188,6 +191,23 @@ const notFound = (what: string) => new Error(`That ${what} isn't in the sample d
 const attempts: Attempt[] = [];
 const answers = new Map<number, Map<number, Answer>>();
 const flags = new Map<number, Set<number>>();
+const savedWords: SavedWord[] = [];
+const SAMPLE_FORMS: Record<string, string> = { followed: "follow", arrives: "arrive", habits: "habit", talking: "talk" };
+const SAMPLE_DICT: Record<string, [string, string, string]> = {
+  "follow through": ["", "坚持到底", ""],
+  "talk about": ["/tɔ:k əˈbaut/", "讨论, 谈论; 考虑（做…）", ""],
+  follow: ["/ˈfɒləʊ/", "v. 跟随, 接着, 遵循", "to travel behind, go after, come after"],
+  arrive: ["/əˈraɪv/", "vi. 到达, 抵达", "reach a destination"],
+  habit: ["/ˈhæbɪt/", "n. 习惯, 习性", "an established custom"],
+  welcome: ["/ˈwelkəm/", "n. 欢迎\nv. 欢迎\na. 受欢迎的", "the state of being welcome"],
+  minute: ["/ˈmɪnɪt/", "n. 分钟, 片刻", "a unit of time equal to 60 seconds"],
+  english: ["/ˈɪŋɡlɪʃ/", "n. 英语", "an Indo-European language"],
+  learning: ["/ˈlɜːnɪŋ/", "n. 学习, 学问", "the cognitive process of acquiring skill or knowledge"],
+  hello: ["/həˈləʊ/", "int. 你好", "an expression of greeting"],
+  to: ["/tuː/", "prep. 到, 向", ""],
+  from: ["/frɒm/", "prep. 从, 来自", ""],
+  talk: ["/tɔːk/", "v. 说话, 谈论", "exchange thoughts; talk with"],
+};
 const flaggedOf = (attemptId: number) => [...(flags.get(attemptId) ?? [])].sort((x, y) => x - y);
 
 /** A rough stand-in for compare.rs: exact words only, lined up by longest common subsequence. */
@@ -447,6 +467,73 @@ export const sample = {
   session(attemptId: number): Session {
     const a = attemptById(attemptId);
     return { attempt: { ...a }, answers: [...(answers.get(a.id)?.values() ?? [])].sort((x, y) => x.idx - y.idx), flagged: flaggedOf(a.id) };
+  },
+
+  // A few words, so the look-up card has something to show in a browser.
+  lookup(text: string): Lookup {
+    const words = text.toLowerCase().replace(/[^a-z' \-]/g, " ").split(/\s+/).filter(Boolean);
+    const query = words.join(" ");
+    const get = (w: string) => {
+      const base = SAMPLE_FORMS[w] ?? w;
+      const m = SAMPLE_DICT[base];
+      return m ? { headword: base, ipa: m[0], meaning: m[1], definition: m[2] } : null;
+    };
+    if (words.length === 1) {
+      const e = get(words[0]);
+      return { query, entry: e, whole: !!e, words: [], source: "ECDICT" };
+    }
+    let entry = get(query);
+    const whole = !!entry;
+    for (let len = words.length - 1; !entry && len >= 2; len--)
+      for (let i = 0; !entry && i + len <= words.length; i++) entry = get(words.slice(i, i + len).join(" "));
+    return { query, entry, whole, words: words.map((w) => ({ text: w, entry: get(w) })), source: "ECDICT" };
+  },
+
+  wordTimes(itemId: number, idx: number): [number, number][] {
+    const s = transcripts.get(itemId)?.sentences[idx];
+    if (!s) return [];
+    const n = s.text.split(/\s+/).filter(Boolean).length;
+    const step = (s.endMs - s.startMs) / Math.max(1, n);
+    return Array.from({ length: n }, (_, i) => [Math.round(s.startMs + i * step), Math.round(s.startMs + (i + 1) * step)]);
+  },
+
+  addWord(w: NewWord): SavedWord {
+    let saved = savedWords.find((x) => x.text.toLowerCase() === w.text.trim().toLowerCase());
+    if (!saved) {
+      saved = { id: savedWords.length + 1, text: w.text.trim(), headword: w.headword, ipa: w.ipa, meaning: w.meaning, note: w.note.trim(), addedAt: now(), contexts: [] };
+      savedWords.unshift(saved);
+    } else if (!saved.note) saved.note = w.note.trim();
+    const item = items.find((i) => i.id === w.itemId);
+    const s = transcripts.get(w.itemId)?.sentences[w.idx];
+    const times = sample.wordTimes(w.itemId, w.idx);
+    if (s && !saved.contexts.some((c) => c.itemId === w.itemId && c.idx === w.idx))
+      saved.contexts.unshift({
+        itemId: w.itemId,
+        itemTitle: item?.title ?? null,
+        path: item?.path ?? null,
+        idx: w.idx,
+        sentence: s.text,
+        typed: w.typed,
+        startMs: times[w.from]?.[0] ?? s.startMs,
+        endMs: times[w.to]?.[1] ?? s.endMs,
+        sentenceStartMs: s.startMs,
+        sentenceEndMs: s.endMs,
+        addedAt: now(),
+      });
+    emit("words", null);
+    return { ...saved };
+  },
+  words: (): SavedWord[] => savedWords.map((w) => ({ ...w })),
+  wordSaved: (text: string): number | null => savedWords.find((x) => x.text.toLowerCase() === text.trim().toLowerCase())?.id ?? null,
+  setWordNote(id: number, note: string) {
+    const w = savedWords.find((x) => x.id === id);
+    if (w) w.note = note.trim();
+    emit("words", null);
+  },
+  removeWord(id: number) {
+    const i = savedWords.findIndex((x) => x.id === id);
+    if (i >= 0) savedWords.splice(i, 1);
+    emit("words", null);
   },
 
   flag(attemptId: number, idx: number, on: boolean) {

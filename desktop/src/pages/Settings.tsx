@@ -7,6 +7,7 @@ import { bytes } from "../lib/format";
 import { useActivity } from "../lib/transcripts";
 import { PlaybackSettings } from "../components/DictationSettings";
 import { useDictationSettings } from "../lib/dictation";
+import { MEANING_LANGUAGES, useMeaningLanguage } from "../lib/words";
 
 const SECTIONS = ["General", "Dictation", "Speech", "About"] as const;
 type Section = (typeof SECTIONS)[number];
@@ -81,6 +82,7 @@ function Dictation() {
 
 function General() {
   const { choice, setChoice } = useTheme();
+  const [lang, setLang] = useMeaningLanguage();
   const options: [ThemeChoice, string][] = [
     ["system", "System"],
     ["light", "Light"],
@@ -98,6 +100,15 @@ function General() {
               </button>
             ))}
           </div>
+        </Row>
+        <Row label="Word meanings in" hint="The dictionary for looking up words in a review. It downloads once, the first time you look something up.">
+          <select className="select" value={lang} onChange={(e) => setLang(e.target.value)} aria-label="Word meanings in">
+            {MEANING_LANGUAGES.map(([code, name]) => (
+              <option key={code} value={code}>
+                {name}
+              </option>
+            ))}
+          </select>
         </Row>
       </div>
     </section>

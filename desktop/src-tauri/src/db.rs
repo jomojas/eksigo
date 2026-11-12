@@ -115,6 +115,36 @@ const MIGRATIONS: &[&str] = &[
     // 7: answers that came back from 'shown' kept the marks and score of that version; a known
     // sentence counts as all correct and has no word-by-word comparison to show.
     "UPDATE answers SET credit = total, spelling = 0, marks = NULL WHERE kind = 'known';",
+    // 8: My words. A word or phrase as selected (one row however often it's saved), and each sentence it
+    // was saved from, with where the words are in the audio. The sentence text is kept, so a word
+    // outlives the episode it came from.
+    "CREATE TABLE saved_words (
+        id         INTEGER PRIMARY KEY,
+        text       TEXT NOT NULL UNIQUE COLLATE NOCASE,
+        headword   TEXT NOT NULL DEFAULT '',  -- the dictionary entry it was found under
+        ipa        TEXT NOT NULL DEFAULT '',
+        meaning    TEXT NOT NULL DEFAULT '',
+        note       TEXT NOT NULL DEFAULT '',  -- the learner's own meaning
+        added_at   INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+    );
+    CREATE TABLE word_contexts (
+        word_id  INTEGER NOT NULL REFERENCES saved_words(id) ON DELETE CASCADE,
+        item_id  INTEGER REFERENCES items(id) ON DELETE SET NULL,
+        idx      INTEGER NOT NULL,
+        sentence TEXT NOT NULL,
+        typed    TEXT NOT NULL DEFAULT '',
+        start_ms INTEGER NOT NULL,
+        end_ms   INTEGER NOT NULL,
+        added_at INTEGER NOT NULL,
+        UNIQUE (word_id, item_id, idx)
+    );",
+    // 9: a saved word's sentence plays whole, and shows where it is in the episode.
+    "ALTER TABLE word_contexts ADD COLUMN sentence_start_ms INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE word_contexts ADD COLUMN sentence_end_ms INTEGER NOT NULL DEFAULT 0;
+    UPDATE word_contexts SET
+        sentence_start_ms = COALESCE((SELECT s.start_ms FROM sentences s WHERE s.item_id = word_contexts.item_id AND s.idx = word_contexts.idx), start_ms),
+        sentence_end_ms = COALESCE((SELECT s.end_ms FROM sentences s WHERE s.item_id = word_contexts.item_id AND s.idx = word_contexts.idx), end_ms);",
 ];
 
 pub struct Db(pub Mutex<Connection>);

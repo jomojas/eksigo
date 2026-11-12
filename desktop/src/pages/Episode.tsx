@@ -2,7 +2,7 @@
 // start dictation. A learner's own file has the same page without the podcast parts.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router";
+import { useLocation, useNavigate, useParams } from "react-router";
 import { Art } from "../components/Art";
 import { Icon } from "../components/Icon";
 import { Kbd, Page } from "../components/Shell";
@@ -272,7 +272,9 @@ const RESTART_MS = 1200;
 function Listen({ item, durationS }: { item: Item; durationS: number | null }) {
   const player = usePlayer(item.path);
   const [speed, setSpeed] = useState(1);
-  const [at, setAt] = useState(0);
+  // Opened from My words at a sentence (`state.at`, ms): the transcript starts there, highlighted.
+  const startAt = (useLocation().state as { at?: number } | null)?.at ?? null;
+  const [at, setAt] = useState(startAt ?? 0);
   const durMs = (durationS ?? 0) * 1000;
   const pos = player.playing ? player.positionMs : at;
 
@@ -365,6 +367,15 @@ function Listen({ item, durationS }: { item: Item; durationS: number | null }) {
   useEffect(() => {
     if (follow && player.playing && current >= 0) reveal(current);
   }, [current, follow, player.playing, reveal]);
+
+  const revealedStart = useRef(false);
+  useEffect(() => {
+    if (startAt === null || revealedStart.current || sentences.length === 0) return;
+    const i = sentenceAt(sentences, startAt);
+    if (i < 0) return;
+    revealedStart.current = true;
+    window.setTimeout(() => reveal(i, true), 50);
+  }, [startAt, sentences, reveal]);
 
   // The learner scrolling (wheel, trackpad, scroll bar, page keys) stops the following.
   useEffect(() => {

@@ -66,7 +66,7 @@ The offline dictionaries the apps download for the learner's language (DESIGN.md
 ```
 
 ### `GET /dictionaries/{file}`
-The file: a zlib-compressed SQLite database. A new version gets a new name, so a file never changes (`Cache-Control: immutable`).
+The file: a SQLite database compressed with raw deflate (zlib without its header). `zh` has Chinese meanings, phrases and English definitions (`words.definition`). A new version gets a new name, so a file never changes (`Cache-Control: immutable`).
 
 ### `GET /v1/art?url=<image URL>`
 A podcast cover image, fetched once, scaled to at most 600 px wide and cached, because some image hosts can't be reached from mainland China.

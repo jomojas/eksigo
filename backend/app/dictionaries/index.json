@@ -38,5 +38,13 @@
     "file": "ko-1.sqlite.deflate",
     "sha256": "2682391f588c3ee423793b083fa013ab3612c87797ce5925e239cc8fd6014339",
     "source": "Wiktionary"
+  },
+  {
+    "lang": "zh",
+    "version": 1,
+    "bytes": 5265439,
+    "file": "zh-1.sqlite.deflate",
+    "sha256": "214ec962f1467a8b3ec6e4e4d551824a6a51857d07cd967724fb3415623f8917",
+    "source": "ECDICT"
   }
 ]

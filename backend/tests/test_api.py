@@ -15,7 +15,7 @@ def test_dictionaries_list_matches_the_files(client):
     r = client.get("/v1/dictionaries")
     assert r.status_code == 200
     items = r.json()["dictionaries"]
-    assert {d["lang"] for d in items} == {"en", "es", "fr", "ja", "ko"}
+    assert {d["lang"] for d in items} == {"en", "es", "fr", "ja", "ko", "zh"}
     for d in items:
         assert d["url"].startswith("https://api.test/dictionaries/")
         name = d["url"].rsplit("/", 1)[1]
