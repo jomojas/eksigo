@@ -214,7 +214,6 @@ export type SavedWord = {
 /** Words due now, and new ones that may start today (at most 10 a day). */
 export type PracticeCounts = { due: number; new: number; total: number };
 /** The last seven days, today last, with seconds practised; the streak; new words started this week. */
-export type DayDetail = { day: string; seconds: number; sentences: number; episodes: number; words: number };
 export type Progress = {
   streak: number;
   bestStreak: number;
@@ -226,7 +225,7 @@ export type Progress = {
   /** The first day of the year grid, a Monday. */
   from: string;
   yearSeconds: number;
-  days: DayDetail[];
+  days: { day: string; seconds: number }[];
   weeks: { start: string; accuracy: number | null; sentences: number }[];
 };
 export type Week = { days: { day: string; seconds: number }[]; streak: number; wordsStarted: number };

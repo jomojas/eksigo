@@ -11,19 +11,6 @@ use crate::activity;
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct DayDetail {
-    pub day: String,
-    pub seconds: i64,
-    /// Sentences typed in dictation.
-    pub sentences: i64,
-    /// Different episodes or files dictated.
-    pub episodes: i64,
-    /// Words practised.
-    pub words: i64,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct WeekAccuracy {
     /// The Monday the week starts on.
     pub start: String,
@@ -46,7 +33,7 @@ pub struct Progress {
     pub from: String,
     pub year_seconds: i64,
     /// Days from `from` on with any practice, oldest first.
-    pub days: Vec<DayDetail>,
+    pub days: Vec<activity::Day>,
     /// The last twelve weeks, oldest first, this week last.
     pub weeks: Vec<WeekAccuracy>,
 }
@@ -88,33 +75,7 @@ pub fn progress(conn: &Connection, today: NaiveDate) -> Result<Progress> {
 
     let monday = today - Days::new(today.weekday().num_days_from_monday() as u64);
     let from = monday - Days::new(52 * 7);
-    let mut days: Vec<DayDetail> = activity::days(conn, &day_of(from))?
-        .into_iter()
-        .map(|d| DayDetail { day: d.day, seconds: d.seconds, sentences: 0, episodes: 0, words: 0 })
-        .collect();
-    let since = start_of(from);
-    let mut st = conn.prepare(
-        "SELECT date(an.answered_at, 'unixepoch', 'localtime') AS day, COUNT(*), COUNT(DISTINCT at.item_id)
-         FROM answers an JOIN attempts at ON at.id = an.attempt_id
-         WHERE an.kind = 'typed' AND an.answered_at >= ?1 GROUP BY day",
-    )?;
-    let typed = st.query_map([since], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?, r.get::<_, i64>(2)?)))?;
-    for row in typed {
-        let (day, sentences, episodes) = row?;
-        let d = detail(&mut days, day);
-        d.sentences = sentences;
-        d.episodes = episodes;
-    }
-    let mut st = conn.prepare(
-        "SELECT date(at, 'unixepoch', 'localtime') AS day, COUNT(*) FROM word_reviews
-         WHERE mode != 'known' AND at >= ?1 GROUP BY day",
-    )?;
-    let reviewed = st.query_map([since], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)))?;
-    for row in reviewed {
-        let (day, words) = row?;
-        detail(&mut days, day).words = words;
-    }
-    days.sort_by(|a, b| a.day.cmp(&b.day));
+    let days = activity::days(conn, &day_of(from))?;
     let year_seconds = days.iter().map(|d| d.seconds).sum();
 
     let weeks = (0..12u64)
@@ -139,17 +100,6 @@ pub fn progress(conn: &Connection, today: NaiveDate) -> Result<Progress> {
         days,
         weeks,
     })
-}
-
-fn detail(days: &mut Vec<DayDetail>, day: String) -> &mut DayDetail {
-    let i = match days.iter().position(|d| d.day == day) {
-        Some(i) => i,
-        None => {
-            days.push(DayDetail { day, seconds: 0, sentences: 0, episodes: 0, words: 0 });
-            days.len() - 1
-        }
-    };
-    &mut days[i]
 }
 
 #[cfg(test)]
@@ -185,8 +135,6 @@ mod tests {
         answer(1, 0, noon(NaiveDate::from_ymd_opt(2026, 10, 20).unwrap()), 5.0, 10);
         answer(1, 1, noon(day(1)), 9.0, 10);
         answer(2, 0, noon(day(1)), 9.0, 10);
-        c.execute("INSERT INTO word_reviews (word_id, at, mode, grade, correct, typed, seconds) VALUES (3, ?1, 'type', 3, 1, 'c', 5)", [noon(today)])
-            .unwrap();
         for n in 0..5 {
             activity::add(&c, &day_of(day(n)), "dictation", 600).unwrap();
         }
@@ -200,11 +148,8 @@ mod tests {
         assert_eq!((p.words_known, p.words_total), (1, 3));
         assert_eq!(p.from, "2025-11-10", "the Monday 52 weeks before this week's");
         assert_eq!(p.year_seconds, 3060);
-        // Oct 20 has an answer but no recorded time; it's still a day with something done.
-        assert_eq!(p.days.len(), 7);
-        let yesterday = p.days.iter().find(|d| d.day == "2026-11-11").unwrap();
-        assert_eq!(*yesterday, DayDetail { day: "2026-11-11".into(), seconds: 600, sentences: 2, episodes: 2, words: 0 });
-        assert_eq!(p.days.last().unwrap().words, 1);
+        assert_eq!(p.days.len(), 6);
+        assert_eq!(p.days.last().unwrap().day, "2026-11-12");
         assert_eq!(p.weeks.len(), 12);
         assert_eq!(p.weeks[11], WeekAccuracy { start: "2026-11-09".into(), accuracy: Some(0.9), sentences: 2 });
         assert_eq!(p.weeks[8].accuracy, Some(0.5), "the week of 19 Oct");

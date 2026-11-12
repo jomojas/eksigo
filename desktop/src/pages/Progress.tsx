@@ -3,7 +3,9 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Page } from "../components/Shell";
-import { backend, on, type DayDetail, type Progress as Data } from "../lib/backend";
+import { backend, on, type Progress as Data } from "../lib/backend";
+
+type DayDetail = Data["days"][number];
 import { percent } from "../lib/dictation";
 import { plural, practised } from "../lib/format";
 
@@ -50,13 +52,9 @@ function level(d: DayDetail | undefined): number {
   return 1;
 }
 
+/** "Thu 12 Nov · 25 min". */
 function describe(d: DayDetail | undefined, day: string): string {
-  if (!d) return `${longDay(day)} · no practice`;
-  const parts = [longDay(day), practised(d.seconds)];
-  if (d.episodes) parts.push(plural(d.episodes, "episode"));
-  if (d.sentences) parts.push(plural(d.sentences, "sentence"));
-  if (d.words) parts.push(plural(d.words, "word") + " practised");
-  return parts.join(" · ");
+  return `${longDay(day)} · ${d ? practised(d.seconds) : "0 min"}`;
 }
 
 function YearGrid({ data }: { data: Data }) {

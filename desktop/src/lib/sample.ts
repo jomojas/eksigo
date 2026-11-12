@@ -9,7 +9,6 @@ import type {
   NewEpisode,
   Week,
   Progress,
-  DayDetail,
   PracticeItem,
   DictInfo,
   DictionaryList,
@@ -570,12 +569,12 @@ export const sample = {
     const monday = new Date(today.getTime() - ((today.getDay() + 6) % 7) * 86_400_000);
     const from = new Date(monday.getTime() - 52 * 7 * 86_400_000);
     // A made-up year that starts slowly and gets more regular.
-    const days: DayDetail[] = [];
+    const days: Progress["days"] = [];
     for (let t = from.getTime(), i = 0; t <= today.getTime(); t += 86_400_000, i++) {
       const r = Math.abs(Math.sin(i * 12.9898) * 43758.5453) % 1;
       if (r < 0.75 - (i / 371) * 0.45) continue;
       const minutes = Math.round(5 + r * 55);
-      days.push({ day: iso(new Date(t)), seconds: minutes * 60, sentences: Math.round(minutes * 1.6), episodes: 1 + Math.floor(r * 2), words: Math.floor(r * 20) });
+      days.push({ day: iso(new Date(t)), seconds: minutes * 60 });
     }
     const weeks = Array.from({ length: 12 }, (_, i) => ({
       start: iso(new Date(monday.getTime() - (11 - i) * 7 * 86_400_000)),
