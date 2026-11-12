@@ -38,7 +38,7 @@ Many desktop dictation apps exist, so making money is not the goal. The project 
 4. Sign-in, optional, only for syncing with the phone. Apple or Google, the same accounts as the iPhone app. Sign in with Apple on Windows uses Apple's web sign-in (needs a Services ID and a return URL on the server).
 
 **Navigation (decided 2026-11-10).** Sidebar: Today, Podcasts, Library, My words, Progress, then an *In progress* list of unfinished episodes, and Settings at the bottom. Every piece of audio lives in the Library, so Dictation is not a sidebar item: it opens from Today, Podcasts, the Library or *In progress*, the sidebar keeps **Library** selected, and the top bar shows the path (`Library / show / episode`).
-- **Today:** Continue, episodes heard on the phone today (needs sign-in), new episodes from subscriptions. Each has **Practise**.
+- **Today:** one large Continue card for the unfinished episode practised last (*Resume at sentence N*, `Enter`); the other unfinished ones are in the sidebar's *In progress*. Then *Heard on your phone today* (needs the phone app and an account, later) and *New from your shows*: from each subscribed show its newest episode not yet started, at most three, newest first, with **Practise** (downloads it and opens dictation). Subscribed feeds are read again once per run of the app when older than six hours. On the right, *This week*: the day streak, time practised, a bar for each of the last seven days (the day under the mouse, else today, is written out below), and My words (due, new to start today, started this week, *Practise N words*, `P`).
 - **Podcasts:** search (Apple podcast directory) or paste an RSS link; *Your shows*; recommendations (*Good for learners*, a short list we choose, plus Apple's top charts by country and category). → **Show** page: description, Subscribe, the episode list with each episode's practice status. → **Episode** page.
 - **Library:** everything that can be practised: downloaded episodes **and the learner's own audio or video files** (Add audio or drag and drop; MP3, M4A, WAV, MP4; they stay on the computer and are transcribed by local Whisper). Each row shows the source, length, progress (*Not started*, *31/100*, *Finished*), accuracy and when it was last practised. Filters replace a separate History page.
 - **Episode page** (the same page from Podcasts or the Library): **Start**, **Resume at sentence 32** or **Practise again**, **Preview**, and every past attempt with its results.
@@ -89,7 +89,7 @@ The **review** (after stopping or finishing, and from each attempt on the Episod
 
 **Stopping partway.** `Esc` or Stop asks: **Review so far** (default) or **Save and continue later**. Progress is saved either way, and seeing partial results doesn't end the episode: the learner can resume at the next sentence, and the results grow.
 
-**Today's Continue list:** clicking a row opens the episode's page; **Resume** opens dictation.
+**Today's Continue card and rows:** clicking one opens the episode's page; **Resume** opens dictation. The streak counts days in a row with any practice, up to yesterday while today has none yet.
 
 **Results: the original and the learner's text side by side**, sentence by sentence like a split diff, each row with a play button. Words the learner missed are marked in the original; wrong words are red in the learner's text. Above: accuracy, sentences done, known, flagged, time; filters All, Flagged, With mistakes; a filter for sentences with mistakes; **Resume** and **Practise these again**. The same results open later from the Episode page.
 - **Selecting a word or phrase** in the original opens a dictionary card (decided 2026-11-12). Any selection works, whether or not the dictionary has it:
@@ -108,6 +108,13 @@ The **review** (after stopping or finishing, and from each attempt on the Episod
 2. **Listen and recall:** hear it, recall the meaning, reveal it, grade *Again / Hard / Good / Easy*.
 3. **Pick the meaning:** four choices, the wrong ones taken from the learner's other words.
 Checking a typed translation needs an LLM, so it can only come later, as an AI feature.
+
+**How practice runs (built 2026-11-12).** The learner decides as little as possible; the app follows one set flow:
+- **What comes up:** words due now, the longest overdue first, then up to **10 new words a day** in the order they were saved; at most **20 per session**. *Practise N* on My words (`P`) and on Today.
+- **Each word** is practised in one of the sentences it was saved from, a different one each time, played as said in the episode (the computer's voice reads it when the episode is gone). Typing needs the word in the sentence and picking needs four saved meanings; otherwise that word falls back to another way.
+- **Grades:** a wrong answer, or *Show the answer* (`Shift+Tab`), counts as **Again** by itself and the word comes back at the end of the session (at most twice) and the next day. A right answer is **Good** on `Enter`; `2` or `4` make it Hard or Easy. Recall is graded by the learner, `Enter` for Good.
+- **Scheduling:** FSRS (the `rs-fsrs` crate, MIT) in days, without the minute-long learning steps. Levels follow the interval: *Learning* under 3 days, *Familiar* 3 to 21, *Known* longer. *I know this* makes a word Known and brings it back in a year.
+- Each answer is kept (time, way, grade, what was typed) for Progress; practice time counts towards the day.
 
 **Speaking, after the review, optional:**
 - **Shadowing:** play a sentence, record yourself, then compare the two. Local Whisper turns the recording into text and shows which words came through clearly. Free.

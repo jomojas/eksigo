@@ -9,6 +9,7 @@ pub mod library;
 pub mod models;
 pub mod player;
 pub mod podcasts;
+mod practice;
 pub mod sentences;
 mod storage;
 pub mod transcribe;
@@ -210,6 +211,21 @@ async fn show_refresh(db: State<'_, Db>, id: i64) -> CmdResult<ShowPage> {
 #[tauri::command]
 fn show_subscribe(db: State<Db>, id: i64, on: bool) -> CmdResult<()> {
     library::set_subscribed(&db.conn(), id, on).map_err(err)
+}
+
+/// Today's "New from your shows". With `refresh`, first reads the feeds of subscribed shows not read in six hours.
+#[tauri::command]
+async fn shows_new_episodes(db: State<'_, Db>, refresh: bool) -> CmdResult<Vec<library::NewEpisode>> {
+    if refresh {
+        let stale = library::stale_subscriptions(&db.conn(), now() - 6 * 3600).map_err(err)?;
+        let feeds = futures_util::future::join_all(stale.iter().map(|(_, url)| podcasts::fetch_feed(url))).await;
+        for ((id, _), feed) in stale.iter().zip(feeds) {
+            if let Ok(feed) = feed {
+                let _ = library::save_feed(&mut db.conn(), *id, &feed);
+            }
+        }
+    }
+    library::new_from_shows(&db.conn(), 3).map_err(err)
 }
 
 #[tauri::command]
@@ -520,6 +536,78 @@ fn words_remove(app: AppHandle, db: State<Db>, id: i64) -> CmdResult<()> {
     Ok(())
 }
 
+// ---------- word practice ----------
+
+fn now() -> i64 {
+    chrono::Utc::now().timestamp()
+}
+
+/// How many words are due and how many new ones may start today.
+#[tauri::command]
+fn practice_counts(db: State<Db>) -> CmdResult<practice::Counts> {
+    practice::counts(&db.conn(), now(), practice::today_start()).map_err(err)
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WeekSummary {
+    #[serde(flatten)]
+    week: activity::Week,
+    /// New words practised for the first time in the last seven days.
+    words_started: i64,
+}
+
+/// The week panel on Today: time practised each day, the streak and words started.
+#[tauri::command]
+fn activity_week(db: State<Db>) -> CmdResult<WeekSummary> {
+    let c = db.conn();
+    let week = activity::week(&c, chrono::Local::now().date_naive()).map_err(err)?;
+    let words_started = practice::started_since(&c, practice::today_start() - 6 * 86_400).map_err(err)?;
+    Ok(WeekSummary { week, words_started })
+}
+
+/// Today's session, at most twenty words.
+#[tauri::command]
+fn practice_queue(db: State<Db>) -> CmdResult<Vec<practice::Item>> {
+    let seed = chrono::Utc::now().timestamp_nanos_opt().unwrap_or(1) as u64;
+    practice::queue(&db.conn(), now(), practice::today_start(), seed).map_err(err)
+}
+
+/// Whether a typed answer is the word.
+#[tauri::command]
+fn practice_check(expected: String, typed: String) -> bool {
+    practice::check(&expected, &typed)
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GradeArgs {
+    word_id: i64,
+    item_id: Option<i64>,
+    idx: i64,
+    mode: String,
+    grade: u8,
+    correct: Option<bool>,
+    typed: String,
+    seconds: i64,
+}
+
+#[tauri::command]
+fn practice_grade(app: AppHandle, db: State<Db>, args: GradeArgs) -> CmdResult<practice::Graded> {
+    let g = practice::grade(&db.conn(), args.word_id, args.item_id, args.idx, &args.mode, args.grade, args.correct, &args.typed, args.seconds, now())
+        .map_err(err)?;
+    let _ = app.emit("words", ());
+    Ok(g)
+}
+
+/// "I know this": the word is Known and comes back in a year.
+#[tauri::command]
+fn practice_know(app: AppHandle, db: State<Db>, id: i64) -> CmdResult<practice::Graded> {
+    let g = practice::know(&db.conn(), id, now()).map_err(err)?;
+    let _ = app.emit("words", ());
+    Ok(g)
+}
+
 // ---------- playback ----------
 
 #[derive(Deserialize)]
@@ -618,6 +706,13 @@ pub fn run() {
             words_saved,
             words_note,
             words_remove,
+            practice_counts,
+            shows_new_episodes,
+            activity_week,
+            practice_queue,
+            practice_check,
+            practice_grade,
+            practice_know,
             play,
             stop_playback,
         ])

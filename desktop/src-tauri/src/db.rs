@@ -155,6 +155,23 @@ const MIGRATIONS: &[&str] = &[
     );
     INSERT INTO practice_days (day, kind, seconds)
         SELECT date(updated_at, 'unixepoch', 'localtime'), 'dictation', SUM(seconds) FROM attempts WHERE seconds > 0 GROUP BY 1;",
+    // 11: word practice (practice.rs). Each word's FSRS card as JSON, when it's next due and the level that
+    // follows; which sentence was practised when; and every answer, for Progress.
+    "ALTER TABLE saved_words ADD COLUMN card TEXT;
+    ALTER TABLE saved_words ADD COLUMN due_at INTEGER;
+    ALTER TABLE saved_words ADD COLUMN level TEXT NOT NULL DEFAULT 'new';
+    CREATE INDEX saved_words_due ON saved_words (level, due_at);
+    ALTER TABLE word_contexts ADD COLUMN practised_at INTEGER;
+    CREATE TABLE word_reviews (
+        word_id INTEGER NOT NULL REFERENCES saved_words(id) ON DELETE CASCADE,
+        at      INTEGER NOT NULL,
+        mode    TEXT NOT NULL,                 -- 'type', 'recall', 'pick' or 'known' (I know this)
+        grade   INTEGER NOT NULL,              -- 1 Again, 2 Hard, 3 Good, 4 Easy
+        correct INTEGER,                       -- typed or picked right; NULL for recall
+        typed   TEXT NOT NULL DEFAULT '',
+        seconds INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE INDEX word_reviews_by_word ON word_reviews (word_id, at);",
 ];
 
 pub struct Db(pub Mutex<Connection>);
