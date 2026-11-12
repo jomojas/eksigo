@@ -189,10 +189,12 @@ pub fn mark_ads(conn: &Connection, attempt_id: i64, from: i64, to: i64, seconds:
 /// Where the learner is (moving with Ctrl ← →, or stopping), and time spent since the last save.
 pub fn save_position(conn: &Connection, attempt_id: i64, position: i64, seconds: i64) -> Result<()> {
     let t = now();
+    let seconds = seconds.clamp(0, MAX_SECONDS_PER_SENTENCE);
     conn.execute(
         "UPDATE attempts SET position = ?2, seconds = seconds + ?3, updated_at = ?4 WHERE id = ?1",
-        params![attempt_id, position.max(0), seconds.clamp(0, MAX_SECONDS_PER_SENTENCE), t],
+        params![attempt_id, position.max(0), seconds, t],
     )?;
+    crate::activity::add(conn, &crate::activity::today(), "dictation", seconds)?;
     conn.execute("UPDATE items SET last_practised_at = ?2 WHERE id = (SELECT item_id FROM attempts WHERE id = ?1)", params![attempt_id, t])?;
     Ok(())
 }
@@ -407,6 +409,8 @@ mod tests {
         assert_eq!((s.done, s.known, s.with_mistakes, s.ads), (2, 1, 1, 2));
         assert_eq!((s.credit, s.total), (5.0, 6), "ads are left out of the score");
         assert_eq!(s.attempt.seconds, 30 + 5 + MAX_SECONDS_PER_SENTENCE, "time away isn't counted");
+        let today = crate::activity::days(&c, &crate::activity::today()).unwrap();
+        assert_eq!(today[0].seconds, s.attempt.seconds, "the time also counts for today");
         assert_eq!(s.attempt.position, 4);
 
         finish(&c, a.id).unwrap();

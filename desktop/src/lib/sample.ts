@@ -2,6 +2,9 @@
 // and Library items kept in memory, with downloads and playback simulated by timers. Never used in the app.
 
 import type {
+  DictInfo,
+  DictionaryList,
+  StorageUsage,
   Added,
   Answer,
   AnswerKind,
@@ -268,6 +271,28 @@ function attemptById(id: number): Attempt {
   return a;
 }
 
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+const SAMPLE_DICTS: DictInfo[] = [
+  ["zh", "ECDICT", 5265439],
+  ["ja", "EJDict", 1534012],
+  ["ko", "Wiktionary", 362855],
+  ["es", "Wiktionary", 768685],
+  ["fr", "Wiktionary", 689289],
+  ["en", "ECDICT", 1731307],
+].map(([lang, source, bytes]) => ({
+  lang: lang as string,
+  source: source as string,
+  downloadBytes: bytes as number,
+  latestVersion: 1,
+  installedVersion: null,
+  installedBytes: 0,
+}));
+const installedDicts = new Map<string, Partial<DictInfo>>([
+  ["zh", { installedVersion: 1, installedBytes: 16_400_000 }],
+  ["en", { installedVersion: 0, installedBytes: 5_100_000 }],
+]);
+
 export const sample = {
   learners,
 
@@ -467,6 +492,32 @@ export const sample = {
   session(attemptId: number): Session {
     const a = attemptById(attemptId);
     return { attempt: { ...a }, answers: [...(answers.get(a.id)?.values() ?? [])].sort((x, y) => x.idx - y.idx), flagged: flaggedOf(a.id) };
+  },
+
+  // Settings › Dictionaries and Storage.
+  async dictionaries(): Promise<DictionaryList> {
+    await wait(300);
+    return { dictionaries: SAMPLE_DICTS.map((d) => ({ ...d, ...installedDicts.get(d.lang) })), offline: false };
+  },
+  async updateDictionary(lang: string) {
+    await wait(1200);
+    const d = SAMPLE_DICTS.find((x) => x.lang === lang)!;
+    installedDicts.set(lang, { installedVersion: d.latestVersion, installedBytes: d.downloadBytes * 3 });
+  },
+  async removeDictionary(lang: string) {
+    installedDicts.delete(lang);
+  },
+  storage(): StorageUsage {
+    return {
+      dataDir: "~/Library/Application Support/com.eksigo.desktop",
+      episodes: 6,
+      episodesBytes: 412e6,
+      ownFiles: 2,
+      ownFilesBytes: 96e6,
+      modelsBytes: 148e6,
+      dictionariesBytes: [...installedDicts.values()].reduce((n, d) => n + (d.installedBytes ?? 0), 0),
+      databaseBytes: 3.4e6,
+    };
   },
 
   // A few words, so the look-up card has something to show in a browser.

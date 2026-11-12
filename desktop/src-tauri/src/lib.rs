@@ -1,3 +1,4 @@
+pub mod activity;
 pub mod audio;
 pub mod compare;
 pub mod db;
@@ -9,6 +10,7 @@ pub mod models;
 pub mod player;
 pub mod podcasts;
 pub mod sentences;
+mod storage;
 pub mod transcribe;
 pub mod whisper;
 
@@ -445,6 +447,42 @@ async fn dictionary_lookup(app: AppHandle, dicts: State<'_, dictionary::Dictiona
     dicts.lookup(&lang, &text).map_err(err)
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DictionaryList {
+    dictionaries: Vec<dictionary::DictInfo>,
+    /// The server couldn't be asked; only what's installed is listed.
+    offline: bool,
+}
+
+/// The dictionaries offered and installed (Settings › Dictionaries).
+#[tauri::command]
+async fn dictionary_list(app: AppHandle) -> CmdResult<DictionaryList> {
+    let dir = app.path().app_data_dir().map_err(err)?.join("dictionaries");
+    let (dictionaries, offline) = dictionary::list(&dir).await;
+    Ok(DictionaryList { dictionaries, offline })
+}
+
+/// Downloads `lang`'s dictionary, or its newer version.
+#[tauri::command]
+async fn dictionary_update(app: AppHandle, dicts: State<'_, dictionary::Dictionaries>, lang: String) -> CmdResult<()> {
+    let dir = app.path().app_data_dir().map_err(err)?.join("dictionaries");
+    dicts.update(&dir, &lang).await.map_err(err)
+}
+
+#[tauri::command]
+fn dictionary_remove(app: AppHandle, dicts: State<dictionary::Dictionaries>, lang: String) -> CmdResult<()> {
+    let dir = app.path().app_data_dir().map_err(err)?.join("dictionaries");
+    dicts.remove(&dir, &lang).map_err(err)
+}
+
+/// How much space each part of Eksigo's data takes (Settings › Storage).
+#[tauri::command]
+fn storage_usage(app: AppHandle, db: State<Db>) -> CmdResult<storage::Usage> {
+    let dir = app.path().app_data_dir().map_err(err)?;
+    storage::usage(&db.conn(), &dir).map_err(err)
+}
+
 /// Where each word of a sentence is in the audio, for playing a selection as said.
 #[tauri::command]
 fn sentence_word_times(db: State<Db>, item_id: i64, idx: i64) -> CmdResult<Vec<[i64; 2]>> {
@@ -570,6 +608,10 @@ pub fn run() {
             dictation_attempts,
             dictation_in_progress,
             dictionary_lookup,
+            dictionary_list,
+            dictionary_update,
+            dictionary_remove,
+            storage_usage,
             sentence_word_times,
             words_add,
             words_list,

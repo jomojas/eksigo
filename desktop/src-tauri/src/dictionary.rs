@@ -71,14 +71,130 @@ fn on_disk(dir: &Path, lang: &str) -> Option<(PathBuf, String)> {
 
 /// While developing, the file built in this repository (backend/app/dictionaries) is used before the
 /// server has it.
-fn from_repo(lang: &str) -> Option<PathBuf> {
+fn repo_index() -> Option<(PathBuf, Vec<serde_json::Value>)> {
     if !cfg!(debug_assertions) {
         return None;
     }
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../backend/app/dictionaries");
     let index: Vec<serde_json::Value> = serde_json::from_str(&std::fs::read_to_string(dir.join("index.json")).ok()?).ok()?;
+    Some((dir, index))
+}
+
+/// The repository's file for `lang` and its version.
+fn from_repo(lang: &str) -> Option<(PathBuf, i64)> {
+    let (dir, index) = repo_index()?;
     let e = index.iter().find(|e| e["lang"] == lang)?;
-    Some(dir.join(e["file"].as_str()?))
+    Some((dir.join(e["file"].as_str()?), e["version"].as_i64().unwrap_or(0)))
+}
+
+/// What the server offers (or, while developing, the repository's index).
+async fn listed() -> Result<Vec<Listed>> {
+    if let Some((_, index)) = repo_index() {
+        return Ok(index
+            .iter()
+            .filter_map(|e| {
+                Some(Listed {
+                    lang: e["lang"].as_str()?.into(),
+                    version: e["version"].as_i64()?,
+                    bytes: e["bytes"].as_u64()?,
+                    sha256: e["sha256"].as_str()?.into(),
+                    source: e["source"].as_str()?.into(),
+                    url: String::new(),
+                })
+            })
+            .collect());
+    }
+    let listing: Listing = HTTP.get(API).send().await.context("The dictionary server can't be reached")?.error_for_status()?.json().await?;
+    Ok(listing.dictionaries)
+}
+
+/// The version of a dictionary file's name ("zh-1.sqlite" → 1).
+fn version_of(path: &Path, lang: &str) -> i64 {
+    path.file_stem()
+        .and_then(|s| s.to_str())
+        .and_then(|s| s.strip_prefix(&format!("{lang}-")))
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(0)
+}
+
+/// Every file belonging to `lang`'s dictionaries in `dir` (the database, its credit, a half download).
+fn files_of(dir: &Path, lang: &str) -> Vec<PathBuf> {
+    let prefix = format!("{lang}-");
+    std::fs::read_dir(dir)
+        .map(|r| {
+            r.flatten()
+                .map(|e| e.path())
+                .filter(|p| {
+                    p.file_name().and_then(|n| n.to_str()).is_some_and(|n| {
+                        n.strip_prefix(&prefix).is_some_and(|rest| rest.split('.').next().is_some_and(|v| v.parse::<i64>().is_ok()))
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// One language's dictionary for Settings: what the server has, and what is on this computer.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DictInfo {
+    pub lang: String,
+    pub source: String,
+    /// The download, packed; 0 when the server couldn't be reached.
+    pub download_bytes: u64,
+    pub latest_version: Option<i64>,
+    /// On this computer, unpacked.
+    pub installed_version: Option<i64>,
+    pub installed_bytes: u64,
+}
+
+/// The dictionaries offered and installed. `offline` is true when the server couldn't be asked.
+pub async fn list(dir: &Path) -> (Vec<DictInfo>, bool) {
+    let (offered, offline) = match listed().await {
+        Ok(l) => (l, false),
+        Err(_) => (vec![], true),
+    };
+    let mut out: Vec<DictInfo> = offered
+        .iter()
+        .map(|d| DictInfo {
+            lang: d.lang.clone(),
+            source: d.source.clone(),
+            download_bytes: d.bytes,
+            latest_version: Some(d.version),
+            installed_version: None,
+            installed_bytes: 0,
+        })
+        .collect();
+    // Installed ones the server no longer lists (or can't be asked about) still show, so they can be removed.
+    let mut langs: Vec<String> = std::fs::read_dir(dir)
+        .map(|r| {
+            r.flatten()
+                .filter_map(|e| e.file_name().to_str().and_then(|n| n.strip_suffix(".sqlite")).and_then(|n| n.split_once('-')).map(|(l, _)| l.to_string()))
+                .collect()
+        })
+        .unwrap_or_default();
+    langs.sort();
+    langs.dedup();
+    for lang in langs {
+        let Some((path, source)) = on_disk(dir, &lang) else { continue };
+        let bytes = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+        let version = version_of(&path, &lang);
+        match out.iter_mut().find(|d| d.lang == lang) {
+            Some(d) => {
+                d.installed_version = Some(version);
+                d.installed_bytes = bytes;
+            }
+            None => out.push(DictInfo {
+                lang,
+                source,
+                download_bytes: 0,
+                latest_version: None,
+                installed_version: Some(version),
+                installed_bytes: bytes,
+            }),
+        }
+    }
+    (out, offline)
 }
 
 fn inflate(data: &[u8]) -> Result<Vec<u8>> {
@@ -90,16 +206,16 @@ fn inflate(data: &[u8]) -> Result<Vec<u8>> {
 /// Downloads (or, while developing, copies) the dictionary for `lang` into `dir`.
 async fn install(dir: &Path, lang: &str) -> Result<(PathBuf, String)> {
     std::fs::create_dir_all(dir)?;
-    if let Some(local) = from_repo(lang).filter(|p| p.exists()) {
+    if let Some((local, version)) = from_repo(lang).filter(|(p, _)| p.exists()) {
         let raw = inflate(&std::fs::read(&local)?)?;
-        let dest = dir.join(file_name(lang, 0));
+        let source = listed().await?.into_iter().find(|d| d.lang == lang).map(|d| d.source).unwrap_or_default();
+        let dest = dir.join(file_name(lang, version));
         std::fs::write(&dest, raw)?;
-        std::fs::write(dest.with_extension("source"), "ECDICT")?;
-        return Ok((dest, "ECDICT".into()));
+        std::fs::write(dest.with_extension("source"), &source)?;
+        return Ok((dest, source));
     }
-    let listing: Listing = HTTP.get(API).send().await.context("The dictionary server can't be reached")?.error_for_status()?.json().await?;
-    let d = listing
-        .dictionaries
+    let d = listed()
+        .await?
         .into_iter()
         .find(|d| d.lang == lang)
         .ok_or_else(|| anyhow!("There's no dictionary for this language yet."))?;
@@ -134,6 +250,27 @@ impl Dictionaries {
         };
         let d = open(&path, source)?;
         self.0.lock().unwrap().insert(lang.to_string(), d);
+        Ok(())
+    }
+
+    /// Downloads `lang`'s newest dictionary, replacing the one on this computer (Settings › Dictionaries).
+    pub async fn update(&self, dir: &Path, lang: &str) -> Result<()> {
+        let old = files_of(dir, lang);
+        let (path, source) = install(dir, lang).await?;
+        let d = open(&path, source)?;
+        self.0.lock().unwrap().insert(lang.to_string(), d);
+        for f in old.into_iter().filter(|f| f != &path && f != &path.with_extension("source")) {
+            let _ = std::fs::remove_file(f);
+        }
+        Ok(())
+    }
+
+    /// Closes and deletes `lang`'s dictionary; it downloads again the next time it's needed.
+    pub fn remove(&self, dir: &Path, lang: &str) -> Result<()> {
+        self.0.lock().unwrap().remove(lang);
+        for f in files_of(dir, lang) {
+            std::fs::remove_file(&f).with_context(|| format!("{} couldn't be deleted", f.display()))?;
+        }
         Ok(())
     }
 
@@ -384,6 +521,29 @@ mod tests {
         Dict { conn, source: "ECDICT".into(), has_definition: true }
     }
 
+    #[tokio::test]
+    async fn installed_dictionaries_are_listed_and_removed() {
+        let dir = std::env::temp_dir().join(format!("eksigo-dicts-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        for f in ["zh-0.sqlite", "zh-0.source", "zh-1.part", "xx-2.sqlite", "zz.sqlite"] {
+            std::fs::write(dir.join(f), "ab").unwrap();
+        }
+        let (list, offline) = list(&dir).await;
+        assert!(!offline, "while developing, the repository's index is the listing");
+        let zh = list.iter().find(|d| d.lang == "zh").unwrap();
+        assert_eq!((zh.installed_version, zh.installed_bytes, zh.latest_version), (Some(0), 2, Some(1)));
+        let xx = list.iter().find(|d| d.lang == "xx").unwrap();
+        assert_eq!((xx.installed_version, xx.latest_version), (Some(2), None), "installed but no longer offered");
+        assert!(list.iter().find(|d| d.lang == "ja").unwrap().installed_version.is_none());
+
+        Dictionaries::default().remove(&dir, "zh").unwrap();
+        let mut left: Vec<String> = std::fs::read_dir(&dir).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into()).collect();
+        left.sort();
+        assert_eq!(left, ["xx-2.sqlite", "zz.sqlite"]);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
     #[test]
     fn a_word_is_found_in_its_base_form() {
         let d = dict();
@@ -458,7 +618,7 @@ mod tests {
     #[ignore = "needs backend/app/dictionaries/zh-1.sqlite.deflate"]
     fn the_built_dictionary() {
         let dir = std::env::temp_dir().join(format!("eksigo-dict-{}", std::process::id()));
-        let raw = inflate(&std::fs::read(from_repo("zh").unwrap()).unwrap()).unwrap();
+        let raw = inflate(&std::fs::read(from_repo("zh").unwrap().0).unwrap()).unwrap();
         std::fs::create_dir_all(&dir).unwrap();
         let p = dir.join("zh-0.sqlite");
         std::fs::write(&p, raw).unwrap();

@@ -145,6 +145,16 @@ const MIGRATIONS: &[&str] = &[
     UPDATE word_contexts SET
         sentence_start_ms = COALESCE((SELECT s.start_ms FROM sentences s WHERE s.item_id = word_contexts.item_id AND s.idx = word_contexts.idx), start_ms),
         sentence_end_ms = COALESCE((SELECT s.end_ms FROM sentences s WHERE s.item_id = word_contexts.item_id AND s.idx = word_contexts.idx), end_ms);",
+    // 10: practice time by day (this computer's calendar), for Progress. Time from before is put on the day
+    // each attempt was last worked on, the best that can be known now.
+    "CREATE TABLE practice_days (
+        day     TEXT NOT NULL,                  -- 'YYYY-MM-DD'
+        kind    TEXT NOT NULL,                  -- 'dictation' or 'words'
+        seconds INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (day, kind)
+    );
+    INSERT INTO practice_days (day, kind, seconds)
+        SELECT date(updated_at, 'unixepoch', 'localtime'), 'dictation', SUM(seconds) FROM attempts WHERE seconds > 0 GROUP BY 1;",
 ];
 
 pub struct Db(pub Mutex<Connection>);

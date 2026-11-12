@@ -43,7 +43,7 @@ Many desktop dictation apps exist, so making money is not the goal. The project 
 - **Library:** everything that can be practised: downloaded episodes **and the learner's own audio or video files** (Add audio or drag and drop; MP3, M4A, WAV, MP4; they stay on the computer and are transcribed by local Whisper). Each row shows the source, length, progress (*Not started*, *31/100*, *Finished*), accuracy and when it was last practised. Filters replace a separate History page.
 - **Episode page** (the same page from Podcasts or the Library): **Start**, **Resume at sentence 32** or **Practise again**, **Preview**, and every past attempt with its results.
 - **Practise** on an episode that isn't downloaded downloads it and opens Dictation; transcription starts in the background.
-- **Settings** is a page in the main area, like VS Code (`Ctrl+,`), with its own section list and search; changes save as they are made.
+- **Settings** is a page in the main area, like VS Code (`Ctrl+,`), with its own section list and search; changes save as they are made. Sections (built 2026-11-12): General (theme), Dictation (the playback defaults), Speech model, Dictionaries (*Word meanings in*, and each language's dictionary downloaded, updated or removed), Storage (space taken by downloaded episodes, the speech model, dictionaries and the database, with the data folder; the learner's own files are never copied), Shortcuts (the full list, not yet changeable), About (version, credits and licences). AI and Account and sync are listed as *later*. The next sentence always waits for `Tab`; there is no setting to play it by itself.
 
 **Starting an episode:** dictation starts after about 30 seconds while transcription continues in the background (section 3).
 
@@ -98,7 +98,7 @@ The **review** (after stopping or finishing, and from each attempt on the Episod
   3. **Pronunciation for anything selected:** ▶ *As said in the episode* plays exactly those words, from the word timings transcription keeps; *Slow voice* reads them with the computer's own voice. The dictionary's IPA where it has it.
   4. **Add to My words** (`A`) for any selection, with the sentence, what was typed, the words' place in the audio, the meaning (or each word's), and the learner's own note.
   5. *Explain in this sentence* needs an AI key (later).
-- **The dictionary:** downloaded once from `GET /v1/dictionaries` for the language chosen in Settings (*Word meanings in*, by default the computer's language). Chinese (`zh-1`, 5 MB) is built from ECDICT: about 50,000 common words, 58,000 phrases and their word forms, with English definitions.
+- **The dictionary:** downloaded once from `GET /v1/dictionaries` for the language chosen in Settings › Dictionaries (*Word meanings in*, by default the computer's language). Chinese (`zh-1`, 5 MB) is built from ECDICT: about 50,000 common words, 58,000 phrases and their word forms, with English definitions.
 - Later: mark **"the transcript is wrong here"** (doesn't count against the learner), adjust a sentence's start or end, merge or split sentences.
 - Later: **mistakes grouped by rules, without AI**: dropped small words (weak forms: *to, of, have, can*), numbers, names, similar-sounding words (*can/can't, fifteen/fifty*, from a pronunciation dictionary), dropped endings (*-ed, -s*).
 - *(AI, optional)* a written review in the learner's language (section 5).
