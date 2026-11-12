@@ -20,7 +20,7 @@ The riskiest parts come first: Whisper building on both systems, then the dictat
 | 6 | **Settings, complete.** The D12 sections v0.1 needs: Dictionaries (installed, size, update, remove), Storage (what takes the space and where it's kept; episodes are removed in the Library), Shortcuts (the full list), About (version, licences, credits); search across the sections. Practice time starts being recorded here, so Progress has data from the start. | Every Settings section on the canvas except AI and Account works |
 | 7 | **Word levels and practice.** Levels New · Learning · Familiar · Known with the next practice date (D09); the Practice screen (D10): *Listen and type* (the saved sentence played as said, the word left as a gap), *Listen and recall* and *Pick the meaning*; grades Again · Hard · Good · Easy set the next date; *I know this*; "Practise 12 due" on My words and Today. | A saved word comes up for practice, its grade moves its level and next date |
 | 8 | **Progress.** The D11 page: streak and best, time this week, accuracy this month, words known; the year grid by minutes (decided: no sentences switch; accuracy is dictation only), with the day's detail; accuracy over the last 12 weeks. *What you mishear most* stays for later. | A week of practice shows correctly on every part of the page |
-| 9 | **First launch and release.** The welcome (D13): language, the speech model download, AI later; `tauri-action` release workflow on version tags, Mac signed and notarised, Windows unsigned; the updater. | A test tag produces installable builds for both systems |
+| 9 | **First launch and release.** The welcome (D13): language, the speech model download, AI later (decided: two steps, the AI step comes with AI); `tauri-action` release workflow on version tags, Mac signed and notarised, Windows unsigned, drafts the owner publishes; the updater; the AGPL-3.0 license. | A test tag produces installable builds for both systems |
 | 10 | **Test and ship.** Install on a clean Mac and Windows machine, fix what breaks, tag **v0.1.0**. Point the eksigo.com download buttons at the release. | v0.1.0 is on GitHub Releases and downloadable from eksigo.com |
 
 ### Left out of v0.1.0, added in the following weeks
@@ -41,7 +41,7 @@ The riskiest parts come first: Whisper building on both systems, then the dictat
 
 - **Day 1:** the list of design fixes from the canvas, and the accent colour (keep lavender or choose another).
 - **By day 9:** an Apple **Developer ID Application** certificate (exported as .p12) and an app-specific password, added as GitHub secrets for notarisation. Creating the certificate can take a day.
-- **By day 9:** the licenses, so the repo can be made public with the release.
+- **By day 9:** the license (AGPL-3.0, chosen 2026-11-12; the repo went public the same day), and the updater's signing key as two GitHub secrets.
 - **Day 10:** a Windows machine for the install test (an older laptop, ideally, to check Whisper speed).
 
 ### Risks

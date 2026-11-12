@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
-import { backend, on, type DictionaryList, type ModelInfo, type StorageUsage } from "../lib/backend";
+import { backend, inApp, on, type DictionaryList, type ModelInfo, type StorageUsage } from "../lib/backend";
 import { useTheme, type ThemeChoice } from "../lib/theme";
 import { Kbd, Page, useAppInfo } from "../components/Shell";
 import { Icon } from "../components/Icon";
@@ -10,6 +10,7 @@ import { useActivity } from "../lib/transcripts";
 import { PlaybackSettings } from "../components/DictationSettings";
 import { useDictationSettings } from "../lib/dictation";
 import { MEANING_LANGUAGES, useMeaningLanguage } from "../lib/words";
+import { checkForUpdate, restartToUpdate, useUpdate } from "../lib/updates";
 
 // Settings (design D12): every section v0.1 has, plus AI and Account, which arrive later. The open
 // section is in the address (#/settings?s=storage), so other screens can link straight to one.
@@ -25,7 +26,7 @@ const SECTIONS: { id: SectionId; label: string; later?: boolean; words: string }
   { id: "account", label: "Account and sync", later: true, words: "sign in apple google iphone sync" },
   { id: "storage", label: "Storage", words: "space disk size folder data episodes audio delete" },
   { id: "shortcuts", label: "Shortcuts", words: "keys keyboard" },
-  { id: "about", label: "About", words: "version licences licenses credits" },
+  { id: "about", label: "About", words: "version update updates licence license credits" },
 ];
 
 export function Settings() {
@@ -638,6 +639,35 @@ const CREDITS: [string, string, string][] = [
   ["Podcast search: Apple Podcasts", "", "https://podcasts.apple.com/"],
 ];
 
+/** The version check; the app also checks once each time it starts and downloads what it finds. */
+function Updates() {
+  const u = useUpdate();
+  const text =
+    !inApp ? "Updates are checked in the app, not in the browser preview."
+    : u.state === "checking" ? "Checking…"
+    : u.state === "current" ? "Eksigo is up to date."
+    : u.state === "downloading" ? `Downloading version ${u.version}${u.fraction !== null ? ` · ${Math.round(u.fraction * 100)}%` : ""}`
+    : u.state === "ready" ? `Version ${u.version} is downloaded and ready.`
+    : u.state === "failed" ? "Couldn't check for updates. Check your connection and try again."
+    : "Eksigo checks for a new version each time it starts.";
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+      <span style={{ flexGrow: 1, fontSize: 13 }} role="status">
+        {text}
+      </span>
+      {u.state === "ready" ? (
+        <button type="button" className="btn btn-sm btn-primary" onClick={() => restartToUpdate()}>
+          Restart to update
+        </button>
+      ) : (
+        <button type="button" className="btn btn-sm" disabled={!inApp || u.state === "checking" || u.state === "downloading"} onClick={() => checkForUpdate()}>
+          Check for updates
+        </button>
+      )}
+    </div>
+  );
+}
+
 function About() {
   const info = useAppInfo();
   return (
@@ -648,7 +678,16 @@ function About() {
         <div className="prop">System<b className="mono">{info?.os}</b></div>
         <div className="prop">Speech engine<b className="mono">{info?.whisperBackend}</b></div>
         <div className="prop">Database schema<b className="mono">{info?.schemaVersion}</b></div>
+        <div className="prop">
+          Licence
+          <b>
+            <button type="button" className="link-btn" style={{ fontSize: 13 }} onClick={() => backend.openUrl("https://github.com/jomojas/eksigo/blob/main/LICENSE")}>
+              GNU AGPL v3
+            </button>
+          </b>
+        </div>
       </div>
+      <Updates />
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <button type="button" className="btn btn-sm" onClick={() => backend.openUrl("https://eksigo.com")}>
           eksigo.com

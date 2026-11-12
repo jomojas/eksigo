@@ -1,0 +1,112 @@
+# Builds the desktop app for Mac and Windows when a version tag is pushed (v0.1.0, or v0.1.0-test.1 for a trial),
+# and puts the installers on a draft GitHub Release for the owner to publish. Not marked pre-release, even for a
+# test tag: the updater reads the latest release, and GitHub never counts a pre-release (or a draft) as latest.
+# Mac: one universal .dmg (Apple Silicon and Intel), signed with the Developer ID and notarised by Apple.
+# Windows: an unsigned NSIS installer. Both get the signed update files and latest.json the in-app updater reads.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # One draft release for both builds to upload to, so they never make two.
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      id: ${{ steps.create.outputs.id }}
+    steps:
+      # The API returns the new release's id; a draft can't be looked up by its tag afterwards.
+      - id: create
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          NOTES: |
+            **Mac:** download the `.dmg`, open it and drag Eksigo to Applications.
+
+            **Windows:** download the `-setup.exe` and run it. Windows may say it protected your PC, because the installer isn't signed yet: choose *More info*, then *Run anyway*.
+        run: |
+          id=$(gh api "repos/$GITHUB_REPOSITORY/releases" -f tag_name="$TAG" -f name="Eksigo $TAG" -f body="$NOTES" -F draft=true --jq .id)
+          test -n "$id"
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            args: --target universal-apple-darwin
+            rust-targets: aarch64-apple-darwin,x86_64-apple-darwin
+          - os: windows-latest
+            args: ""
+            rust-targets: ""
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write # creates the release and uploads to it
+    env:
+      # whisper.cpp would otherwise be compiled for this build machine's processor and could crash on the
+      # learner's. AVX2 and FMA are on almost every PC since 2015 and every Intel Mac that runs macOS 11.
+      GGML_NATIVE: "OFF"
+      GGML_AVX: "ON"
+      GGML_AVX2: "ON"
+      GGML_FMA: "ON"
+      GGML_F16C: "ON"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-targets }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+          key: release
+
+      - name: Install the interface's packages
+        working-directory: desktop
+        run: npm ci
+
+      # The tag is the version: v0.1.0-test.2 builds 0.1.0-test.2, which the updater sees as newer than test.1.
+      - name: Take the version from the tag
+        working-directory: desktop
+        shell: bash
+        run: |
+          node -e '
+            const fs = require("fs"), f = "src-tauri/tauri.conf.json", c = JSON.parse(fs.readFileSync(f));
+            c.version = process.argv[1].replace(/^v/, "");
+            fs.writeFileSync(f, JSON.stringify(c, null, 2) + "\n");
+            console.log("version", c.version);
+          ' "${{ github.ref_name }}"
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Signs the update files; the app only installs updates signed with this key.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Mac signing and notarisation (unused on Windows).
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          projectPath: desktop
+          releaseId: ${{ needs.release.outputs.id }}
+          args: ${{ matrix.args }}

@@ -31,13 +31,43 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": [
+      "app",
+      "dmg",
+      "nsis"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "createUpdaterArtifacts": true,
+    "publisher": "Eksigo",
+    "copyright": "© 2026 the Eksigo authors. Licensed under the GNU AGPL v3.",
+    "license": "AGPL-3.0-only",
+    "category": "Education",
+    "shortDescription": "Dictation practice with real podcasts",
+    "homepage": "https://eksigo.com",
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    },
+    "macOS": {
+      "minimumSystemVersion": "11.0"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEI2OEY5NEE1M0UxNjNCQkMKUldTOE94WStwWlNQdG85VkIzYTNaY09taFVYbHBVL1pyaDkyS0srcUtjNUpUb2Jtbi81OCtpbWYK",
+      "endpoints": [
+        "https://github.com/jomojas/eksigo/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

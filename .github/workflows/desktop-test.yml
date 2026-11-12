@@ -42,7 +42,7 @@ jobs:
 
       - name: Build the app and the Whisper benchmark
         working-directory: desktop/src-tauri
-        run: cargo build --bins
+        run: cargo build --bins --features bench
 
       - name: Cache the speech model
         uses: actions/cache@v4

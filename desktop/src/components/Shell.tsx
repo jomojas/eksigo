@@ -6,6 +6,8 @@ import { isBusy, transcribed, useActivity } from "../lib/transcripts";
 import { dictationPath, progressLabel, useInProgress } from "../lib/dictation";
 import { isMac, keyLabel, modKey } from "../lib/platform";
 import { Icon, type IconName } from "./Icon";
+import { restartToUpdate, useUpdate } from "../lib/updates";
+import { Welcome, WELCOMED } from "../pages/Welcome";
 
 const NAV: { to: string; label: string; icon: IconName }[] = [
   { to: "/today", label: "Today", icon: "today" },
@@ -49,7 +51,18 @@ export function Kbd({ keys }: { keys: string }) {
   return <span className="kbd">{keyLabel(keys)}</span>;
 }
 
+/** The welcome on first launch, then the app. Nothing is drawn until the setting is read, so the app doesn't flash. */
 export function Shell() {
+  const [welcomed, setWelcomed] = useState<boolean | null>(null);
+  useEffect(() => {
+    backend.getSetting(WELCOMED).then((v) => setWelcomed(v !== null));
+  }, []);
+  if (welcomed === null) return null;
+  if (!welcomed) return <Welcome onDone={() => setWelcomed(true)} />;
+  return <AppShell />;
+}
+
+function AppShell() {
   const [info, setInfo] = useState<AppInfo | null>(null);
   const [keys, setKeys] = useState<Keys>([]);
   const [status, setStatus] = useState("");
@@ -137,6 +150,7 @@ export function Shell() {
           </span>
           {downloads.size > 0 && <DownloadStatus />}
           <TranscriptActivity />
+          <UpdateStatus />
           {status && <span>{status}</span>}
           <span style={{ flexGrow: 1 }} />
           {keys.map(([k, label]) => (
@@ -151,6 +165,20 @@ export function Shell() {
         </footer>
       </div>
     </ShellContext.Provider>
+  );
+}
+
+/** A new version downloaded in the background, ready once the app restarts. */
+function UpdateStatus() {
+  const u = useUpdate();
+  if (u.state !== "ready") return null;
+  return (
+    <span>
+      Version {u.version} is ready
+      <button type="button" className="link-btn" style={{ fontSize: 12 }} onClick={() => restartToUpdate()}>
+        Restart to update
+      </button>
+    </span>
   );
 }
 
