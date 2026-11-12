@@ -438,7 +438,11 @@ fn dictation_in_progress(db: State<Db>) -> CmdResult<Vec<dictation::InProgress>>
 async fn dictionary_lookup(app: AppHandle, dicts: State<'_, dictionary::Dictionaries>, lang: String, text: String) -> CmdResult<dictionary::Lookup> {
     let dir = app.path().app_data_dir().map_err(err)?.join("dictionaries");
     dicts.ensure(&dir, &lang).await.map_err(err)?;
-    dicts.with(&lang, |d| d.lookup(&text)).map_err(err)
+    if dicts.needs_english(&lang) {
+        // Not fatal: the meanings still show without the English definitions.
+        let _ = dicts.ensure(&dir, "en").await;
+    }
+    dicts.lookup(&lang, &text).map_err(err)
 }
 
 /// Where each word of a sentence is in the audio, for playing a selection as said.

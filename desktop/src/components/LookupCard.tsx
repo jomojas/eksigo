@@ -84,7 +84,8 @@ export function LookupCard({ sel, path, onClose }: { sel: Selection; path: strin
   const asSaid = () => {
     const a = times[sel.from];
     const b = times[Math.min(sel.to, times.length - 1)];
-    if (a && b) player.play(a[0], b[1], 1);
+    // A little air at both ends: word timings are a guess to within a tenth of a second or so.
+    if (a && b) player.play(Math.max(0, a[0] - 100), b[1] + 120, 1);
   };
 
   // A adds, Esc closes; typing in the note is left alone.
@@ -115,7 +116,7 @@ export function LookupCard({ sel, path, onClose }: { sel: Selection; path: strin
 
   const entry = result?.entry ?? null;
   const single = result ? result.words.length === 0 : !sel.text.trim().includes(" ");
-  const title = result?.whole && entry ? entry.headword : result?.query || sel.text;
+  const title = result?.whole && entry ? entry.headword : sel.text.replace(/^[^\p{L}\p{N}']+|[^\p{L}\p{N}']+$/gu, "");
 
   return (
     <div ref={card} className="lookup" role="dialog" aria-label={title} style={{ top: pos.top, left: pos.left, width: WIDTH }}>

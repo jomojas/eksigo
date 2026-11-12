@@ -158,8 +158,12 @@ export type WordContext = {
   idx: number;
   sentence: string;
   typed: string;
+  /** The saved words in the audio. */
   startMs: number;
   endMs: number;
+  /** The whole sentence in the audio. */
+  sentenceStartMs: number;
+  sentenceEndMs: number;
   addedAt: number;
 };
 export type SavedWord = { id: number; text: string; headword: string; ipa: string; meaning: string; note: string; addedAt: number; contexts: WordContext[] };

@@ -6,7 +6,7 @@ import { useNavigate } from "react-router";
 import { Icon } from "../components/Icon";
 import { Page } from "../components/Shell";
 import { backend, type SavedWord, type WordContext } from "../lib/backend";
-import { whenDay } from "../lib/format";
+import { clock, whenDay } from "../lib/format";
 import { usePlayer } from "../lib/playback";
 import { firstLine, speak, useWords } from "../lib/words";
 
@@ -158,7 +158,7 @@ function Detail({ word: w }: { word: SavedWord }) {
   );
 }
 
-/** One sentence the word was heard in: the words played as said, or the whole sentence. */
+/** One sentence the word was heard in: played whole, with the episode and where it is in it. */
 function Context({ c, text }: { c: WordContext; text: string }) {
   const player = usePlayer(c.path);
   const navigate = useNavigate();
@@ -170,10 +170,10 @@ function Context({ c, text }: { c: WordContext; text: string }) {
           type="button"
           className="btn flag-btn"
           style={{ borderRadius: 9999, color: "var(--ink-muted)", flexShrink: 0 }}
-          aria-label="Play the words as said"
-          title={c.path ? "The words as said in the episode" : "The episode is no longer in your library"}
+          aria-label="Play the sentence"
+          title={c.path ? "Play the sentence" : "The episode is no longer in your library"}
           disabled={!c.path}
-          onClick={() => (player.playing ? player.stop() : player.play(c.startMs, c.endMs, 1))}
+          onClick={() => (player.playing ? player.stop() : player.play(c.sentenceStartMs, c.sentenceEndMs, 1))}
         >
           <Icon name={player.playing ? "pause" : "play"} size={11} />
         </button>
@@ -189,16 +189,22 @@ function Context({ c, text }: { c: WordContext; text: string }) {
           )}
         </span>
       </div>
-      <div style={{ fontSize: 12, color: "var(--ink-subtle)", paddingLeft: 36 }}>
-        {c.typed ? `You typed “${c.typed}”` : "Not typed"}
-        {c.itemTitle && (
-          <>
-            {" · "}
-            <button type="button" className="link-btn" onClick={() => c.itemId && navigate(`/library/${c.itemId}`)}>
-              {c.itemTitle}
-            </button>
-          </>
+      <div style={{ fontSize: 12, color: "var(--ink-subtle)", paddingLeft: 36, display: "flex", gap: 6, flexWrap: "wrap" }}>
+        {c.itemTitle && c.itemId ? (
+          <button
+            type="button"
+            className="link-btn"
+            title="Open the episode at this sentence"
+            onClick={() => navigate(`/library/${c.itemId}`, { state: { at: c.sentenceStartMs } })}
+          >
+            {c.itemTitle}
+          </button>
+        ) : (
+          <span>From an episode no longer in your library</span>
         )}
+        <span className="mono">
+          {clock(c.sentenceStartMs / 1000)}–{clock(c.sentenceEndMs / 1000)}
+        </span>
       </div>
     </div>
   );

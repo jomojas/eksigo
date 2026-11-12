@@ -516,6 +516,8 @@ export const sample = {
         typed: w.typed,
         startMs: times[w.from]?.[0] ?? s.startMs,
         endMs: times[w.to]?.[1] ?? s.endMs,
+        sentenceStartMs: s.startMs,
+        sentenceEndMs: s.endMs,
         addedAt: now(),
       });
     emit("words", null);

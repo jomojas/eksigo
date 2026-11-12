@@ -137,9 +137,23 @@ impl Dictionaries {
         Ok(())
     }
 
-    pub fn with<T>(&self, lang: &str, f: impl FnOnce(&Dict) -> Result<T>) -> Result<T> {
+    /// Whether `lang`'s dictionary lacks English definitions, so the English one is needed beside it.
+    pub fn needs_english(&self, lang: &str) -> bool {
+        lang != "en" && self.0.lock().unwrap().get(lang).is_some_and(|d| !d.has_definition)
+    }
+
+    /// Looks up `text` in `lang`'s dictionary; English definitions come from the English dictionary when
+    /// `lang`'s has none (every language shows its meaning and the English definition).
+    pub fn lookup(&self, lang: &str, text: &str) -> Result<Lookup> {
         let map = self.0.lock().unwrap();
-        f(map.get(lang).ok_or_else(|| anyhow!("The dictionary isn't ready yet."))?)
+        let d = map.get(lang).ok_or_else(|| anyhow!("The dictionary isn't ready yet."))?;
+        let mut l = d.lookup(text)?;
+        if !d.has_definition && lang != "en" {
+            if let Some(en) = map.get("en") {
+                en.fill_definitions(&mut l)?;
+            }
+        }
+        Ok(l)
     }
 }
 
@@ -294,6 +308,27 @@ impl Dict {
         Ok(None)
     }
 
+    /// Fills empty English definitions from this (English) dictionary, whose meanings are definitions.
+    fn fill_definitions(&self, l: &mut Lookup) -> Result<()> {
+        let fill = |e: &mut Entry| -> Result<()> {
+            if e.definition.is_empty() {
+                if let Some(en) = self.word(&e.headword)? {
+                    e.definition = en.meaning;
+                }
+            }
+            Ok(())
+        };
+        if let Some(e) = l.entry.as_mut() {
+            fill(e)?;
+        }
+        for w in l.words.iter_mut() {
+            if let Some(e) = w.entry.as_mut() {
+                fill(e)?;
+            }
+        }
+        Ok(())
+    }
+
     pub fn lookup(&self, text: &str) -> Result<Lookup> {
         let words = tokens(text);
         let query = words.join(" ");
@@ -384,6 +419,31 @@ mod tests {
         assert!(l.entry.is_none());
         let heads: Vec<Option<&str>> = l.words.iter().map(|w| w.entry.as_ref().map(|e| e.headword.as_str())).collect();
         assert_eq!(heads, vec![Some("before"), Some("the"), Some("feeling"), Some("arrive")]);
+    }
+
+    #[test]
+    fn other_languages_get_english_definitions_from_the_english_dictionary() {
+        let ja = Connection::open_in_memory().unwrap();
+        ja.execute_batch(
+            "CREATE TABLE words (word TEXT PRIMARY KEY, ipa TEXT NOT NULL, meaning TEXT NOT NULL);
+             CREATE TABLE forms (form TEXT PRIMARY KEY, word TEXT NOT NULL);
+             INSERT INTO words VALUES ('follow', '', '…の後について行く');",
+        )
+        .unwrap();
+        let en = Connection::open_in_memory().unwrap();
+        en.execute_batch(
+            "CREATE TABLE words (word TEXT PRIMARY KEY, ipa TEXT NOT NULL, meaning TEXT NOT NULL);
+             CREATE TABLE forms (form TEXT PRIMARY KEY, word TEXT NOT NULL);
+             INSERT INTO words VALUES ('follow', '', 'v. to travel behind, go after');",
+        )
+        .unwrap();
+        let dicts = Dictionaries::default();
+        dicts.0.lock().unwrap().insert("ja".into(), Dict { conn: ja, source: "EJDict".into(), has_definition: false });
+        assert!(dicts.needs_english("ja"));
+        dicts.0.lock().unwrap().insert("en".into(), Dict { conn: en, source: "ECDICT".into(), has_definition: false });
+        let l = dicts.lookup("ja", "Follow").unwrap();
+        let e = l.entry.unwrap();
+        assert_eq!((e.meaning.as_str(), e.definition.as_str()), ("…の後について行く", "v. to travel behind, go after"));
     }
 
     #[test]

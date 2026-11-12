@@ -139,6 +139,12 @@ const MIGRATIONS: &[&str] = &[
         added_at INTEGER NOT NULL,
         UNIQUE (word_id, item_id, idx)
     );",
+    // 9: a saved word's sentence plays whole, and shows where it is in the episode.
+    "ALTER TABLE word_contexts ADD COLUMN sentence_start_ms INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE word_contexts ADD COLUMN sentence_end_ms INTEGER NOT NULL DEFAULT 0;
+    UPDATE word_contexts SET
+        sentence_start_ms = COALESCE((SELECT s.start_ms FROM sentences s WHERE s.item_id = word_contexts.item_id AND s.idx = word_contexts.idx), start_ms),
+        sentence_end_ms = COALESCE((SELECT s.end_ms FROM sentences s WHERE s.item_id = word_contexts.item_id AND s.idx = word_contexts.idx), end_ms);",
 ];
 
 pub struct Db(pub Mutex<Connection>);

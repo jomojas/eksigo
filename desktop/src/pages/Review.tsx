@@ -2,7 +2,7 @@
 // sentences flagged during dictation. Shown when stopping or finishing, and from the Episode page
 // (`/library/:itemId/review/:attemptId`). Selecting words in the original opens the dictionary card.
 
-import { useCallback, useEffect, useMemo, useState, type MouseEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { useNavigate, useParams } from "react-router";
 import { Icon } from "../components/Icon";
 import { LookupCard, type Selection } from "../components/LookupCard";
@@ -61,18 +61,32 @@ export function Review({
     player.play(sen.startMs, sen.endMs, 1);
   };
   const [lookup, setLookup] = useState<Selection | null>(null);
-  /** Words selected in an original open the dictionary card. */
+  // Selecting words only selects them (to read, or copy); clicking the selection then opens the card.
+  const pending = useRef<{ sel: Selection; rects: DOMRect[] } | null>(null);
   const onSelect = (i: number, e: MouseEvent<HTMLElement>) => {
     const root = e.currentTarget;
     window.setTimeout(() => {
       const range = selectedWords(root);
-      const text = answers.get(i)?.original ?? sentences[i]?.text ?? "";
       if (!range) return;
+      const text = answers.get(i)?.original ?? sentences[i]?.text ?? "";
       const words = text.split(/\s+/).filter(Boolean);
-      const r = window.getSelection()?.getRangeAt(0).getBoundingClientRect();
+      const r = window.getSelection()?.getRangeAt(0);
       if (!r) return;
-      setLookup({ itemId: item.id, idx: i, from: range[0], to: range[1], text: words.slice(range[0], range[1] + 1).join(" "), typed: answers.get(i)?.typed ?? "", rect: r });
+      pending.current = {
+        sel: { itemId: item.id, idx: i, from: range[0], to: range[1], text: words.slice(range[0], range[1] + 1).join(" "), typed: answers.get(i)?.typed ?? "", rect: r.getBoundingClientRect() },
+        rects: [...r.getClientRects()],
+      };
     }, 0);
+  };
+  const onClickWords = (e: MouseEvent<HTMLElement>) => {
+    const { clientX: x, clientY: y } = e;
+    window.setTimeout(() => {
+      const p = pending.current;
+      const stillSelecting = !window.getSelection()?.isCollapsed;
+      if (stillSelecting) return;
+      pending.current = null;
+      if (p && p.rects.some((r) => x >= r.left - 2 && x <= r.right + 2 && y >= r.top - 2 && y <= r.bottom + 2)) setLookup(p.sel);
+    }, 10);
   };
 
   return (
@@ -121,7 +135,7 @@ export function Review({
           ))}
         </span>
         <span style={{ fontSize: 12 }}>
-          Select words in the original to look them up. <span className="w w-missing">Boxed</span> words were missed, <span className="w w-wrong">red</span> ones wrong,{" "}
+          Select words in the original, then click them to look them up. <span className="w w-missing">Boxed</span> words were missed, <span className="w w-wrong">red</span> ones wrong,{" "}
           <span className="w w-spelling">underlined</span> ones misspelled (half a word).
           {s.ads > 0 && ` ${plural(s.ads, "sentence")} skipped as ads.`}
         </span>
@@ -163,7 +177,7 @@ export function Review({
                   <Icon name="flag" size={13} />
                 </button>
               </span>
-              <span style={{ color: "var(--ink)", cursor: "text" }} onMouseUp={(e) => onSelect(i, e)}>
+              <span style={{ color: "var(--ink)", cursor: "text" }} onMouseUp={(e) => onSelect(i, e)} onClick={onClickWords}>
                 {a?.comparison ? <MarkedText words={a.comparison.original} indexed /> : <IndexedText text={a?.original ?? sentences[i]?.text ?? ""} />}
               </span>
               <span>

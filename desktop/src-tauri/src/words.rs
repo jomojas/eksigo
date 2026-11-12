@@ -53,8 +53,12 @@ pub struct Context {
     pub idx: i64,
     pub sentence: String,
     pub typed: String,
+    /// The saved words in the audio.
     pub start_ms: i64,
     pub end_ms: i64,
+    /// The whole sentence in the audio.
+    pub sentence_start_ms: i64,
+    pub sentence_end_ms: i64,
     pub added_at: i64,
 }
 
@@ -82,7 +86,8 @@ pub fn add(conn: &Connection, w: &NewWord) -> Result<SavedWord> {
             (s, e)
         }
     };
-    let sentence: String = conn.query_row("SELECT text FROM sentences WHERE item_id = ?1 AND idx = ?2", params![w.item_id, w.idx], |r| r.get(0))?;
+    let (sentence, s_start, s_end): (String, i64, i64) =
+        conn.query_row("SELECT text, start_ms, end_ms FROM sentences WHERE item_id = ?1 AND idx = ?2", params![w.item_id, w.idx], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
     let t = now();
     conn.execute(
         "INSERT INTO saved_words (text, headword, ipa, meaning, note, added_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)
@@ -92,8 +97,9 @@ pub fn add(conn: &Connection, w: &NewWord) -> Result<SavedWord> {
     )?;
     let id: i64 = conn.query_row("SELECT id FROM saved_words WHERE text = ?1", [w.text.trim()], |r| r.get(0))?;
     conn.execute(
-        "INSERT OR IGNORE INTO word_contexts (word_id, item_id, idx, sentence, typed, start_ms, end_ms, added_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-        params![id, w.item_id, w.idx, sentence, w.typed, start_ms, end_ms, t],
+        "INSERT OR IGNORE INTO word_contexts (word_id, item_id, idx, sentence, typed, start_ms, end_ms, sentence_start_ms, sentence_end_ms, added_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        params![id, w.item_id, w.idx, sentence, w.typed, start_ms, end_ms, s_start, s_end, t],
     )?;
     get(conn, id)
 }
@@ -110,7 +116,7 @@ pub fn remove(conn: &Connection, id: i64) -> Result<()> {
 
 fn contexts(conn: &Connection, id: i64) -> Result<Vec<Context>> {
     let mut st = conn.prepare(
-        "SELECT c.item_id, i.title, i.path, c.idx, c.sentence, c.typed, c.start_ms, c.end_ms, c.added_at
+        "SELECT c.item_id, i.title, i.path, c.idx, c.sentence, c.typed, c.start_ms, c.end_ms, c.sentence_start_ms, c.sentence_end_ms, c.added_at
          FROM word_contexts c LEFT JOIN items i ON i.id = c.item_id WHERE c.word_id = ?1 ORDER BY c.added_at DESC",
     )?;
     let rows = st
@@ -124,7 +130,9 @@ fn contexts(conn: &Connection, id: i64) -> Result<Vec<Context>> {
                 typed: r.get(5)?,
                 start_ms: r.get(6)?,
                 end_ms: r.get(7)?,
-                added_at: r.get(8)?,
+                sentence_start_ms: r.get(8)?,
+                sentence_end_ms: r.get(9)?,
+                added_at: r.get(10)?,
             })
         })?
         .collect::<rusqlite::Result<_>>()?;
@@ -193,6 +201,7 @@ mod tests {
         assert_eq!(w.contexts.len(), 1);
         let ctx = &w.contexts[0];
         assert_eq!((ctx.start_ms, ctx.end_ms, ctx.path.as_deref()), (1500, 2400, Some("/x.mp3")));
+        assert_eq!((ctx.sentence_start_ms, ctx.sentence_end_ms), (900, 4100));
         assert_eq!(ctx.sentence, "You have to follow through.");
         // Saving it again from the same sentence changes nothing; a note fills an empty one.
         let again = add(&c, &new("Follow Through", 3, 4, "keep going")).unwrap();
