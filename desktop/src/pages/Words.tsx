@@ -129,7 +129,7 @@ function Detail({ word: w }: { word: SavedWord }) {
     if (note.trim() !== w.note) backend.setWordNote(w.id, note);
   };
   return (
-    <aside className="insp" aria-label={w.text} style={{ width: 360 }}>
+    <aside className="insp" aria-label={w.text}>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <h2 className="h2" style={{ fontSize: 20, flexGrow: 1 }}>
@@ -175,7 +175,7 @@ function Detail({ word: w }: { word: SavedWord }) {
           <Context key={i} c={c} text={w.text} />
         ))}
       </div>
-      <div style={{ display: "flex", gap: 8, marginTop: "auto" }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: "auto" }}>
         {confirming ? (
           <>
             <button type="button" className="btn btn-sm" onClick={() => backend.removeWord(w.id)}>
