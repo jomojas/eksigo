@@ -31,11 +31,13 @@ Many desktop dictation apps exist, so making money is not the goal. The project 
 
 **The desktop app works on its own.** It has its own podcast search, RSS and downloads, so the phone is a bonus, not a requirement. Android users with a Windows or Mac computer lose only the daytime sync.
 
-**First launch (about one minute):**
-1. Interface language, the same languages as the iPhone app.
-2. Speech model download: *Fast* (about 150 MB) or *Accurate* (about 500 MB–1.5 GB). Changeable later.
-3. AI: *None for now* / *Use my own key* / *Eksigo Premium*. Everything except the AI features in section 5 works with *None*.
-4. Sign-in, optional, only for syncing with the phone. Apple or Google, the same accounts as the iPhone app. Sign in with Apple on Windows uses Apple's web sign-in (needs a Services ID and a return URL on the server).
+**First launch (about one minute; v0.1 decided 2026-11-12):**
+1. *Which language do you speak?* The language word meanings are shown in, your computer's language already chosen. The interface itself is English in v0.1; translating it comes later, and this step will then set both.
+2. *The speech model:* Fast (150 MB), with Accurate shown as *Later* until it arrives. It downloads in the background, in the status bar, while the learner carries on; if it fails, the first transcription downloads it again.
+3. Later: AI (*None for now* / *Use my own key* / *Eksigo Premium*), added as a step once there's AI to set up. Everything except the AI features in section 5 works without it.
+4. Later: sign-in, optional, only for syncing with the phone. Apple or Google, the same accounts as the iPhone app. Sign in with Apple on Windows uses Apple's web sign-in (needs a Services ID and a return URL on the server).
+
+The welcome shows once; the app remembers it in its own database, so updates don't show it again.
 
 **Navigation (decided 2026-11-10).** Sidebar: Today, Podcasts, Library, My words, Progress, then an *In progress* list of unfinished episodes, and Settings at the bottom. Every piece of audio lives in the Library, so Dictation is not a sidebar item: it opens from Today, Podcasts, the Library or *In progress*, the sidebar keeps **Library** selected, and the top bar shows the path (`Library / show / episode`).
 - **Today:** one large Continue card for the unfinished episode practised last (*Resume at sentence N*, `Enter`); the other unfinished ones are in the sidebar's *In progress*. Then *Heard on your phone today* (needs the phone app and an account, later) and *New from your shows*: from each subscribed show its newest episode not yet started, at most three, newest first, with **Practise** (downloads it and opens dictation). Subscribed feeds are read again once per run of the app when older than six hours. On the right, *This week*: the day streak, time practised, a bar for each of the last seven days (the day under the mouse, else today, is written out below), and My words (due, new to start today, started this week, *Practise N words*, `P`).
@@ -270,9 +272,7 @@ Free, with no AI and no in-app purchase.
 
 ## 10. Open source and distribution
 
-- **Licenses, proposed:**
-  - **MIT** for `ios/`, `desktop/` and `site/`. GPL-style licenses conflict with App Store distribution.
-  - **AGPL** for `backend/`, so anyone who runs a changed copy of the server as a service must publish their changes.
+- **License (decided 2026-11-12):** **AGPL-3.0** for the whole repository (`LICENSE` at the top). Anyone may use and change the code, but a changed copy that is shipped or run as a service must publish its changes under the same license.
 - **The name and icon stay the owner's.** A trademark note says that forks must use another name and icon.
 - **Contributions:** a `Signed-off-by` line on each commit (Developer Certificate of Origin). No CLA.
 - **The README says it plainly:**
@@ -287,7 +287,7 @@ Free, with no AI and no in-app purchase.
   - **Builds:** GitHub Releases. A `tauri-action` workflow builds Mac and Windows on every tagged release. GitHub's build machines are free for public repos.
   - **Mac:** signed and notarised with the existing Apple Developer account, outside the Mac App Store, so no extra cost.
   - **Windows:** unsigned at first, with a note about SmartScreen's *More info → Run anyway*. Apply to the SignPath Foundation for free open-source code signing once there are users.
-  - **Updates:** automatic, with Tauri's updater.
+  - **Updates:** automatic, with Tauri's updater. The app checks the latest GitHub release once each time it starts, downloads a newer version without asking, and offers *Restart to update* in the status bar (and in Settings › About). Update files are signed with a key whose private half is a GitHub secret; the app refuses anything not signed with it.
   - **Later:** `winget` and Homebrew.
 - **Audio rights:** downloads are for the learner's own practice. Audio is never re-hosted or shared.
 
@@ -377,7 +377,13 @@ push to main (backend/**)
 - **Mainland China:** not in the first release. The China App Store requires an ICP app filing, which needs a mainland Chinese company or ID holder and a mainland hosting provider. Apps using generative AI face extra rules. Podcast hosts and a London server are also slow or blocked there. Chinese speakers in Hong Kong, Taiwan, Singapore and abroad (and mainland users with non-mainland Apple IDs) can still install it. Revisit with a Chinese partner if mainland users become the main market.
 
 ### Desktop app
-Releases go to GitHub Releases, built by a `tauri-action` workflow on every version tag: Mac signed and notarised, Windows unsigned at first (section 10). Tauri's updater checks GitHub Releases for new versions.
+Releases go to GitHub Releases, built by `.github/workflows/release.yml` on every version tag (`git tag v0.1.0 && git push origin v0.1.0`):
+- The tag is the version: the workflow writes it into `tauri.conf.json` before building.
+- **Mac:** one universal `.dmg` (Apple Silicon and Intel, macOS 11 or later), signed with the Developer ID and notarised. Secrets: `APPLE_CERTIFICATE` (the .p12 as base64), `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD` (app-specific), `APPLE_TEAM_ID`.
+- **Windows:** an unsigned NSIS installer for the current user, no admin rights needed (section 10).
+- **Updates:** both builds also upload signed update files and `latest.json`. Secrets: `TAURI_SIGNING_PRIVATE_KEY` and its password; the public key is in `tauri.conf.json`.
+- whisper.cpp is compiled for a common baseline (AVX2 and FMA), not for the build machine's processor, so it runs on the learner's.
+- The release is a **draft** until the owner publishes it. It's never marked pre-release, because the updater reads GitHub's *latest* release, which skips pre-releases and drafts. Test tags (`v0.1.0-test.1`) are published only to test the updater, then deleted.
 
 ---
 
