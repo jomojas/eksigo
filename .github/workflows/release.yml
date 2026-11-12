@@ -48,6 +48,9 @@ jobs:
           - os: windows-latest
             args: ""
             rust-targets: ""
+            # Builds Microsoft's C and C++ runtime into eksigo.exe, whisper.cpp included. Without it the app needs
+            # MSVCP140.dll, which a fresh Windows doesn't have, and won't start.
+            rustflags: -C target-feature=+crt-static
     runs-on: ${{ matrix.os }}
     permissions:
       contents: write # creates the release and uploads to it
@@ -59,6 +62,7 @@ jobs:
       GGML_AVX2: "ON"
       GGML_FMA: "ON"
       GGML_F16C: "ON"
+      RUSTFLAGS: ${{ matrix.rustflags }}
     steps:
       - uses: actions/checkout@v4
 
@@ -110,3 +114,16 @@ jobs:
           projectPath: desktop
           releaseId: ${{ needs.release.outputs.id }}
           args: ${{ matrix.args }}
+
+      # A clean Windows has no Visual C++ runtime; the app must not need one. (The installer is already uploaded,
+      # but a red run is the signal not to publish this draft.)
+      - name: Check the app needs no Visual C++ runtime
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          exe=desktop/src-tauri/target/release/eksigo.exe
+          test -f "$exe"
+          if grep -a -i -o -E '(msvcp|vcruntime)140[_0-9a-z]*\.dll' "$exe" | sort -u | grep .; then
+            echo "eksigo.exe needs the Visual C++ runtime above, which a fresh Windows lacks"; exit 1
+          fi
+          echo "no Visual C++ runtime needed"
