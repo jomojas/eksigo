@@ -22,19 +22,18 @@ jobs:
     outputs:
       id: ${{ steps.create.outputs.id }}
     steps:
+      # The API returns the new release's id; a draft can't be looked up by its tag afterwards.
       - id: create
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
-        run: |
-          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --verify-tag --title "Eksigo $TAG" --notes "$(cat <<'NOTES'
-          **Mac:** download the `.dmg`, open it and drag Eksigo to Applications.
+          NOTES: |
+            **Mac:** download the `.dmg`, open it and drag Eksigo to Applications.
 
-          **Windows:** download the `-setup.exe` and run it. Windows may say it protected your PC, because the installer isn't signed yet: choose *More info*, then *Run anyway*.
-          NOTES
-          )"
-          # A draft can only be found by listing, not by its tag.
-          id=$(gh api "repos/$GITHUB_REPOSITORY/releases" --jq ".[] | select(.tag_name == \"$TAG\") | .id" | head -1)
+            **Windows:** download the `-setup.exe` and run it. Windows may say it protected your PC, because the installer isn't signed yet: choose *More info*, then *Run anyway*.
+        run: |
+          id=$(gh api "repos/$GITHUB_REPOSITORY/releases" -f tag_name="$TAG" -f name="Eksigo $TAG" -f body="$NOTES" -F draft=true --jq .id)
+          test -n "$id"
           echo "id=$id" >> "$GITHUB_OUTPUT"
 
   build:
