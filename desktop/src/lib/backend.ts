@@ -5,6 +5,7 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { open } from "@tauri-apps/plugin-dialog";
+import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { sample } from "./sample";
 
 export const inApp = isTauri();
@@ -150,6 +151,30 @@ export type Entry = { headword: string; ipa: string; meaning: string; definition
 export type WordLine = { text: string; entry: Entry | null };
 /** A selection looked up: the whole phrase, or the longest phrase inside it, and each word on its own. */
 export type Lookup = { query: string; entry: Entry | null; whole: boolean; words: WordLine[]; source: string };
+
+/** One language's dictionary: what the server offers and what's on this computer (Settings › Dictionaries). */
+export type DictInfo = {
+  lang: string;
+  source: string;
+  /** Packed download size; 0 when the server couldn't be asked. */
+  downloadBytes: number;
+  latestVersion: number | null;
+  installedVersion: number | null;
+  installedBytes: number;
+};
+export type DictionaryList = { dictionaries: DictInfo[]; offline: boolean };
+
+/** What Eksigo keeps on this computer (Settings › Storage). */
+export type StorageUsage = {
+  dataDir: string;
+  episodes: number;
+  episodesBytes: number;
+  ownFiles: number;
+  ownFilesBytes: number;
+  modelsBytes: number;
+  dictionariesBytes: number;
+  databaseBytes: number;
+};
 
 export type WordContext = {
   itemId: number | null;
@@ -300,6 +325,21 @@ export const backend = {
   wordSaved: (text: string) => call<number | null>("words_saved", { text }, () => sample.wordSaved(text)),
   setWordNote: (id: number, note: string) => call<void>("words_note", { id, note }, () => sample.setWordNote(id, note)),
   removeWord: (id: number) => call<void>("words_remove", { id }, () => sample.removeWord(id)),
+  dictionaries: () => call<DictionaryList>("dictionary_list", {}, () => sample.dictionaries()),
+  updateDictionary: (lang: string) => call<void>("dictionary_update", { lang }, () => sample.updateDictionary(lang)),
+  removeDictionary: (lang: string) => call<void>("dictionary_remove", { lang }, () => sample.removeDictionary(lang)),
+
+  // Storage
+  storage: () => call<StorageUsage>("storage_usage", {}, () => sample.storage()),
+  /** Opens a web page in the default browser. */
+  async openUrl(url: string) {
+    if (inApp) await openUrl(url);
+    else window.open(url, "_blank", "noopener");
+  },
+  /** Shows a file or folder in Finder or File Explorer. */
+  async reveal(path: string) {
+    if (inApp) await revealItemInDir(path);
+  },
 
   // Playback
   play: (args: { id: number; path: string; startMs: number; endMs: number | null; speed: number }) =>

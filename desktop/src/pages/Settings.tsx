@@ -1,53 +1,131 @@
-import { useCallback, useEffect, useState } from "react";
-import { useNavigate } from "react-router";
-import { backend, on, type ModelInfo } from "../lib/backend";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router";
+import { backend, on, type DictionaryList, type ModelInfo, type StorageUsage } from "../lib/backend";
 import { useTheme, type ThemeChoice } from "../lib/theme";
-import { Page, useAppInfo } from "../components/Shell";
-import { bytes } from "../lib/format";
+import { Kbd, Page, useAppInfo } from "../components/Shell";
+import { Icon } from "../components/Icon";
+import { bytes, plural } from "../lib/format";
+import { isMac } from "../lib/platform";
 import { useActivity } from "../lib/transcripts";
 import { PlaybackSettings } from "../components/DictationSettings";
 import { useDictationSettings } from "../lib/dictation";
 import { MEANING_LANGUAGES, useMeaningLanguage } from "../lib/words";
 
-const SECTIONS = ["General", "Dictation", "Speech", "About"] as const;
-type Section = (typeof SECTIONS)[number];
+// Settings (design D12): every section v0.1 has, plus AI and Account, which arrive later. The open
+// section is in the address (#/settings?s=storage), so other screens can link straight to one.
+
+type SectionId = "general" | "dictation" | "speech" | "dictionaries" | "ai" | "account" | "storage" | "shortcuts" | "about";
+
+const SECTIONS: { id: SectionId; label: string; later?: boolean; words: string }[] = [
+  { id: "general", label: "General", words: "theme light dark appearance" },
+  { id: "dictation", label: "Dictation", words: "playback speed plays mode auto manual pause slow" },
+  { id: "speech", label: "Speech model", words: "whisper transcription model download" },
+  { id: "dictionaries", label: "Dictionaries", words: "meanings language translation chinese japanese korean spanish french english" },
+  { id: "ai", label: "AI", later: true, words: "key openai deepseek explain" },
+  { id: "account", label: "Account and sync", later: true, words: "sign in apple google iphone sync" },
+  { id: "storage", label: "Storage", words: "space disk size folder data episodes audio delete" },
+  { id: "shortcuts", label: "Shortcuts", words: "keys keyboard" },
+  { id: "about", label: "About", words: "version licences licenses credits" },
+];
 
 export function Settings() {
-  const [section, setSection] = useState<Section>("General");
+  const [params, setParams] = useSearchParams();
+  const section: SectionId = SECTIONS.some((x) => x.id === params.get("s")) ? (params.get("s") as SectionId) : "general";
+  const setSection = (s: SectionId) => setParams({ s }, { replace: true });
+  const [query, setQuery] = useState("");
   const navigate = useNavigate();
+  const q = query.trim().toLowerCase();
+  const shown = q ? SECTIONS.filter((s) => `${s.label} ${s.words}`.toLowerCase().includes(q)) : SECTIONS;
+  const label = SECTIONS.find((s) => s.id === section)!.label;
 
-  // Esc leaves Settings for the previous screen.
+  // Esc clears the search, then leaves Settings for the previous screen.
+  const escape = useRef(() => {});
+  escape.current = () => {
+    if (query) setQuery("");
+    else navigate(-1);
+  };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") navigate(-1);
+      if (e.key === "Escape") escape.current();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [navigate]);
+  }, []);
+
   return (
-    <Page crumbs={["Settings", section]} keys={[["Esc", "Back"]]}>
+    <Page crumbs={["Settings", label]} keys={[["Esc", "Back"]]}>
       <div style={{ display: "flex", minHeight: "100%" }}>
-        <nav aria-label="Settings sections" style={{ width: 200, flexShrink: 0, padding: "20px 8px", borderRight: "1px solid var(--hairline)" }}>
-          {SECTIONS.map((s) => (
+        <nav aria-label="Settings sections" style={{ width: 210, flexShrink: 0, padding: "20px 12px", borderRight: "1px solid var(--hairline)", display: "flex", flexDirection: "column", gap: 1 }}>
+          <label className="input" style={{ height: 30, marginBottom: 12 }}>
+            <Icon name="search" size={13} />
+            <input
+              type="search"
+              placeholder="Search settings"
+              aria-label="Search settings"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && shown[0]) setSection(shown[0].id);
+              }}
+            />
+          </label>
+          {shown.map((s) => (
             <button
-              key={s}
+              key={s.id}
               type="button"
-              className={s === section ? "nav active" : "nav"}
-              style={{ width: "100%", border: 0, background: s === section ? undefined : "transparent", cursor: "pointer" }}
-              onClick={() => setSection(s)}
+              className={s.id === section ? "nav active" : "nav"}
+              aria-current={s.id === section ? "page" : undefined}
+              style={{ width: "100%", border: 0, background: s.id === section ? undefined : "transparent", cursor: "pointer", fontWeight: s.id === section ? 500 : 400 }}
+              onClick={() => setSection(s.id)}
             >
-              {s}
+              {s.label}
+              {s.later && <span className="n">later</span>}
             </button>
           ))}
+          {shown.length === 0 && <div className="muted" style={{ fontSize: 12, padding: "6px 8px" }}>Nothing matches “{query}”.</div>}
         </nav>
         <div className="page" style={{ flexGrow: 1, minWidth: 0 }}>
-          {section === "General" && <General />}
-          {section === "Dictation" && <Dictation />}
-          {section === "Speech" && <Speech />}
-          {section === "About" && <About />}
+          {section === "general" && <General />}
+          {section === "dictation" && <Dictation />}
+          {section === "speech" && <Speech />}
+          {section === "dictionaries" && <Dictionaries />}
+          {section === "ai" && (
+            <Later title="AI" text="Explanations of a word in its sentence and a review of each episode, in your language, using your own key from OpenAI, DeepSeek, Anthropic or any compatible service. The key stays in your computer's keychain." />
+          )}
+          {section === "account" && (
+            <Later title="Account and sync" text="Sign in with Apple or Google to keep My words and your progress on the iPhone app too. Eksigo works fully without an account." />
+          )}
+          {section === "storage" && <Storage onOpen={setSection} />}
+          {section === "shortcuts" && <Shortcuts />}
+          {section === "about" && <About />}
         </div>
       </div>
     </Page>
+  );
+}
+
+function Header({ title, text }: { title: string; text?: string }) {
+  return (
+    <div>
+      <h1 className="h1">{title}</h1>
+      {text && (
+        <p className="muted" style={{ marginTop: 8, fontSize: 14, lineHeight: 1.5, maxWidth: 640 }}>
+          {text}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function Later({ title, text }: { title: string; text: string }) {
+  return (
+    <section style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <h1 className="h1">{title}</h1>
+        <span className="badge badge-next">After v0.1</span>
+      </div>
+      <p className="muted" style={{ fontSize: 14, lineHeight: 1.6, maxWidth: 640 }}>{text}</p>
+    </section>
   );
 }
 
@@ -82,7 +160,6 @@ function Dictation() {
 
 function General() {
   const { choice, setChoice } = useTheme();
-  const [lang, setLang] = useMeaningLanguage();
   const options: [ThemeChoice, string][] = [
     ["system", "System"],
     ["light", "Light"],
@@ -100,15 +177,6 @@ function General() {
               </button>
             ))}
           </div>
-        </Row>
-        <Row label="Word meanings in" hint="The dictionary for looking up words in a review. It downloads once, the first time you look something up.">
-          <select className="select" value={lang} onChange={(e) => setLang(e.target.value)} aria-label="Word meanings in">
-            {MEANING_LANGUAGES.map(([code, name]) => (
-              <option key={code} value={code}>
-                {name}
-              </option>
-            ))}
-          </select>
         </Row>
       </div>
     </section>
@@ -141,7 +209,7 @@ function Speech() {
 
   return (
     <section aria-labelledby="speech">
-      <h1 id="speech" className="h1">Speech</h1>
+      <h1 id="speech" className="h1">Speech model</h1>
       <p className="muted" style={{ marginTop: 8, fontSize: 14, lineHeight: 1.5 }}>
         Episodes are transcribed on this computer with Whisper ({info?.whisperBackend === "Metal" ? "on the graphics chip" : "on the processor"}).
         The audio never leaves it. The model is downloaded once, the first time you transcribe.
@@ -223,22 +291,373 @@ function Speech() {
   );
 }
 
+const LANGUAGE_NAMES: Record<string, string> = Object.fromEntries(MEANING_LANGUAGES);
+
+/** The offline dictionaries: which language meanings are shown in, and what's downloaded. */
+function Dictionaries() {
+  const [lang, setLang] = useMeaningLanguage();
+  const [list, setList] = useState<DictionaryList | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const load = useCallback(() => {
+    backend.dictionaries().then(setList, (e) => setError(String(e)));
+  }, []);
+  useEffect(load, [load]);
+
+  const act = async (code: string, f: () => Promise<void>) => {
+    setBusy(code);
+    setError(null);
+    setConfirm(null);
+    try {
+      await f();
+    } catch (e) {
+      setError(String(e));
+    }
+    setBusy(null);
+    load();
+  };
+
+  // The chosen language first, then the English one its definitions come from, then the rest.
+  const order = (c: string) => (c === lang ? 0 : c === "en" ? 1 : 2 + MEANING_LANGUAGES.findIndex(([x]) => x === c));
+  const rows = [...(list?.dictionaries ?? [])].sort((a, b) => order(a.lang) - order(b.lang));
+
+  return (
+    <section aria-labelledby="dictionaries" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <Header
+        title="Dictionaries"
+        text="Meanings for the words you look up in a review come from a dictionary on this computer, so looking up is instant and works offline. Each one downloads once, the first time it's needed, or here."
+      />
+      <div>
+        <Row label="Word meanings in" hint="English definitions are shown beside the meanings, whatever the language.">
+          <select className="select" value={lang} onChange={(e) => setLang(e.target.value)} aria-label="Word meanings in">
+            {MEANING_LANGUAGES.map(([code, name]) => (
+              <option key={code} value={code}>
+                {name}
+              </option>
+            ))}
+          </select>
+        </Row>
+      </div>
+      {list?.offline && (
+        <div className="notice" role="status" style={{ fontSize: 13 }}>
+          The dictionary server can't be reached, so only the dictionaries on this computer are listed.
+        </div>
+      )}
+      {error && (
+        <div className="notice notice-error" role="alert" style={{ fontSize: 13 }}>
+          {error}
+        </div>
+      )}
+      <div className="panel" style={{ overflow: "hidden" }}>
+        {!list && <div style={{ padding: 16 }} className="muted">Checking…</div>}
+        {rows.map((d, i) => {
+          const installed = d.installedVersion != null;
+          const update = installed && d.latestVersion != null && d.latestVersion > d.installedVersion!;
+          const used = d.lang === lang || d.lang === "en";
+          return (
+            <div
+              key={d.lang}
+              style={{ display: "flex", alignItems: "center", gap: 16, padding: "10px 14px", borderTop: i ? "1px solid var(--hairline)" : undefined, minHeight: 56 }}
+            >
+              <span style={{ display: "flex", flexDirection: "column", gap: 4, flexGrow: 1, minWidth: 0 }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <b style={{ color: "var(--ink)", fontWeight: 500 }}>{LANGUAGE_NAMES[d.lang] ?? d.lang}</b>
+                  {d.lang === lang && <span className="badge" style={{ height: 18, fontSize: 11 }}>In use</span>}
+                  {d.lang === "en" && d.lang !== lang && <span className="muted" style={{ fontSize: 12 }}>for the English definitions</span>}
+                </span>
+                <span className="muted" style={{ fontSize: 12 }}>
+                  {d.source || "—"} ·{" "}
+                  {installed ? `${bytes(d.installedBytes)} on this computer${update ? " · a newer version is out" : ""}` : d.downloadBytes ? `${bytes(d.downloadBytes)} download` : "not downloaded"}
+                </span>
+              </span>
+              <span style={{ display: "flex", gap: 6, justifyContent: "flex-end", alignItems: "center" }}>
+                {busy === d.lang ? (
+                  <span className="muted" style={{ fontSize: 12 }}>
+                    {installed && !update ? "Removing…" : "Downloading…"}
+                  </span>
+                ) : confirm === d.lang ? (
+                  <>
+                    <button type="button" className="btn btn-sm" onClick={() => act(d.lang, () => backend.removeDictionary(d.lang))}>
+                      Remove
+                    </button>
+                    <button type="button" className="btn btn-sm btn-ghost" onClick={() => setConfirm(null)}>
+                      Keep
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    {(!installed || update) && d.latestVersion != null && (
+                      <button type="button" className="btn btn-sm" disabled={!!busy} onClick={() => act(d.lang, () => backend.updateDictionary(d.lang))}>
+                        {update ? "Update" : "Download"}
+                      </button>
+                    )}
+                    {installed && (
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-ghost"
+                        disabled={!!busy}
+                        title={used ? "It downloads again the next time you look a word up" : undefined}
+                        onClick={() => setConfirm(d.lang)}
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </>
+                )}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      <p className="muted" style={{ fontSize: 12, lineHeight: 1.6, maxWidth: 640 }}>
+        ECDICT (MIT licence) for Chinese and English, EJDict (public domain) for Japanese, and Wiktionary's contributors (CC BY-SA) for Korean,
+        Spanish and French.
+      </p>
+    </section>
+  );
+}
+
+/** What Eksigo keeps on this computer, and where. */
+function Storage({ onOpen }: { onOpen: (s: SectionId) => void }) {
+  const [u, setU] = useState<StorageUsage | null>(null);
+  const navigate = useNavigate();
+  useEffect(() => {
+    backend.storage().then(setU);
+    // Downloads and removals elsewhere change the numbers.
+    const offs = [on("library", () => backend.storage().then(setU)), on("model-download", (p) => p.state !== "downloading" && backend.storage().then(setU))];
+    return () => offs.forEach((f) => f());
+  }, []);
+
+  const parts: { key: string; label: string; hint: string; n: number; tone: string; action?: [string, () => void] }[] = u
+    ? [
+        {
+          key: "episodes",
+          label: "Downloaded episodes",
+          hint: `${plural(u.episodes, "episode")}. Remove the ones you're done with in the Library.`,
+          n: u.episodesBytes,
+          tone: "var(--ink-muted)",
+          action: ["Library", () => navigate("/library")],
+        },
+        { key: "models", label: "Speech model", hint: "Whisper, for transcribing on this computer.", n: u.modelsBytes, tone: "var(--ink-subtle)", action: ["Speech model", () => onOpen("speech")] },
+        { key: "dicts", label: "Dictionaries", hint: "Word meanings for looking up.", n: u.dictionariesBytes, tone: "var(--ink-tertiary)", action: ["Dictionaries", () => onOpen("dictionaries")] },
+        { key: "db", label: "Your practice", hint: "Transcripts, dictations, My words and settings.", n: u.databaseBytes, tone: "var(--hairline-tertiary)" },
+      ]
+    : [];
+  const total = parts.reduce((n, p) => n + p.n, 0);
+
+  return (
+    <section aria-labelledby="storage" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <Header title="Storage" text="Everything stays on this computer. Episodes you download are kept until you remove them; your own files are never copied or moved." />
+      {u && (
+        <>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+              <span className="big" style={{ font: "600 22px/1 var(--font-display)", color: "var(--ink)" }}>
+                {bytes(total)}
+              </span>
+              <span className="muted" style={{ fontSize: 13 }}>
+                used by Eksigo
+              </span>
+            </div>
+            <div
+              role="img"
+              aria-label={parts.map((p) => `${p.label} ${bytes(p.n)}`).join(", ")}
+              style={{ display: "flex", height: 8, borderRadius: 9999, overflow: "hidden", background: "var(--hairline)", gap: 2 }}
+            >
+              {parts
+                .filter((p) => p.n > 0)
+                .map((p) => (
+                  <span key={p.key} style={{ width: `${(p.n / Math.max(total, 1)) * 100}%`, minWidth: 3, background: p.tone }} />
+                ))}
+            </div>
+          </div>
+          <div>
+            {parts.map((p) => (
+              <div key={p.key} style={{ display: "flex", alignItems: "center", gap: 16, padding: "12px 0", borderBottom: "1px solid var(--hairline)" }}>
+                <span aria-hidden="true" style={{ width: 10, height: 10, borderRadius: 3, background: p.tone, flexShrink: 0 }} />
+                <div style={{ flexGrow: 1, minWidth: 0 }}>
+                  <div style={{ color: "var(--ink)", fontWeight: 500 }}>{p.label}</div>
+                  <div className="muted" style={{ marginTop: 4, fontSize: 12 }}>
+                    {p.hint}
+                  </div>
+                </div>
+                <span className="mono" style={{ fontSize: 13, color: "var(--ink)", minWidth: 72, textAlign: "right" }}>
+                  {bytes(p.n)}
+                </span>
+                <span style={{ width: 120, display: "flex", justifyContent: "flex-end" }}>
+                  {p.action && (
+                    <button type="button" className="btn btn-sm btn-ghost" onClick={p.action[1]}>
+                      {p.action[0]}
+                    </button>
+                  )}
+                </span>
+              </div>
+            ))}
+            {u.ownFiles > 0 && (
+              <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "12px 0", borderBottom: "1px solid var(--hairline)" }}>
+                <span aria-hidden="true" style={{ width: 10, height: 10, borderRadius: 3, border: "1px dashed var(--hairline-tertiary)", flexShrink: 0 }} />
+                <div style={{ flexGrow: 1, minWidth: 0 }}>
+                  <div style={{ color: "var(--ink)", fontWeight: 500 }}>Your own files</div>
+                  <div className="muted" style={{ marginTop: 4, fontSize: 12 }}>
+                    {plural(u.ownFiles, "file")}, left where they are. Not counted above.
+                  </div>
+                </div>
+                <span className="mono muted" style={{ fontSize: 13, minWidth: 72, textAlign: "right" }}>
+                  {bytes(u.ownFilesBytes)}
+                </span>
+                <span style={{ width: 120 }} />
+              </div>
+            )}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <span className="muted" style={{ fontSize: 12 }}>
+              Kept in <span className="mono selectable">{u.dataDir}</span>
+            </span>
+            <button type="button" className="btn btn-sm" onClick={() => backend.reveal(u.dataDir)}>
+              {isMac ? "Show in Finder" : "Show in File Explorer"}
+            </button>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+const SHORTCUTS: [string, [string, string][]][] = [
+  [
+    "Everywhere",
+    [
+      ["Mod 1 – 5", "Today, Podcasts, Library, My words, Progress"],
+      ["Mod K", "Search podcasts"],
+      ["Mod O", "Add your own audio or video"],
+      ["Mod ,", "Settings"],
+      ["Esc", "Back, or close"],
+    ],
+  ],
+  [
+    "Dictation",
+    [
+      ["Tab", "Play the sentence"],
+      ["Shift Enter", "Finish the sentence"],
+      ["Shift Tab", "I know this one"],
+      ["Mod D", "Flag the sentence for the review"],
+      ["Mod P", "Play past your maximum"],
+      ["Mod R", "Play it slower"],
+      ["Mod ← →", "Previous or next sentence"],
+      ["Mod ↓", "The first sentence not done"],
+      ["Mod − = 0", "Slower, faster, normal speed"],
+      ["Mod K", "Mark as an ad (left out of the score)"],
+      ["Mod \\", "Focus: hide the sidebar"],
+      ["_", "A gap for a word you didn't catch"],
+      ["Esc", "Stop"],
+    ],
+  ],
+  [
+    "Review and looking up",
+    [
+      ["Select, then click", "Look the words up"],
+      ["A", "Add to My words"],
+      ["Esc", "Close the card"],
+    ],
+  ],
+  [
+    "Episode",
+    [
+      ["Space", "Play or pause"],
+      ["← →", "Back or forward 5 seconds"],
+      ["R", "Play the sentence again"],
+    ],
+  ],
+  [
+    "Podcasts and shows",
+    [
+      ["/", "Search podcasts"],
+      ["↑ ↓", "Move through a show's episodes"],
+      ["Enter", "Open"],
+      ["D", "Download the episode"],
+    ],
+  ],
+  [
+    "Library and My words",
+    [
+      ["↑ ↓", "Move"],
+      ["Enter", "Open"],
+      ["Delete", "Remove from the Library"],
+    ],
+  ],
+];
+
+function Shortcuts() {
+  return (
+    <section aria-labelledby="shortcuts" style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      <Header title="Shortcuts" text="Eksigo is made to be used from the keyboard. These can't be changed yet." />
+      {SHORTCUTS.map(([group, keys]) => (
+        <div key={group} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <div className="eyebrow" style={{ marginBottom: 4 }}>
+            {group}
+          </div>
+          {keys.map(([k, what]) => (
+            <div key={k + what} style={{ display: "flex", alignItems: "center", gap: 16, minHeight: 32, borderBottom: "1px solid var(--hairline)" }}>
+              <span style={{ flexGrow: 1, color: "var(--ink)" }}>{what}</span>
+              {/^[A-Z]?[a-z]/.test(k) && k.includes(" ") && !k.startsWith("Mod") && !k.startsWith("Shift") ? (
+                <span className="muted" style={{ fontSize: 12 }}>
+                  {k}
+                </span>
+              ) : (
+                <Kbd keys={k} />
+              )}
+            </div>
+          ))}
+        </div>
+      ))}
+    </section>
+  );
+}
+
+const CREDITS: [string, string, string][] = [
+  ["whisper.cpp", "MIT", "https://github.com/ggml-org/whisper.cpp"],
+  ["Whisper speech models, by OpenAI", "MIT", "https://github.com/openai/whisper"],
+  ["ECDICT", "MIT", "https://github.com/skywind3000/ECDICT"],
+  ["EJDict", "Public domain", "https://github.com/kujirahand/EJDict"],
+  ["Wiktionary", "CC BY-SA", "https://www.wiktionary.org/"],
+  ["Tauri", "MIT or Apache 2.0", "https://tauri.app/"],
+  ["Podcast search: Apple Podcasts", "", "https://podcasts.apple.com/"],
+];
+
 function About() {
   const info = useAppInfo();
   return (
-    <section aria-labelledby="about">
-      <h1 id="about" className="h1">About</h1>
-      <div className="panel" style={{ marginTop: 16, padding: "8px 16px" }}>
+    <section aria-labelledby="about" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <Header title="About" text="Eksigo: dictation practice with real podcasts, on your own computer." />
+      <div className="panel" style={{ padding: "8px 16px" }}>
         <div className="prop">Version<b className="mono">{info?.version}</b></div>
         <div className="prop">System<b className="mono">{info?.os}</b></div>
         <div className="prop">Speech engine<b className="mono">{info?.whisperBackend}</b></div>
         <div className="prop">Database schema<b className="mono">{info?.schemaVersion}</b></div>
-        <div className="prop">
-          Data folder
-          <b className="mono selectable ell" style={{ maxWidth: 380, fontSize: 12 }} title={info?.dataDir}>
-            {info?.dataDir}
-          </b>
+      </div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <button type="button" className="btn btn-sm" onClick={() => backend.openUrl("https://eksigo.com")}>
+          eksigo.com
+        </button>
+        <button type="button" className="btn btn-sm btn-ghost" onClick={() => backend.openUrl("https://github.com/jomojas/eksigo/issues")}>
+          Report a problem
+        </button>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        <div className="eyebrow" style={{ marginBottom: 4 }}>
+          Made with
         </div>
+        {CREDITS.map(([name, licence, url]) => (
+          <div key={name} style={{ display: "flex", alignItems: "center", gap: 16, minHeight: 32, borderBottom: "1px solid var(--hairline)" }}>
+            <button type="button" className="link-btn" style={{ flexGrow: 1, textAlign: "left", fontSize: 13 }} onClick={() => backend.openUrl(url)}>
+              {name}
+            </button>
+            <span className="muted" style={{ fontSize: 12 }}>
+              {licence}
+            </span>
+          </div>
+        ))}
       </div>
     </section>
   );
