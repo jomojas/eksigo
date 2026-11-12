@@ -2,6 +2,11 @@
 // and Library items kept in memory, with downloads and playback simulated by timers. Never used in the app.
 
 import type {
+  GradeArgs,
+  Graded,
+  Level,
+  PracticeCounts,
+  PracticeItem,
   DictInfo,
   DictionaryList,
   StorageUsage,
@@ -194,7 +199,56 @@ const notFound = (what: string) => new Error(`That ${what} isn't in the sample d
 const attempts: Attempt[] = [];
 const answers = new Map<number, Map<number, Answer>>();
 const flags = new Map<number, Set<number>>();
-const savedWords: SavedWord[] = [];
+// A few saved words, so My words and practice have something to show in a browser. Their episode isn't
+// in the sample Library, so practice reads them with the computer's voice.
+const SEED_WORDS: [string, string, number][] = [
+  ["false dawns", "虚假的希望；空欢喜", 8],
+  ["a long time coming", "姗姗来迟；酝酿已久", 6],
+  ["personalised", "个性化的；为个人定制的", 4],
+  ["vaccination", "接种疫苗", 2],
+  ["keep itself clear of", "使自身远离", 5],
+  ["achieve", "达到；实现", 7],
+  ["specific", "特定的；具体的", 5],
+  ["travelling", "旅行", 3],
+];
+const savedWords: SavedWord[] = SEED_WORDS.map(([text, meaning, idx], i) => {
+  const sentence = SAMPLE_TEXT[idx];
+  return {
+    id: i + 1,
+    text,
+    headword: "",
+    ipa: "",
+    meaning,
+    note: "",
+    addedAt: Math.floor(Date.now() / 1000) - (8 - i) * 86_400,
+    level: (i < 2 ? "learning" : "new") as Level,
+    dueAt: i < 2 ? Math.floor(Date.now() / 1000) - 3600 : null,
+    reviews: i < 2 ? 2 : 0,
+    contexts: [
+      {
+        itemId: null,
+        itemTitle: "6 Minute English",
+        path: null,
+        idx,
+        sentence,
+        typed: "",
+        startMs: 0,
+        endMs: 0,
+        sentenceStartMs: 0,
+        sentenceEndMs: 0,
+        addedAt: Math.floor(Date.now() / 1000) - (8 - i) * 86_400,
+      },
+    ],
+  };
+});
+const NEXT: [number, number, number, number] = [86_400, 2 * 86_400, 4 * 86_400, 10 * 86_400];
+const looseWords = (t: string) =>
+  t
+    .toLowerCase()
+    .replace(/[’‘`]/g, "'")
+    .split(/[^\p{L}\p{N}'-]+/u)
+    .map((w) => w.replace(/^['-]+|['-]+$/g, ""))
+    .filter(Boolean);
 const SAMPLE_FORMS: Record<string, string> = { followed: "follow", arrives: "arrive", habits: "habit", talking: "talk" };
 const SAMPLE_DICT: Record<string, [string, string, string]> = {
   "follow through": ["", "坚持到底", ""],
@@ -494,6 +548,52 @@ export const sample = {
     return { attempt: { ...a }, answers: [...(answers.get(a.id)?.values() ?? [])].sort((x, y) => x.idx - y.idx), flagged: flaggedOf(a.id) };
   },
 
+  // Word practice, with fixed intervals instead of FSRS.
+  practiceCounts(): PracticeCounts {
+    const t = now();
+    const due = savedWords.filter((w) => w.level !== "new" && (w.dueAt ?? 0) <= t).length;
+    const fresh = Math.min(10, savedWords.filter((w) => w.level === "new").length);
+    return { due, new: fresh, total: due + fresh };
+  },
+  practiceQueue(): PracticeItem[] {
+    const t = now();
+    const due = savedWords.filter((w) => w.level !== "new" && (w.dueAt ?? 0) <= t).sort((a, b) => (a.dueAt ?? 0) - (b.dueAt ?? 0));
+    const fresh = savedWords.filter((w) => w.level === "new").sort((a, b) => a.addedAt - b.addedAt);
+    const answerOf = (w: SavedWord) => w.note || w.meaning.split("\n")[0];
+    return [...due, ...fresh].slice(0, 20).map((w) => {
+      const c = w.contexts[0];
+      const i = c.sentence.toLowerCase().indexOf(w.text.toLowerCase());
+      const others = [...new Set(savedWords.filter((o) => o.id !== w.id).map(answerOf))].sort(() => Math.random() - 0.5).slice(0, 3);
+      return {
+        word: { ...w },
+        context: c,
+        gap: i >= 0 ? [c.sentence.slice(0, i), c.sentence.slice(i, i + w.text.length), c.sentence.slice(i + w.text.length)] : null,
+        answer: answerOf(w),
+        choices: others.length === 3 ? [...others, answerOf(w)].sort(() => Math.random() - 0.5) : [],
+        next: NEXT,
+      };
+    });
+  },
+  practiceCheck(expected: string, typed: string): boolean {
+    const e = looseWords(expected);
+    return e.length > 0 && e.join(" ") === looseWords(typed).join(" ");
+  },
+  practiceGrade(a: GradeArgs): Graded {
+    const w = savedWords.find((x) => x.id === a.wordId)!;
+    w.level = (["learning", "learning", "familiar", "known"] as Level[])[a.grade - 1];
+    w.dueAt = now() + NEXT[a.grade - 1];
+    w.reviews += 1;
+    emit("words", null);
+    return { level: w.level, dueAt: w.dueAt };
+  },
+  practiceKnow(id: number): Graded {
+    const w = savedWords.find((x) => x.id === id)!;
+    w.level = "known";
+    w.dueAt = now() + 365 * 86_400;
+    emit("words", null);
+    return { level: w.level, dueAt: w.dueAt };
+  },
+
   // Settings › Dictionaries and Storage.
   async dictionaries(): Promise<DictionaryList> {
     await wait(300);
@@ -551,7 +651,19 @@ export const sample = {
   addWord(w: NewWord): SavedWord {
     let saved = savedWords.find((x) => x.text.toLowerCase() === w.text.trim().toLowerCase());
     if (!saved) {
-      saved = { id: savedWords.length + 1, text: w.text.trim(), headword: w.headword, ipa: w.ipa, meaning: w.meaning, note: w.note.trim(), addedAt: now(), contexts: [] };
+      saved = {
+        id: Math.max(0, ...savedWords.map((x) => x.id)) + 1,
+        text: w.text.trim(),
+        headword: w.headword,
+        ipa: w.ipa,
+        meaning: w.meaning,
+        note: w.note.trim(),
+        addedAt: now(),
+        level: "new",
+        dueAt: null,
+        reviews: 0,
+        contexts: [],
+      };
       savedWords.unshift(saved);
     } else if (!saved.note) saved.note = w.note.trim();
     const item = items.find((i) => i.id === w.itemId);

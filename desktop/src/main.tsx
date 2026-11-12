@@ -21,6 +21,7 @@ import { Progress, Today } from "./pages/Placeholders";
 import { Words } from "./pages/Words";
 import { Podcasts } from "./pages/Podcasts";
 import { Settings } from "./pages/Settings";
+import { Practice } from "./pages/Practice";
 import { ShowScreen } from "./pages/Show";
 
 const router = createHashRouter([
@@ -37,6 +38,7 @@ const router = createHashRouter([
       { path: "library/:itemId/dictation", element: <DictationScreen /> },
       { path: "library/:itemId/review/:attemptId", element: <ReviewScreen /> },
       { path: "words", element: <Words /> },
+      { path: "words/practice", element: <Practice /> },
       { path: "progress", element: <Progress /> },
       { path: "settings", element: <Settings /> },
     ],

@@ -562,6 +562,19 @@ const SHORTCUTS: [string, [string, string][]][] = [
     ],
   ],
   [
+    "Word practice",
+    [
+      ["P", "Practise (on My words)"],
+      ["Tab", "Play the sentence again"],
+      ["Mod R", "Play it slower"],
+      ["Enter", "Check, then next as Good"],
+      ["Space", "Show the meaning (recall)"],
+      ["1 – 4", "Pick a meaning, or grade Again, Hard, Good, Easy"],
+      ["Shift Tab", "Show the answer (counts as Again)"],
+      ["Esc", "End the session"],
+    ],
+  ],
+  [
     "Episode",
     [
       ["Space", "Play or pause"],

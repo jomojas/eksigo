@@ -72,6 +72,12 @@ pub struct SavedWord {
     pub meaning: String,
     pub note: String,
     pub added_at: i64,
+    /// "new", "learning", "familiar" or "known" (practice.rs).
+    pub level: String,
+    /// When it next comes up for practice; None while new.
+    pub due_at: Option<i64>,
+    /// Times practised.
+    pub reviews: i64,
     pub contexts: Vec<Context>,
 }
 
@@ -140,9 +146,27 @@ fn contexts(conn: &Connection, id: i64) -> Result<Vec<Context>> {
 }
 
 pub fn get(conn: &Connection, id: i64) -> Result<SavedWord> {
-    let mut w = conn.query_row("SELECT id, text, headword, ipa, meaning, note, added_at FROM saved_words WHERE id = ?1", [id], |r| {
-        Ok(SavedWord { id: r.get(0)?, text: r.get(1)?, headword: r.get(2)?, ipa: r.get(3)?, meaning: r.get(4)?, note: r.get(5)?, added_at: r.get(6)?, contexts: vec![] })
-    })?;
+    let mut w = conn.query_row(
+        "SELECT id, text, headword, ipa, meaning, note, added_at, level, due_at,
+           (SELECT COUNT(*) FROM word_reviews WHERE word_id = saved_words.id AND mode != 'known')
+         FROM saved_words WHERE id = ?1",
+        [id],
+        |r| {
+            Ok(SavedWord {
+                id: r.get(0)?,
+                text: r.get(1)?,
+                headword: r.get(2)?,
+                ipa: r.get(3)?,
+                meaning: r.get(4)?,
+                note: r.get(5)?,
+                added_at: r.get(6)?,
+                level: r.get(7)?,
+                due_at: r.get(8)?,
+                reviews: r.get(9)?,
+                contexts: vec![],
+            })
+        },
+    )?;
     w.contexts = contexts(conn, id)?;
     Ok(w)
 }

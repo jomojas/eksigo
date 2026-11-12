@@ -1,7 +1,7 @@
 // The language word meanings are shown in, My words, and reading words aloud.
 
 import { useCallback, useEffect, useState } from "react";
-import { backend, on, type SavedWord } from "./backend";
+import { backend, on, type Level, type PracticeCounts, type SavedWord } from "./backend";
 
 /** The offline dictionaries the server has (backend/app/dictionaries), by the language meanings are in. */
 export const MEANING_LANGUAGES: [string, string][] = [
@@ -88,3 +88,28 @@ export function speak(text: string, rate = 0.75) {
 
 /** The first line of a meaning, for lists. */
 export const firstLine = (s: string) => s.split("\n")[0] ?? "";
+
+export const LEVELS: [Level, string][] = [
+  ["new", "New"],
+  ["learning", "Learning"],
+  ["familiar", "Familiar"],
+  ["known", "Known"],
+];
+export const levelName = (l: Level) => LEVELS.find(([x]) => x === l)?.[1] ?? l;
+
+/** Words to practise today (due, and new ones up to 10 a day), kept current. */
+export function usePracticeCounts(): PracticeCounts | null {
+  const [counts, setCounts] = useState<PracticeCounts | null>(null);
+  useEffect(() => {
+    const load = () => backend.practiceCounts().then(setCounts, () => {});
+    load();
+    // The day can change while the app is open.
+    const timer = window.setInterval(load, 5 * 60_000);
+    const off = on("words", load);
+    return () => {
+      off();
+      window.clearInterval(timer);
+    };
+  }, []);
+  return counts;
+}

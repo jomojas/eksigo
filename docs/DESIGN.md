@@ -109,6 +109,13 @@ The **review** (after stopping or finishing, and from each attempt on the Episod
 3. **Pick the meaning:** four choices, the wrong ones taken from the learner's other words.
 Checking a typed translation needs an LLM, so it can only come later, as an AI feature.
 
+**How practice runs (built 2026-11-12).** The learner decides as little as possible; the app follows one set flow:
+- **What comes up:** words due now, the longest overdue first, then up to **10 new words a day** in the order they were saved; at most **20 per session**. *Practise N* on My words (`P`) and on Today.
+- **Each word** is practised in one of the sentences it was saved from, a different one each time, played as said in the episode (the computer's voice reads it when the episode is gone). Typing needs the word in the sentence and picking needs four saved meanings; otherwise that word falls back to another way.
+- **Grades:** a wrong answer, or *Show the answer* (`Shift+Tab`), counts as **Again** by itself and the word comes back at the end of the session (at most twice) and the next day. A right answer is **Good** on `Enter`; `2` or `4` make it Hard or Easy. Recall is graded by the learner, `Enter` for Good.
+- **Scheduling:** FSRS (the `rs-fsrs` crate, MIT) in days, without the minute-long learning steps. Levels follow the interval: *Learning* under 3 days, *Familiar* 3 to 21, *Known* longer. *I know this* makes a word Known and brings it back in a year.
+- Each answer is kept (time, way, grade, what was typed) for Progress; practice time counts towards the day.
+
 **Speaking, after the review, optional:**
 - **Shadowing:** play a sentence, record yourself, then compare the two. Local Whisper turns the recording into text and shows which words came through clearly. Free.
 - **Retell:** summarise the episode out loud. *(AI)* feedback on content and grammar, plus a better version.

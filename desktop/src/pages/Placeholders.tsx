@@ -8,7 +8,8 @@ import { Icon } from "../components/Icon";
 import { addAudio, Kbd, Page } from "../components/Shell";
 import { backend, inApp, on, type Item } from "../lib/backend";
 import { dictationPath, percent, progressLabel, useInProgress } from "../lib/dictation";
-import { clock, whenDay } from "../lib/format";
+import { clock, plural, whenDay } from "../lib/format";
+import { usePracticeCounts } from "../lib/words";
 
 function greeting(): string {
   const h = new Date().getHours();
@@ -22,6 +23,7 @@ function Soon({ day }: { day: string }) {
 export function Today() {
   const navigate = useNavigate();
   const continuing = useInProgress();
+  const words = usePracticeCounts();
   // The library, recently added or practised first: what to start next.
   const [library, setLibrary] = useState<Item[]>([]);
   useEffect(() => {
@@ -84,6 +86,20 @@ export function Today() {
                 </span>
               </div>
             ))}
+          </section>
+        )}
+        {words && words.total > 0 && (
+          <section aria-label="Words to practise" className="panel" style={{ display: "flex", alignItems: "center", gap: 16, padding: "14px 16px", flexWrap: "wrap" }}>
+            <Icon name="words" size={18} />
+            <div style={{ flexGrow: 1, minWidth: 0 }}>
+              <div style={{ color: "var(--ink)", fontWeight: 500 }}>{plural(words.total, "word")} to practise</div>
+              <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                {[words.due > 0 && `${words.due} due`, words.new > 0 && `${words.new} new`].filter(Boolean).join(" · ")}
+              </div>
+            </div>
+            <button type="button" className="btn btn-primary" onClick={() => navigate("/words/practice")}>
+              Practise
+            </button>
           </section>
         )}
         {recent.length > 0 && (

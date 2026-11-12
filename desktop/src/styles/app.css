@@ -1009,3 +1009,67 @@ select.btn {
   gap: 12px;
   color: var(--ink-muted);
 }
+
+/* ---------- word practice (Practice.tsx) ---------- */
+.pill:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.gap {
+  display: inline-block;
+  height: 1em;
+  border-bottom: 2px solid var(--hairline-tertiary);
+  transform: translateY(2px);
+  margin: 0 2px;
+}
+.practice-box {
+  font: 400 20px/1 var(--font-text);
+  color: var(--ink);
+  background: var(--canvas);
+  border: 1px solid var(--hairline-strong);
+  border-radius: 8px;
+  padding: 14px 16px;
+  outline: none;
+}
+.practice-box:focus {
+  border-color: var(--primary);
+  box-shadow: var(--focus-ring);
+}
+.practice-box[data-result="right"] {
+  border-color: var(--semantic-success);
+  box-shadow: none;
+}
+.practice-box[data-result="wrong"] {
+  border-color: var(--semantic-error);
+  box-shadow: none;
+}
+.answer-right {
+  color: var(--semantic-success);
+  font-weight: 500;
+}
+.answer-wrong {
+  color: var(--semantic-error);
+  background: var(--error-fill);
+  border-radius: 4px;
+  padding: 0 3px;
+}
+.choice {
+  height: auto;
+  min-height: 48px;
+  padding: 10px 12px;
+  justify-content: flex-start;
+  gap: 10px;
+  line-height: 1.4;
+  font-weight: 400;
+}
+.choice[data-result="right"] {
+  border-color: var(--semantic-success);
+  color: var(--ink);
+}
+.choice[data-result="wrong"] {
+  border-color: var(--semantic-error);
+  background: var(--error-fill);
+}
+.choice[data-result="off"] {
+  opacity: 0.5;
+}

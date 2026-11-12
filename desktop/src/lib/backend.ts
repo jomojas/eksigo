@@ -191,7 +191,50 @@ export type WordContext = {
   sentenceEndMs: number;
   addedAt: number;
 };
-export type SavedWord = { id: number; text: string; headword: string; ipa: string; meaning: string; note: string; addedAt: number; contexts: WordContext[] };
+export type Level = "new" | "learning" | "familiar" | "known";
+export type SavedWord = {
+  id: number;
+  text: string;
+  headword: string;
+  ipa: string;
+  meaning: string;
+  note: string;
+  addedAt: number;
+  level: Level;
+  /** When it next comes up for practice; null while new. */
+  dueAt: number | null;
+  /** Times practised. */
+  reviews: number;
+  contexts: WordContext[];
+};
+
+/** Words due now, and new ones that may start today (at most 10 a day). */
+export type PracticeCounts = { due: number; new: number; total: number };
+export type PracticeMode = "type" | "recall" | "pick";
+/** One word to practise, in one of the sentences it was saved from. */
+export type PracticeItem = {
+  word: SavedWord;
+  context: WordContext;
+  /** The sentence split around the word; null when the word isn't found in it. */
+  gap: [string, string, string] | null;
+  /** The note, else the dictionary's first meaning. */
+  answer: string;
+  /** Four meanings for Pick the meaning; empty with fewer than four saved words. */
+  choices: string[];
+  /** Seconds until it comes back for Again, Hard, Good, Easy. */
+  next: [number, number, number, number];
+};
+export type Graded = { level: Level; dueAt: number };
+export type GradeArgs = {
+  wordId: number;
+  itemId: number | null;
+  idx: number;
+  mode: PracticeMode;
+  grade: 1 | 2 | 3 | 4;
+  correct: boolean | null;
+  typed: string;
+  seconds: number;
+};
 export type NewWord = {
   text: string;
   headword: string;
@@ -325,6 +368,11 @@ export const backend = {
   wordSaved: (text: string) => call<number | null>("words_saved", { text }, () => sample.wordSaved(text)),
   setWordNote: (id: number, note: string) => call<void>("words_note", { id, note }, () => sample.setWordNote(id, note)),
   removeWord: (id: number) => call<void>("words_remove", { id }, () => sample.removeWord(id)),
+  practiceCounts: () => call<PracticeCounts>("practice_counts", {}, () => sample.practiceCounts()),
+  practiceQueue: () => call<PracticeItem[]>("practice_queue", {}, () => sample.practiceQueue()),
+  practiceCheck: (expected: string, typed: string) => call<boolean>("practice_check", { expected, typed }, () => sample.practiceCheck(expected, typed)),
+  practiceGrade: (args: GradeArgs) => call<Graded>("practice_grade", { args }, () => sample.practiceGrade(args)),
+  practiceKnow: (id: number) => call<Graded>("practice_know", { id }, () => sample.practiceKnow(id)),
   dictionaries: () => call<DictionaryList>("dictionary_list", {}, () => sample.dictionaries()),
   updateDictionary: (lang: string) => call<void>("dictionary_update", { lang }, () => sample.updateDictionary(lang)),
   removeDictionary: (lang: string) => call<void>("dictionary_remove", { lang }, () => sample.removeDictionary(lang)),
