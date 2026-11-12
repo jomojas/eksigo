@@ -228,6 +228,39 @@ pub fn subscribed(conn: &Connection) -> Result<Vec<Show>> {
     Ok(rows)
 }
 
+/// Subscribed shows whose feed hasn't been read since `before`: (id, feed URL).
+pub fn stale_subscriptions(conn: &Connection, before: i64) -> Result<Vec<(i64, String)>> {
+    let mut st = conn.prepare(
+        "SELECT id, feed_url FROM shows WHERE subscribed_at IS NOT NULL AND (refreshed_at IS NULL OR refreshed_at < ?1)",
+    )?;
+    let rows = st.query_map([before], |r| Ok((r.get(0)?, r.get(1)?)))?.collect::<rusqlite::Result<_>>()?;
+    Ok(rows)
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NewEpisode {
+    #[serde(flatten)]
+    pub episode: Episode,
+    pub show_title: String,
+}
+
+/// For Today: from each subscribed show, its newest episode not yet started; newest first, at most `limit`.
+pub fn new_from_shows(conn: &Connection, limit: i64) -> Result<Vec<NewEpisode>> {
+    let mut st = conn.prepare(&format!(
+        "SELECT {EPISODE_COLS}, s.title FROM episodes e JOIN shows s ON s.id = e.show_id LEFT JOIN items i ON i.episode_id = e.id
+         WHERE s.subscribed_at IS NOT NULL AND e.id = (
+           SELECT e2.id FROM episodes e2 WHERE e2.show_id = s.id
+             AND NOT EXISTS (SELECT 1 FROM items i2 JOIN attempts a ON a.item_id = i2.id WHERE i2.episode_id = e2.id)
+           ORDER BY e2.published_at DESC NULLS LAST, e2.id DESC LIMIT 1)
+         ORDER BY e.published_at DESC NULLS LAST, e.id DESC LIMIT ?1"
+    ))?;
+    let rows = st
+        .query_map([limit], |r| Ok(NewEpisode { episode: episode_from(r)?, show_title: r.get(11)? }))?
+        .collect::<rusqlite::Result<_>>()?;
+    Ok(rows)
+}
+
 pub fn set_subscribed(conn: &Connection, id: i64, on: bool) -> Result<()> {
     conn.execute(
         "UPDATE shows SET subscribed_at = CASE WHEN ?2 THEN COALESCE(subscribed_at, ?3) ELSE NULL END WHERE id = ?1",
@@ -547,6 +580,27 @@ mod tests {
         assert!(show(&conn, id).unwrap().subscribed);
         set_subscribed(&conn, id, false).unwrap();
         assert!(!show(&conn, id).unwrap().subscribed);
+    }
+
+    #[test]
+    fn new_from_shows_skips_started_episodes() {
+        let db = Db::open_in_memory().unwrap();
+        let mut conn = db.conn();
+        let id = save_listing(&conn, &listing()).unwrap();
+        save_feed(&mut conn, id, &feed(3)).unwrap();
+        assert!(new_from_shows(&conn, 3).unwrap().is_empty(), "only subscribed shows");
+        set_subscribed(&conn, id, true).unwrap();
+        let new = new_from_shows(&conn, 3).unwrap();
+        assert_eq!(new.len(), 1, "one per show");
+        assert_eq!((new[0].episode.title.as_str(), new[0].show_title.as_str()), ("Episode 2", "Show"));
+
+        // Downloaded but not started still counts as new; started doesn't.
+        let (item_id, _) = begin_download(&conn, new[0].episode.id).unwrap();
+        assert_eq!(new_from_shows(&conn, 3).unwrap()[0].episode.title, "Episode 2");
+        conn.execute("INSERT INTO attempts (item_id, started_at, updated_at) VALUES (?1, 0, 0)", [item_id]).unwrap();
+        assert_eq!(new_from_shows(&conn, 3).unwrap()[0].episode.title, "Episode 1");
+        assert_eq!(stale_subscriptions(&conn, i64::MAX).unwrap().len(), 1);
+        assert!(stale_subscriptions(&conn, 0).unwrap().is_empty());
     }
 
     #[test]

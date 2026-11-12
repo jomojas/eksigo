@@ -6,8 +6,8 @@ import { useNavigate } from "react-router";
 import { Art } from "../components/Art";
 import { Icon } from "../components/Icon";
 import { addAudio, Kbd, Page } from "../components/Shell";
-import { backend, inApp, on, type Item, type PracticeCounts, type Week } from "../lib/backend";
-import { dictationPath, percent, progressLabel, useInProgress } from "../lib/dictation";
+import { backend, inApp, on, type NewEpisode, type PracticeCounts, type Week } from "../lib/backend";
+import { dictationPath, useInProgress } from "../lib/dictation";
 import { clock, plural, practised, whenDay } from "../lib/format";
 import { usePracticeCounts } from "../lib/words";
 
@@ -74,12 +74,16 @@ function Row({
 }
 
 const DAY_LETTER = ["S", "M", "T", "W", "T", "F", "S"];
+const dateOf = (day: string) => new Date(`${day}T12:00`);
 
 function WeekPanel({ week, words }: { week: Week | null; words: PracticeCounts | null }) {
   const navigate = useNavigate();
   const days = week?.days ?? [];
   const total = days.reduce((n, d) => n + d.seconds, 0);
   const most = Math.max(1, ...days.map((d) => d.seconds));
+  // The day under the mouse, else today, is spelled out under the bars.
+  const [hover, setHover] = useState<number | null>(null);
+  const shown = days[hover ?? days.length - 1];
   return (
     <aside className="insp" aria-label="This week">
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -94,24 +98,32 @@ function WeekPanel({ week, words }: { week: Week | null; words: PracticeCounts |
             <div className="small">Practised</div>
           </div>
         </div>
-        <div className="week-bars" role="img" aria-label={days.map((d) => `${d.day}: ${practised(d.seconds)}`).join(", ")}>
+        <div className="week-bars" onMouseLeave={() => setHover(null)}>
           {days.map((d, i) => (
-            <div
-              key={d.day}
-              title={`${new Date(`${d.day}T12:00`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })} · ${practised(d.seconds)}`}
-              data-today={i === days.length - 1 || undefined}
-              data-empty={d.seconds === 0 || undefined}
-              style={{ height: d.seconds ? `${Math.max(8, (d.seconds / most) * 100)}%` : "8%" }}
-            />
+            <div key={d.day} className="week-col" data-on={i === hover || undefined} onMouseEnter={() => setHover(i)}>
+              <div
+                data-today={i === days.length - 1 || undefined}
+                data-empty={d.seconds === 0 || undefined}
+                style={{ height: d.seconds ? `${Math.max(8, (d.seconds / most) * 100)}%` : "8%" }}
+              />
+            </div>
           ))}
         </div>
-        <div className="week-days mono">
+        <div className="week-days mono" aria-hidden="true">
           {days.map((d, i) => (
-            <span key={d.day} data-today={i === days.length - 1 || undefined}>
-              {DAY_LETTER[new Date(`${d.day}T12:00`).getDay()]}
+            <span key={d.day} data-today={i === days.length - 1 || undefined} data-on={i === hover || undefined}>
+              {DAY_LETTER[dateOf(d.day).getDay()]}
             </span>
           ))}
         </div>
+        {shown && (
+          <div className="prop" aria-live="polite" style={{ minHeight: 0 }}>
+            {hover == null || hover === days.length - 1
+              ? "Today"
+              : dateOf(shown.day).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "short" })}
+            <b className="mono">{practised(shown.seconds)}</b>
+          </div>
+        )}
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         <div className="eyebrow">My words</div>
@@ -133,30 +145,52 @@ function WeekPanel({ week, words }: { week: Week | null; words: PracticeCounts |
   );
 }
 
+// Feeds are read again once per run of the app, not each time Today opens.
+let feedsRead = false;
+
+/** Today's "New from your shows", from what's saved at once, then again after reading stale feeds. */
+function useNewEpisodes(): NewEpisode[] | null {
+  const [list, setList] = useState<NewEpisode[] | null>(null);
+  useEffect(() => {
+    let live = true;
+    const load = (refresh: boolean) =>
+      backend.newEpisodes(refresh).then(
+        (l) => live && setList(l),
+        () => live && setList((old) => old ?? []),
+      );
+    load(false);
+    if (!feedsRead) {
+      feedsRead = true;
+      load(true);
+    }
+    const offs = [on("library", () => load(false)), on("practice", () => load(false))];
+    return () => {
+      live = false;
+      offs.forEach((off) => off());
+    };
+  }, []);
+  return list;
+}
+
 export function Today() {
   const navigate = useNavigate();
   const continuing = useInProgress();
   const words = usePracticeCounts();
   const week = useWeek();
-  // The library, recently added or practised first: what to start next.
-  const [library, setLibrary] = useState<Item[]>([]);
-  useEffect(() => {
-    const load = () => backend.library().then((p) => setLibrary(p.items), () => {});
-    load();
-    const off1 = on("library", load);
-    const off2 = on("practice", load);
-    return () => {
-      off1();
-      off2();
-    };
-  }, []);
-  const busy = new Set(continuing.map((c) => c.itemId));
-  const recent = library
-    .filter((i) => !busy.has(i.id) && i.state !== "failed" && i.state !== "missing")
-    .sort((a, b) => Math.max(b.lastPractisedAt ?? 0, b.addedAt) - Math.max(a.lastPractisedAt ?? 0, a.addedAt))
-    .slice(0, 6);
-  const [first, ...others] = continuing;
+  const fresh = useNewEpisodes();
+  const [error, setError] = useState<string | null>(null);
+  // Only the episode practised last; the others are in the sidebar's In progress list.
+  const first = continuing[0];
   const resumeAt = first ? Math.min(first.position + 1, first.sentences || first.position + 1) : 0;
+
+  const practise = async (e: NewEpisode) => {
+    try {
+      const itemId = e.itemId ?? (await backend.download(e.id));
+      navigate(dictationPath(itemId));
+    } catch (err) {
+      setError(String(err));
+    }
+  };
 
   // Enter resumes, P practises words.
   useEffect(() => {
@@ -184,7 +218,7 @@ export function Today() {
           <div>
             <div className="eyebrow">{new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</div>
             <h1 className="h1" style={{ marginTop: 6 }}>
-              {first ? "Pick up where you stopped" : recent.length ? "Start something new" : "Nothing to continue yet"}
+              {first ? "Pick up where you stopped" : "Nothing to continue yet"}
             </h1>
           </div>
 
@@ -197,13 +231,13 @@ export function Today() {
                   {first.title}
                 </div>
                 <div className="continue-meta">
-                  <span className="ell">{first.source}</span>
+                  <span className="ell" style={{ minWidth: 60 }}>{first.source}</span>
                   {first.transcriptDone && first.sentences > 0 ? (
                     <>
                       <span className="mono">
                         {first.done} / {first.sentences} sentences
                       </span>
-                      <div className="track" style={{ width: 140, flexShrink: 0 }}>
+                      <div className="track" style={{ flex: "0 1 140px", minWidth: 40 }}>
                         <div className="fill" style={{ width: `${Math.round((first.done / first.sentences) * 100)}%` }} />
                       </div>
                     </>
@@ -227,80 +261,59 @@ export function Today() {
             </article>
           )}
 
-          {others.length > 0 && (
-            <section aria-labelledby="also">
-              <h2 id="also" className="eyebrow" style={{ marginBottom: 8 }}>
-                Also in progress
+          <section aria-labelledby="heard">
+            <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
+              <h2 id="heard" className="eyebrow" style={{ flexGrow: 1 }}>
+                Heard on your phone today
               </h2>
+              <span className="badge badge-next">With the phone app · later</span>
+            </div>
+            <div className="panel today-note">Episodes you listen to on your phone will show up here, ready to practise.</div>
+          </section>
+
+          <section aria-labelledby="new">
+            <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
+              <h2 id="new" className="eyebrow" style={{ flexGrow: 1 }}>
+                New from your shows
+              </h2>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => navigate("/podcasts")}>
+                Podcasts
+              </button>
+            </div>
+            {error && (
+              <div className="muted" role="alert" style={{ fontSize: 12, marginBottom: 8 }}>
+                {error}
+              </div>
+            )}
+            {fresh && fresh.length > 0 && (
               <div className="panel" style={{ overflow: "hidden" }}>
-                {others.map((p) => (
+                {fresh.map((e) => (
                   <Row
-                    key={p.attemptId}
-                    art={<Art url={p.artworkUrl} size={36} file={p.source === "My files"} />}
-                    title={p.title}
-                    sub={[p.source, progressLabel(p) && `${progressLabel(p)} sentences`, whenDay(p.updatedAt)].filter(Boolean).join(" · ")}
-                    action="Resume"
-                    onOpen={() => navigate(`/library/${p.itemId}`)}
-                    onAction={() => navigate(dictationPath(p.itemId))}
+                    key={e.id}
+                    art={<Art url={e.artworkUrl} size={36} />}
+                    title={e.title}
+                    sub={[e.showTitle, e.durationS ? clock(e.durationS) : "", e.publishedAt ? whenDay(e.publishedAt) : ""].filter(Boolean).join(" · ")}
+                    action="Practise"
+                    onOpen={() => navigate(`/podcasts/episode/${e.id}`)}
+                    onAction={() => practise(e)}
                   />
                 ))}
               </div>
-            </section>
-          )}
-
-          {recent.length > 0 && (
-            <section aria-labelledby="your-library">
-              <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
-                <h2 id="your-library" className="eyebrow" style={{ flexGrow: 1 }}>
-                  From your library
-                </h2>
-                <button type="button" className="btn btn-ghost btn-sm" onClick={() => navigate("/library")}>
-                  All of it
-                </button>
-              </div>
-              <div className="panel" style={{ overflow: "hidden" }}>
-                {recent.map((it) => (
-                  <Row
-                    key={it.id}
-                    art={<Art url={it.artworkUrl} size={36} file={it.ownFile} />}
-                    title={it.title}
-                    sub={[
-                      it.source,
-                      it.durationS ? clock(it.durationS) : "",
-                      it.practice?.finished ? `Finished · ${percent(it.practice.accuracy)}` : it.lastPractisedAt ? whenDay(it.lastPractisedAt) : "Not started",
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                    action={it.practice?.finished ? "Practise again" : "Practise"}
-                    disabled={it.state !== "ready"}
-                    onOpen={() => navigate(`/library/${it.id}`)}
-                    onAction={() => navigate(dictationPath(it.id), it.practice?.finished ? { state: { again: true } } : undefined)}
-                  />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {!first && !recent.length && (
-            <div className="empty">
-              <h2 className="h2">Start with an episode</h2>
-              <p>
-                Find a podcast you like, or add an audio or video file of your own. Eksigo transcribes it on this computer, then
-                plays it back one sentence at a time for you to type.
-              </p>
-              <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-                <button className="btn btn-primary" onClick={() => navigate("/podcasts")}>
+            )}
+            {fresh && fresh.length === 0 && (
+              <div className="panel today-note" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                <span style={{ flex: "1 1 240px" }}>Subscribe to shows you like, and their newest episodes appear here each day.</span>
+                <button type="button" className="btn btn-sm btn-primary" onClick={() => navigate("/podcasts")}>
                   <Icon name="podcasts" />
                   Find a podcast
                 </button>
-                <button className="btn" disabled={!inApp} onClick={() => addAudio().then((added) => added && navigate("/library", { state: { added } }))}>
+                <button type="button" className="btn btn-sm" disabled={!inApp} onClick={() => addAudio().then((added) => added && navigate("/library", { state: { added } }))}>
                   <Icon name="plus" />
                   Add audio
-                  <Kbd keys="Mod O" />
                 </button>
               </div>
-            </div>
-          )}
+            )}
+          </section>
         </div>
         <WeekPanel week={week} words={words} />
       </div>

@@ -6,6 +6,7 @@ import type {
   Graded,
   Level,
   PracticeCounts,
+  NewEpisode,
   Week,
   PracticeItem,
   DictInfo,
@@ -383,6 +384,16 @@ export const sample = {
     if (show) show.subscribed = on;
   },
 
+  newEpisodes: (): NewEpisode[] =>
+    shows
+      .filter((s) => s.subscribed)
+      .flatMap((s) => {
+        const started = (e: Episode) => attempts.some((a) => a.itemId === e.itemId);
+        const e = episodes.filter((e) => e.showId === s.id && !started(e)).sort((a, b) => (b.publishedAt ?? 0) - (a.publishedAt ?? 0))[0];
+        return e ? [{ ...e, artworkUrl: e.artworkUrl ?? s.artworkUrl, showTitle: s.title }] : [];
+      })
+      .sort((a, b) => (b.publishedAt ?? 0) - (a.publishedAt ?? 0))
+      .slice(0, 3),
   subscribed: (): Show[] => shows.filter((s) => s.subscribed).map((s) => ({ ...s })),
 
   episodePage(id: number): EpisodePage {

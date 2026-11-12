@@ -213,6 +213,21 @@ fn show_subscribe(db: State<Db>, id: i64, on: bool) -> CmdResult<()> {
     library::set_subscribed(&db.conn(), id, on).map_err(err)
 }
 
+/// Today's "New from your shows". With `refresh`, first reads the feeds of subscribed shows not read in six hours.
+#[tauri::command]
+async fn shows_new_episodes(db: State<'_, Db>, refresh: bool) -> CmdResult<Vec<library::NewEpisode>> {
+    if refresh {
+        let stale = library::stale_subscriptions(&db.conn(), now() - 6 * 3600).map_err(err)?;
+        let feeds = futures_util::future::join_all(stale.iter().map(|(_, url)| podcasts::fetch_feed(url))).await;
+        for ((id, _), feed) in stale.iter().zip(feeds) {
+            if let Ok(feed) = feed {
+                let _ = library::save_feed(&mut db.conn(), *id, &feed);
+            }
+        }
+    }
+    library::new_from_shows(&db.conn(), 3).map_err(err)
+}
+
 #[tauri::command]
 fn shows_subscribed(db: State<Db>) -> CmdResult<Vec<Show>> {
     library::subscribed(&db.conn()).map_err(err)
@@ -692,6 +707,7 @@ pub fn run() {
             words_note,
             words_remove,
             practice_counts,
+            shows_new_episodes,
             activity_week,
             practice_queue,
             practice_check,

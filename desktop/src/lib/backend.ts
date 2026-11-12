@@ -74,6 +74,9 @@ export type Episode = {
   practice?: Practice | null;
 };
 
+/** Today's "New from your shows": an episode with its show's title. */
+export type NewEpisode = Episode & { showTitle: string };
+
 export type ItemState = "downloading" | "ready" | "failed" | "missing";
 
 export type Item = {
@@ -337,6 +340,7 @@ export const backend = {
   refreshShow: (id: number) => call<ShowPage>("show_refresh", { id }, () => sample.showPage(id)),
   subscribe: (id: number, on: boolean) => call<void>("show_subscribe", { id, on }, () => sample.subscribe(id, on)),
   subscribed: () => call<Show[]>("shows_subscribed", {}, () => sample.subscribed()),
+  newEpisodes: (refresh: boolean) => call<NewEpisode[]>("shows_new_episodes", { refresh }, () => sample.newEpisodes()),
   getEpisode: (id: number) => call<EpisodePage>("episode_get", { id }, () => sample.episodePage(id)),
   download: (id: number) => call<number>("episode_download", { id }, () => sample.download(id)),
   cancelDownload: (itemId: number) => call<boolean>("download_cancel", { itemId }, () => sample.cancel(itemId)),
