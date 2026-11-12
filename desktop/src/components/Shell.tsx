@@ -3,6 +3,7 @@ import { NavLink, Outlet, useNavigate } from "react-router";
 import { AUDIO_EXTENSIONS, backend, type Added, type AppInfo } from "../lib/backend";
 import { fraction, useDownloads } from "../lib/downloads";
 import { isBusy, transcribed, useActivity } from "../lib/transcripts";
+import { dictationPath, progressLabel, useInProgress } from "../lib/dictation";
 import { isMac, keyLabel, modKey } from "../lib/platform";
 import { Icon, type IconName } from "./Icon";
 
@@ -16,11 +17,25 @@ const NAV: { to: string; label: string; icon: IconName }[] = [
 
 type Keys = [keys: string, label: string][];
 
-const ShellContext = createContext<{ info: AppInfo | null; setKeys: (k: Keys) => void; setStatus: (s: string) => void }>({
+const ShellContext = createContext<{
+  info: AppInfo | null;
+  setKeys: (k: Keys) => void;
+  setStatus: (s: string) => void;
+  /** Focus mode (Mod \ in Dictation): the sidebar and side panels are hidden. */
+  focus: boolean;
+  setFocus: (on: boolean) => void;
+}>({
   info: null,
   setKeys: () => {},
   setStatus: () => {},
+  focus: false,
+  setFocus: () => {},
 });
+
+export const useFocusMode = (): [boolean, (on: boolean) => void] => {
+  const { focus, setFocus } = useContext(ShellContext);
+  return [focus, setFocus];
+};
 
 /** Opens the file picker and adds the chosen audio or video files to the Library. Null when cancelled. */
 export async function addAudio(): Promise<Added | null> {
@@ -38,8 +53,10 @@ export function Shell() {
   const [info, setInfo] = useState<AppInfo | null>(null);
   const [keys, setKeys] = useState<Keys>([]);
   const [status, setStatus] = useState("");
+  const [focus, setFocus] = useState(false);
   const navigate = useNavigate();
   const downloads = useDownloads();
+  const inProgress = useInProgress();
 
   useEffect(() => {
     backend.appInfo().then(setInfo);
@@ -69,8 +86,8 @@ export function Shell() {
   }, [navigate]);
 
   return (
-    <ShellContext.Provider value={{ info, setKeys, setStatus }}>
-      <div className={isMac ? "app mac" : "app"}>
+    <ShellContext.Provider value={{ info, setKeys, setStatus, focus, setFocus }}>
+      <div className={["app", isMac && "mac", focus && "focus"].filter(Boolean).join(" ")}>
         <div className="app-body">
           <nav className="side" aria-label="Main" data-tauri-drag-region>
             <div className="ws" data-tauri-drag-region>
@@ -89,7 +106,19 @@ export function Shell() {
               </NavLink>
             ))}
             <div className="sect">In progress</div>
-            <div className="side-empty">Episodes you start appear here.</div>
+            {inProgress.length === 0 ? (
+              <div className="side-empty">Episodes you start appear here.</div>
+            ) : (
+              inProgress.slice(0, 6).map((p) => (
+                <NavLink key={p.attemptId} to={dictationPath(p.itemId)} className="nav" title={`${p.title} · ${p.source}`}>
+                  <span className="dot dot-ring" aria-hidden="true" style={{ margin: "0 4px" }} />
+                  <span className="ell" style={{ flexGrow: 1 }}>
+                    {p.title}
+                  </span>
+                  <span className="n">{progressLabel(p)}</span>
+                </NavLink>
+              ))
+            )}
             <div style={{ flexGrow: 1 }} />
             <NavLink to="/settings" className="nav">
               <Icon name="settings" />

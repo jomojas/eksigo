@@ -5,7 +5,8 @@ import { useLocation, useNavigate } from "react-router";
 import { Art } from "../components/Art";
 import { Icon } from "../components/Icon";
 import { addAudio, Kbd, Page } from "../components/Shell";
-import { backend, onFileDrop, inApp, type Added, type Item, type LibraryPage } from "../lib/backend";
+import { backend, on, onFileDrop, inApp, type Added, type Item, type LibraryPage } from "../lib/backend";
+import { percent } from "../lib/dictation";
 import { useLibraryChanged } from "../lib/downloads";
 import { bytes, clock, plural, whenDay } from "../lib/format";
 import { isBusy, transcribed, useTranscript } from "../lib/transcripts";
@@ -35,6 +36,7 @@ export function Library() {
   }, []);
   useEffect(reload, [reload]);
   useLibraryChanged(reload);
+  useEffect(() => on("practice", reload), [reload]);
 
   // Files added with Mod O elsewhere arrive in the navigation state.
   useEffect(() => {
@@ -199,7 +201,7 @@ export function Library() {
                   <ItemProgress item={it} />
                 </span>
                 <span className="mono" style={{ fontSize: 12 }}>
-                  —
+                  {percent(it.practice?.accuracy)}
                 </span>
                 <span>{it.lastPractisedAt ? whenDay(it.lastPractisedAt) : "—"}</span>
               </div>
@@ -226,11 +228,11 @@ export function Library() {
   );
 }
 
-/** Downloading, transcribing, or (from day 4) how far the learner has got. */
+/** Downloading, transcribing, or how far the learner has got. */
 function ItemProgress({ item }: { item: Item }) {
   const live = useTranscript(item.id, null);
   const t = live ?? { state: item.transcriptState, doneMs: item.transcriptDoneMs, durationMs: item.durationS ? item.durationS * 1000 : null };
-  if (item.state === "ready" && isBusy(t.state)) {
+  if (item.state === "ready" && isBusy(t.state) && !item.practice?.done) {
     const f = transcribed(t);
     return (
       <>
@@ -241,7 +243,7 @@ function ItemProgress({ item }: { item: Item }) {
       </>
     );
   }
-  return <PracticeStatus itemId={item.id} state={item.state} />;
+  return <PracticeStatus itemId={item.id} state={item.state} practice={item.practice} />;
 }
 
 function AddedNotice({ added, onClose }: { added: Added; onClose: () => void }) {

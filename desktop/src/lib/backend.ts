@@ -70,6 +70,7 @@ export type Episode = {
   artworkUrl: string | null;
   itemId: number | null;
   itemState: ItemState | null;
+  practice?: Practice | null;
 };
 
 export type ItemState = "downloading" | "ready" | "failed" | "missing";
@@ -91,6 +92,81 @@ export type Item = {
   artworkUrl: string | null;
   transcriptState: TranscriptState;
   transcriptDoneMs: number;
+  practice?: Practice | null;
+};
+
+// ---------- dictation ----------
+
+export type Mark = "correct" | "spelling" | "wrong" | "missing" | "extra" | "gap" | "ignored";
+export type Marked = { text: string; mark: Mark };
+export type Comparison = { original: Marked[]; typed: Marked[]; credit: number; total: number; spelling: number };
+
+export type Attempt = {
+  id: number;
+  itemId: number;
+  startedAt: number;
+  updatedAt: number;
+  finishedAt: number | null;
+  /** The sentence to carry on from. */
+  position: number;
+  seconds: number;
+};
+
+export type AnswerKind = "typed" | "known" | "ad";
+export type Answer = {
+  idx: number;
+  kind: AnswerKind;
+  original: string;
+  typed: string;
+  plays: number;
+  credit: number;
+  total: number;
+  spelling: number;
+  comparison: Comparison | null;
+};
+
+/** An attempt, its answers, and the sentences flagged for the review. */
+export type Session = { attempt: Attempt; answers: Answer[]; flagged: number[] };
+
+export type Summary = {
+  attempt: Attempt;
+  done: number;
+  known: number;
+  withMistakes: number;
+  ads: number;
+  /** Sentences flagged for the review. */
+  flagged: number;
+  credit: number;
+  total: number;
+  spelling: number;
+  accuracy: number | null;
+  sentences: number;
+  transcriptDone: boolean;
+};
+
+/** The latest dictation of an item, for the Practice column. */
+export type Practice = {
+  attemptId: number;
+  position: number;
+  /** Sentences answered (typed or known). */
+  done: number;
+  sentences: number;
+  transcriptDone: boolean;
+  finished: boolean;
+  accuracy: number | null;
+};
+
+export type InProgress = {
+  itemId: number;
+  attemptId: number;
+  title: string;
+  source: string;
+  artworkUrl: string | null;
+  position: number;
+  done: number;
+  sentences: number;
+  transcriptDone: boolean;
+  updatedAt: number;
 };
 
 export type ShowPage = { show: Show; episodes: Episode[] };
@@ -164,6 +240,21 @@ export const backend = {
   addFiles: (paths: string[]) => call<Added>("library_add_files", { paths }, () => ({ ids: [], skipped: [] })),
   remove: (id: number) => call<void>("library_remove", { id }, () => sample.remove(id)),
 
+  // Dictation
+  startDictation: (itemId: number, again = false) => call<Session>("dictation_start", { itemId, again }, () => sample.startDictation(itemId, again)),
+  answer: (attemptId: number, idx: number, kind: AnswerKind, typed: string, plays: number, seconds: number) =>
+    call<Answer>("dictation_answer", { attemptId, idx, kind, typed, plays, seconds }, () => sample.answer(attemptId, idx, kind, typed, plays, seconds)),
+  markAds: (attemptId: number, from: number, to: number, seconds: number) =>
+    call<void>("dictation_mark_ads", { attemptId, from, to, seconds }, () => sample.markAds(attemptId, from, to, seconds)),
+  savePosition: (attemptId: number, position: number, seconds: number) =>
+    call<void>("dictation_position", { attemptId, position, seconds }, () => sample.savePosition(attemptId, position, seconds)),
+  finishDictation: (attemptId: number) => call<Summary>("dictation_finish", { attemptId }, () => sample.finishDictation(attemptId)),
+  session: (attemptId: number) => call<Session>("dictation_session", { attemptId }, () => sample.session(attemptId)),
+  flag: (attemptId: number, idx: number, on: boolean) => call<void>("dictation_flag", { attemptId, idx, on }, () => sample.flag(attemptId, idx, on)),
+  summary: (attemptId: number) => call<Summary>("dictation_summary", { attemptId }, () => sample.summary(attemptId)),
+  attempts: (itemId: number) => call<Summary[]>("dictation_attempts", { itemId }, () => sample.attempts(itemId)),
+  inProgress: () => call<InProgress[]>("dictation_in_progress", {}, () => sample.inProgress()),
+
   // Playback
   play: (args: { id: number; path: string; startMs: number; endMs: number | null; speed: number }) =>
     call<void>("play", { args }, () => sample.play(args)),
@@ -182,6 +273,7 @@ export const backend = {
 type Events = {
   download: DownloadProgress;
   library: null;
+  practice: null;
   playback: PlaybackEvent;
   transcript: TranscriptStatus;
   "model-download": ModelProgress;

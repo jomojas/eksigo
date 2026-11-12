@@ -1,5 +1,7 @@
 pub mod audio;
+pub mod compare;
 pub mod db;
+pub mod dictation;
 pub mod library;
 pub mod models;
 pub mod player;
@@ -324,6 +326,109 @@ fn library_remove(app: AppHandle, db: State<Db>, downloads: State<Downloads>, tr
     Ok(())
 }
 
+// ---------- dictation ----------
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Session {
+    attempt: dictation::Attempt,
+    answers: Vec<dictation::Answer>,
+    /// Sentences flagged for the review.
+    flagged: Vec<i64>,
+}
+
+fn session(conn: &rusqlite::Connection, attempt: dictation::Attempt) -> anyhow::Result<Session> {
+    let answers = dictation::answers(conn, attempt.id)?;
+    let flagged = dictation::flagged(conn, attempt.id)?;
+    Ok(Session { attempt, answers, flagged })
+}
+
+/// Opens dictation of an item: the unfinished attempt, or a new one (`again` starts a new one regardless).
+#[tauri::command]
+fn dictation_start(app: AppHandle, db: State<Db>, item_id: i64, again: bool) -> CmdResult<Session> {
+    let s = {
+        let conn = db.conn();
+        let attempt = dictation::start(&conn, item_id, again).map_err(err)?;
+        session(&conn, attempt).map_err(err)?
+    };
+    let _ = app.emit("practice", ());
+    Ok(s)
+}
+
+/// Saves the answer to sentence `idx`: "typed" (compared with the original), "known" or "ad".
+#[tauri::command]
+fn dictation_answer(
+    app: AppHandle,
+    db: State<Db>,
+    attempt_id: i64,
+    idx: i64,
+    kind: String,
+    typed: String,
+    plays: i64,
+    seconds: i64,
+) -> CmdResult<dictation::Answer> {
+    let kind = dictation::Kind::parse(&kind).map_err(err)?;
+    let a = dictation::answer(&db.conn(), attempt_id, idx, kind, &typed, plays, seconds).map_err(err)?;
+    let _ = app.emit("practice", ());
+    Ok(a)
+}
+
+/// Leaves sentences `from..to` out of the score as an ad.
+#[tauri::command]
+fn dictation_mark_ads(app: AppHandle, db: State<Db>, attempt_id: i64, from: i64, to: i64, seconds: i64) -> CmdResult<()> {
+    dictation::mark_ads(&db.conn(), attempt_id, from, to, seconds).map_err(err)?;
+    let _ = app.emit("practice", ());
+    Ok(())
+}
+
+#[tauri::command]
+fn dictation_position(app: AppHandle, db: State<Db>, attempt_id: i64, position: i64, seconds: i64) -> CmdResult<()> {
+    dictation::save_position(&db.conn(), attempt_id, position, seconds).map_err(err)?;
+    let _ = app.emit("practice", ());
+    Ok(())
+}
+
+#[tauri::command]
+fn dictation_finish(app: AppHandle, db: State<Db>, attempt_id: i64) -> CmdResult<dictation::Summary> {
+    let conn = db.conn();
+    dictation::finish(&conn, attempt_id).map_err(err)?;
+    let _ = app.emit("practice", ());
+    dictation::summary(&conn, attempt_id).map_err(err)
+}
+
+/// One attempt with its answers, for its review (from the Episode page).
+#[tauri::command]
+fn dictation_session(db: State<Db>, attempt_id: i64) -> CmdResult<Session> {
+    let conn = db.conn();
+    let attempt = dictation::attempt(&conn, attempt_id).map_err(err)?;
+    session(&conn, attempt).map_err(err)
+}
+
+/// Flags sentence `idx` for the review, or takes the flag off.
+#[tauri::command]
+fn dictation_flag(app: AppHandle, db: State<Db>, attempt_id: i64, idx: i64, on: bool) -> CmdResult<()> {
+    dictation::flag(&db.conn(), attempt_id, idx, on).map_err(err)?;
+    let _ = app.emit("practice", ());
+    Ok(())
+}
+
+#[tauri::command]
+fn dictation_summary(db: State<Db>, attempt_id: i64) -> CmdResult<dictation::Summary> {
+    dictation::summary(&db.conn(), attempt_id).map_err(err)
+}
+
+/// Every attempt at an item, newest first, for the Episode page.
+#[tauri::command]
+fn dictation_attempts(db: State<Db>, item_id: i64) -> CmdResult<Vec<dictation::Summary>> {
+    dictation::summaries(&db.conn(), item_id).map_err(err)
+}
+
+/// Unfinished episodes, for the sidebar and Today.
+#[tauri::command]
+fn dictation_in_progress(db: State<Db>) -> CmdResult<Vec<dictation::InProgress>> {
+    dictation::in_progress(&db.conn()).map_err(err)
+}
+
 // ---------- playback ----------
 
 #[derive(Deserialize)]
@@ -400,6 +505,16 @@ pub fn run() {
             library_item,
             library_add_files,
             library_remove,
+            dictation_start,
+            dictation_answer,
+            dictation_mark_ads,
+            dictation_position,
+            dictation_finish,
+            dictation_summary,
+            dictation_session,
+            dictation_flag,
+            dictation_attempts,
+            dictation_in_progress,
             play,
             stop_playback,
         ])
