@@ -22,6 +22,8 @@ The riskiest parts come first: Whisper building on both systems, then the dictat
 
 ### Left out of v0.1.0, added in the following weeks
 
+- **First after v0.1.0 (decided 2026-11-12): a human-like voice for looking words up.** A neural voice (Kokoro, Apache 2.0) on api.eksigo.com, `GET /v1/speak?text=` returning audio for a selected word or phrase, each made once and kept; it replaces *Slow voice*, which uses the computer's own voice until then.
+
 - Publisher transcripts (`podcast:transcript`) and their alignment
 - The *Accurate* speech model
 - Mistakes grouped by type (weak forms, numbers, names, similar sounds, endings)
