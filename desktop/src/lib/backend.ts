@@ -210,6 +210,8 @@ export type SavedWord = {
 
 /** Words due now, and new ones that may start today (at most 10 a day). */
 export type PracticeCounts = { due: number; new: number; total: number };
+/** The last seven days, today last, with seconds practised; the streak; new words started this week. */
+export type Week = { days: { day: string; seconds: number }[]; streak: number; wordsStarted: number };
 export type PracticeMode = "type" | "recall" | "pick";
 /** One word to practise, in one of the sentences it was saved from. */
 export type PracticeItem = {
@@ -369,6 +371,7 @@ export const backend = {
   setWordNote: (id: number, note: string) => call<void>("words_note", { id, note }, () => sample.setWordNote(id, note)),
   removeWord: (id: number) => call<void>("words_remove", { id }, () => sample.removeWord(id)),
   practiceCounts: () => call<PracticeCounts>("practice_counts", {}, () => sample.practiceCounts()),
+  week: () => call<Week>("activity_week", {}, () => sample.week()),
   practiceQueue: () => call<PracticeItem[]>("practice_queue", {}, () => sample.practiceQueue()),
   practiceCheck: (expected: string, typed: string) => call<boolean>("practice_check", { expected, typed }, () => sample.practiceCheck(expected, typed)),
   practiceGrade: (args: GradeArgs) => call<Graded>("practice_grade", { args }, () => sample.practiceGrade(args)),

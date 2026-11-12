@@ -18,6 +18,14 @@ export function shortDate(unix: number | null | undefined): string {
   return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", ...(sameYear ? {} : { year: "numeric" }) });
 }
 
+/** Time practised: "12 min", "3 h 20". */
+export function practised(seconds: number): string {
+  const m = Math.round(seconds / 60);
+  if (m < 60) return `${m} min`;
+  const h = Math.floor(m / 60);
+  return m % 60 ? `${h} h ${String(m % 60).padStart(2, "0")}` : `${h} h`;
+}
+
 /** "Today", "Yesterday", then the date. */
 export function whenDay(unix: number | null | undefined): string {
   if (!unix) return "—";

@@ -38,7 +38,7 @@ Many desktop dictation apps exist, so making money is not the goal. The project 
 4. Sign-in, optional, only for syncing with the phone. Apple or Google, the same accounts as the iPhone app. Sign in with Apple on Windows uses Apple's web sign-in (needs a Services ID and a return URL on the server).
 
 **Navigation (decided 2026-11-10).** Sidebar: Today, Podcasts, Library, My words, Progress, then an *In progress* list of unfinished episodes, and Settings at the bottom. Every piece of audio lives in the Library, so Dictation is not a sidebar item: it opens from Today, Podcasts, the Library or *In progress*, the sidebar keeps **Library** selected, and the top bar shows the path (`Library / show / episode`).
-- **Today:** Continue, episodes heard on the phone today (needs sign-in), new episodes from subscriptions. Each has **Practise**.
+- **Today:** a large Continue card for the episode practised last (*Resume at sentence N*, `Enter`), then the other unfinished episodes, then recent items from the library; later, episodes heard on the phone today (needs sign-in) and new episodes from subscriptions. On the right, *This week*: the day streak, time practised, a bar for each of the last seven days, and My words (due, new to start today, started this week, *Practise N words*, `P`).
 - **Podcasts:** search (Apple podcast directory) or paste an RSS link; *Your shows*; recommendations (*Good for learners*, a short list we choose, plus Apple's top charts by country and category). → **Show** page: description, Subscribe, the episode list with each episode's practice status. → **Episode** page.
 - **Library:** everything that can be practised: downloaded episodes **and the learner's own audio or video files** (Add audio or drag and drop; MP3, M4A, WAV, MP4; they stay on the computer and are transcribed by local Whisper). Each row shows the source, length, progress (*Not started*, *31/100*, *Finished*), accuracy and when it was last practised. Filters replace a separate History page.
 - **Episode page** (the same page from Podcasts or the Library): **Start**, **Resume at sentence 32** or **Practise again**, **Preview**, and every past attempt with its results.
@@ -89,7 +89,7 @@ The **review** (after stopping or finishing, and from each attempt on the Episod
 
 **Stopping partway.** `Esc` or Stop asks: **Review so far** (default) or **Save and continue later**. Progress is saved either way, and seeing partial results doesn't end the episode: the learner can resume at the next sentence, and the results grow.
 
-**Today's Continue list:** clicking a row opens the episode's page; **Resume** opens dictation.
+**Today's Continue card and rows:** clicking one opens the episode's page; **Resume** opens dictation. The streak counts days in a row with any practice, up to yesterday while today has none yet.
 
 **Results: the original and the learner's text side by side**, sentence by sentence like a split diff, each row with a play button. Words the learner missed are marked in the original; wrong words are red in the learner's text. Above: accuracy, sentences done, known, flagged, time; filters All, Flagged, With mistakes; a filter for sentences with mistakes; **Resume** and **Practise these again**. The same results open later from the Episode page.
 - **Selecting a word or phrase** in the original opens a dictionary card (decided 2026-11-12). Any selection works, whether or not the dictionary has it:

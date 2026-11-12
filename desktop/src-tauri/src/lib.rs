@@ -533,6 +533,24 @@ fn practice_counts(db: State<Db>) -> CmdResult<practice::Counts> {
     practice::counts(&db.conn(), now(), practice::today_start()).map_err(err)
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WeekSummary {
+    #[serde(flatten)]
+    week: activity::Week,
+    /// New words practised for the first time in the last seven days.
+    words_started: i64,
+}
+
+/// The week panel on Today: time practised each day, the streak and words started.
+#[tauri::command]
+fn activity_week(db: State<Db>) -> CmdResult<WeekSummary> {
+    let c = db.conn();
+    let week = activity::week(&c, chrono::Local::now().date_naive()).map_err(err)?;
+    let words_started = practice::started_since(&c, practice::today_start() - 6 * 86_400).map_err(err)?;
+    Ok(WeekSummary { week, words_started })
+}
+
 /// Today's session, at most twenty words.
 #[tauri::command]
 fn practice_queue(db: State<Db>) -> CmdResult<Vec<practice::Item>> {
@@ -674,6 +692,7 @@ pub fn run() {
             words_note,
             words_remove,
             practice_counts,
+            activity_week,
             practice_queue,
             practice_check,
             practice_grade,

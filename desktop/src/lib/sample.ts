@@ -6,6 +6,7 @@ import type {
   Graded,
   Level,
   PracticeCounts,
+  Week,
   PracticeItem,
   DictInfo,
   DictionaryList,
@@ -549,6 +550,15 @@ export const sample = {
   },
 
   // Word practice, with fixed intervals instead of FSRS.
+  week(): Week {
+    const minutes = [20, 40, 0, 50, 30, 15, 25];
+    const days = minutes.map((m, i) => {
+      const d = new Date(Date.now() - (6 - i) * 86_400_000);
+      const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      return { day, seconds: m * 60 };
+    });
+    return { days, streak: 4, wordsStarted: 5 };
+  },
   practiceCounts(): PracticeCounts {
     const t = now();
     const due = savedWords.filter((w) => w.level !== "new" && (w.dueAt ?? 0) <= t).length;

@@ -3,11 +3,16 @@
 
 use anyhow::Result;
 use rusqlite::{params, Connection};
+use chrono::{Days, NaiveDate};
 use serde::Serialize;
 
 /// Today on this computer's calendar, "2026-11-12".
 pub fn today() -> String {
-    chrono::Local::now().format("%Y-%m-%d").to_string()
+    day_of(chrono::Local::now().date_naive())
+}
+
+fn day_of(d: NaiveDate) -> String {
+    d.format("%Y-%m-%d").to_string()
 }
 
 /// Adds `seconds` of practice of `kind` ("dictation", later "words") to `day`.
@@ -37,6 +42,44 @@ pub fn days(conn: &Connection, from: &str) -> Result<Vec<Day>> {
     Ok(rows)
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Week {
+    /// The last seven days, oldest first and `today` last; days without practice have 0 seconds.
+    pub days: Vec<Day>,
+    /// Days in a row with some practice, up to today, or up to yesterday while today has none yet.
+    pub streak: i64,
+}
+
+/// The week shown on Today.
+pub fn week(conn: &Connection, today: NaiveDate) -> Result<Week> {
+    let from = today - Days::new(6);
+    let got = days(conn, &day_of(from))?;
+    let days = (0..7)
+        .map(|i| {
+            let day = day_of(from + Days::new(i));
+            let seconds = got.iter().find(|g| g.day == day).map_or(0, |g| g.seconds);
+            Day { day, seconds }
+        })
+        .collect();
+
+    let mut st = conn.prepare("SELECT day FROM practice_days GROUP BY day HAVING SUM(seconds) > 0 ORDER BY day DESC")?;
+    let practised = st.query_map([], |r| r.get::<_, String>(0))?.collect::<rusqlite::Result<Vec<_>>>()?;
+    let mut at = if practised.first() == Some(&day_of(today)) { today } else { today - Days::new(1) };
+    let mut streak = 0;
+    for p in practised {
+        if p > day_of(at) {
+            continue;
+        }
+        if p != day_of(at) {
+            break;
+        }
+        streak += 1;
+        at = at - Days::new(1);
+    }
+    Ok(Week { days, streak })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -56,5 +99,26 @@ mod tests {
             vec![Day { day: "2026-11-10".into(), seconds: 100 }, Day { day: "2026-11-12".into(), seconds: 5 }]
         );
         assert_eq!(days(&c, "2026-11-11").unwrap().len(), 1);
+    }
+
+    #[test]
+    fn week_and_streak() {
+        let db = Db::open_in_memory().unwrap();
+        let c = db.conn();
+        let day = |s: &str| NaiveDate::parse_from_str(s, "%Y-%m-%d").unwrap();
+        for d in ["2026-11-01", "2026-11-09", "2026-11-10", "2026-11-11"] {
+            add(&c, d, "dictation", 60).unwrap();
+        }
+        // Today has nothing yet: the streak still counts up to yesterday.
+        let w = week(&c, day("2026-11-12")).unwrap();
+        assert_eq!(w.streak, 3);
+        assert_eq!(w.days.len(), 7);
+        assert_eq!(w.days[0], Day { day: "2026-11-06".into(), seconds: 0 });
+        assert_eq!(w.days[5].seconds, 60);
+        assert_eq!(w.days[6], Day { day: "2026-11-12".into(), seconds: 0 });
+        add(&c, "2026-11-12", "words", 30).unwrap();
+        assert_eq!(week(&c, day("2026-11-12")).unwrap().streak, 4);
+        // A day missed ends it.
+        assert_eq!(week(&c, day("2026-11-14")).unwrap().streak, 0);
     }
 }

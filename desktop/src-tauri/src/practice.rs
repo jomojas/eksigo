@@ -69,7 +69,7 @@ pub struct Counts {
 }
 
 /// New words practised for the first time since `since` (not counting ones marked "I know this").
-fn started_since(conn: &Connection, since: i64) -> Result<i64> {
+pub fn started_since(conn: &Connection, since: i64) -> Result<i64> {
     Ok(conn.query_row(
         "SELECT COUNT(*) FROM (SELECT word_id, MIN(at) AS first FROM word_reviews WHERE mode != 'known' GROUP BY word_id) WHERE first >= ?1",
         [since],

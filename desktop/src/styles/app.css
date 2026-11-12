@@ -1073,3 +1073,64 @@ select.btn {
 .choice[data-result="off"] {
   opacity: 0.5;
 }
+
+/* Today */
+.continue-card {
+  padding: 18px 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  align-items: center;
+  cursor: pointer;
+}
+.continue-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--ink-subtle);
+  white-space: nowrap;
+}
+.today-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--hairline);
+  cursor: pointer;
+  transition: background 120ms ease-out;
+}
+.today-row:last-child {
+  border-bottom: none;
+}
+.today-row:hover {
+  background: var(--surface-2);
+}
+.week-bars {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  align-items: end;
+  height: 72px;
+}
+.week-bars > div {
+  border-radius: 3px;
+  background: var(--ink-muted);
+}
+.week-bars > div[data-empty] {
+  background: var(--hairline-strong);
+}
+.week-bars > div[data-today]:not([data-empty]) {
+  background: var(--ink);
+}
+.week-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  font-size: 11px;
+  color: var(--ink-subtle);
+  text-align: center;
+}
+.week-days [data-today] {
+  color: var(--ink);
+}
