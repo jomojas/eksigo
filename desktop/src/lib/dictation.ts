@@ -12,8 +12,6 @@ export type DictationSettings = {
   pauseKind: "fixed" | "relative";
   pauseSeconds: number;
   pauseFactor: number;
-  /** Show the original after each sentence, or only when stopping or finishing. */
-  showOriginal: "end" | "each";
   /** Mod R plays the sentence once at this speed. */
   slowSpeed: number;
 };
@@ -25,7 +23,6 @@ export const DEFAULTS: DictationSettings = {
   pauseKind: "relative",
   pauseSeconds: 3,
   pauseFactor: 1.5,
-  showOriginal: "end",
   slowSpeed: 0.75,
 };
 

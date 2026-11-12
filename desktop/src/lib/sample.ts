@@ -5,7 +5,6 @@ import type {
   Added,
   Answer,
   AnswerKind,
-  Flagged,
   Attempt,
   Comparison,
   EpisodePage,
@@ -25,7 +24,6 @@ import type {
   Summary,
   TranscriptStatus,
 } from "./backend";
-import { parseMarkup } from "./markup";
 import learnersJson from "../../src-tauri/data/learners.json";
 
 type Learner = { appleId: string; title: string; author: string; feedUrl: string; artworkUrl: string; blurb: string };
@@ -189,43 +187,29 @@ const notFound = (what: string) => new Error(`That ${what} isn't in the sample d
 
 const attempts: Attempt[] = [];
 const answers = new Map<number, Map<number, Answer>>();
+const flags = new Map<number, Set<number>>();
+const flaggedOf = (attemptId: number) => [...(flags.get(attemptId) ?? [])].sort((x, y) => x - y);
 
-/** A rough stand-in for compare.rs: exact words only, lined up by longest common subsequence; marks typed in the box apply. */
-function roughCompare(original: string, typedRaw: string): Comparison {
-  const { words: t, flags: typedFlags } = parseMarkup(typedRaw);
+/** A rough stand-in for compare.rs: exact words only, lined up by longest common subsequence. */
+function roughCompare(original: string, typed: string): Comparison {
   const norm = (w: string) => w.toLowerCase().replace(/[^a-z0-9']/g, "");
   const o = original.split(/\s+/).filter(Boolean);
+  const t = typed.split(/\s+/).filter(Boolean);
   const L = Array.from({ length: o.length + 1 }, () => new Array<number>(t.length + 1).fill(0));
   for (let i = o.length - 1; i >= 0; i--)
     for (let j = t.length - 1; j >= 0; j--) L[i][j] = norm(o[i]) === norm(t[j]) ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
   const om: Marked[] = o.map((text) => ({ text, mark: "missing" }));
   const tm: Marked[] = t.map((text) => ({ text, mark: text === "_" ? "gap" : "extra" }));
-  const flagOf: (Flagged["flag"] | undefined)[] = o.map(() => undefined);
   for (let i = 0, j = 0; i < o.length && j < t.length; ) {
     if (norm(o[i]) === norm(t[j])) {
       om[i].mark = tm[j].mark = "correct";
-      flagOf[i] = typedFlags.find((x) => x.from <= j && j <= x.to)?.flag;
       i++;
       j++;
     } else if (L[i + 1][j] >= L[i][j + 1]) i++;
     else j++;
   }
-  // The learner's marks: the worse of the two.
-  om.forEach((m, i) => {
-    const f = flagOf[i];
-    if (f === "unknown" || f === "missed" || f === "unexpected") m.mark = m.mark === "correct" ? "wrong" : m.mark;
-    else if (f === "spelling" && m.mark === "correct") m.mark = "spelling";
-  });
-  const flags: Flagged[] = [];
-  flagOf.forEach((f, i) => {
-    if (!f) return;
-    const last = flags[flags.length - 1];
-    if (last && last.flag === f && last.to === i - 1) last.to = i;
-    else flags.push({ from: i, to: i, flag: f });
-  });
-  const spelling = om.filter((m) => m.mark === "spelling").length;
-  const credit = om.filter((m) => m.mark === "correct").length + spelling / 2;
-  return { original: om, typed: tm, credit, total: o.length, spelling, flags };
+  const credit = om.filter((m) => m.mark === "correct").length;
+  return { original: om, typed: tm, credit, total: o.length, spelling: 0 };
 }
 
 function summaryOf(a: Attempt): Summary {
@@ -237,9 +221,10 @@ function summaryOf(a: Attempt): Summary {
   return {
     attempt: { ...a },
     done: scored.length,
-    shown: list.filter((x) => x.kind === "shown").length,
-    withMistakes: scored.filter((x) => x.credit < x.total).length,
+    known: list.filter((x) => x.kind === "known").length,
+    withMistakes: list.filter((x) => x.kind === "typed" && x.credit < x.total).length,
     ads: list.length - scored.length,
+    flagged: flags.get(a.id)?.size ?? 0,
     credit,
     total,
     spelling: 0,
@@ -456,26 +441,36 @@ export const sample = {
       answers.set(a.id, new Map());
     }
     emit("practice", null);
-    return { attempt: { ...a }, answers: [...answers.get(a.id)!.values()].sort((x, y) => x.idx - y.idx) };
+    return sample.session(a.id);
+  },
+
+  session(attemptId: number): Session {
+    const a = attemptById(attemptId);
+    return { attempt: { ...a }, answers: [...(answers.get(a.id)?.values() ?? [])].sort((x, y) => x.idx - y.idx), flagged: flaggedOf(a.id) };
+  },
+
+  flag(attemptId: number, idx: number, on: boolean) {
+    if (!flags.has(attemptId)) flags.set(attemptId, new Set());
+    if (on) flags.get(attemptId)!.add(idx);
+    else flags.get(attemptId)!.delete(idx);
+    emit("practice", null);
   },
 
   answer(attemptId: number, idx: number, kind: AnswerKind, typed: string, plays: number, seconds: number): Answer {
     const a = attemptById(attemptId);
     const original = transcripts.get(a.itemId)?.sentences[idx]?.text;
     if (original === undefined) throw new Error(`Sentence ${idx + 1} isn't transcribed yet.`);
-    const ad = kind === "ad";
-    const comparison = ad ? null : roughCompare(original, typed);
+    const comparison = kind === "typed" ? roughCompare(original, typed) : kind === "known" ? { ...roughCompare(original, original), typed: [] } : null;
     const ans: Answer = {
       idx,
       kind,
       original,
-      typed: ad ? "" : typed.trim(),
+      typed: kind === "typed" ? typed.trim() : "",
       plays,
       credit: comparison?.credit ?? 0,
       total: comparison?.total ?? 0,
-      spelling: comparison?.spelling ?? 0,
+      spelling: 0,
       comparison,
-      flags: comparison?.flags ?? [],
     };
     answers.get(a.id)!.set(idx, ans);
     sample.savePosition(attemptId, idx + 1, seconds);

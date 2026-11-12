@@ -6,23 +6,23 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useLocation, useNavigate, useParams } from "react-router";
 import { PlaybackSettings } from "../components/DictationSettings";
 import { Icon } from "../components/Icon";
-import { FLAGS, FlaggedWords, MarkedText } from "../components/Marks";
 import { Kbd, Page, useFocusMode } from "../components/Shell";
-import { backend, type Answer, type Item, type Sentence, type Session, type Show, type Summary, type TranscriptStatus } from "../lib/backend";
+import { backend, type Item, type Sentence, type Session, type Show, type Summary, type TranscriptStatus } from "../lib/backend";
 import { fraction, useDownloads, useLibraryChanged } from "../lib/downloads";
-import { clampSpeed, pauseMs, percent, slowerSpeed, SPEED_STEP, speedLabel, useDictationSettings } from "../lib/dictation";
+import { clampSpeed, pauseMs, slowerSpeed, SPEED_STEP, speedLabel, useDictationSettings } from "../lib/dictation";
 import { bytes, clock, plural } from "../lib/format";
 import { modKey } from "../lib/platform";
 import { sentenceAt, usePlayer } from "../lib/playback";
-import { hasMarkup, parseMarkup } from "../lib/markup";
 import { isBusy, useActivity, useTranscript } from "../lib/transcripts";
+import { Review } from "./Review";
 
 type Phase = "dictating" | "ad" | "stop" | "results";
 
 const KEYS: [string, string][] = [
   ["Tab", "Play"],
   ["Shift Enter", "Finish"],
-  ["Shift Tab", "Show original"],
+  ["Shift Tab", "Know it"],
+  ["Mod D", "Flag"],
   ["Mod P", "Play anyway"],
   ["Mod R", "Slower"],
   ["Esc", "Stop"],
@@ -198,18 +198,14 @@ function Dictation({
   const [pos, setPos] = useState(session.attempt.position);
   const drafts = useRef(new Map<number, string>());
   const [text, setText] = useState(() => answers.get(session.attempt.position)?.typed ?? "");
-  // Each sentence keeps its plays and whether the original was shown when moving back and forth;
-  // answered sentences start from their saved answer.
+  // Each sentence keeps its plays when moving back and forth; answered ones start from their saved answer.
   const [playsBy, setPlaysBy] = useState(() => new Map(session.answers.map((a) => [a.idx, a.plays])));
-  const [shownBy, setShownBy] = useState(() => new Set(session.answers.filter((a) => a.kind === "shown").map((a) => a.idx)));
   const plays = playsBy.get(pos) ?? 0;
-  const shown = shownBy.has(pos);
-  // The marks typed in the box, read as they will be when the sentence is finished.
-  const marked = useMemo(() => (hasMarkup(text) ? parseMarkup(text) : null), [text]);
+  // Sentences flagged to look at in the review; a flag can be set before answering.
+  const [flagged, setFlagged] = useState(() => new Set(session.flagged));
   const [phase, setPhase] = useState<Phase>("dictating");
   const [adFrom, setAdFrom] = useState(0);
   const [note, setNote] = useState("");
-  const [feedback, setFeedback] = useState<Answer | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -327,24 +323,15 @@ function Dictation({
     [answers, attemptId, player, secondsSince],
   );
 
-  /** Shift Tab: the original appears, and goes into the box when nothing is typed yet. */
-  const reveal = () => {
-    if (!sentence) return;
-    setShownBy((s) => new Set(s).add(pos));
-    if (!text.trim()) setText(sentence.text);
-    setNote("");
-    focusBox();
-  };
-
-  const submit = async () => {
+  /** Shift Enter submits what's typed; Shift Tab ("I know this one") moves on without typing. */
+  const submit = async (kind: "typed" | "known") => {
     if (!sentence || busy) return;
     setBusy(true);
     try {
       const s = secondsSince();
       addSeconds(s);
-      const a = await backend.answer(attemptId, pos, shown ? "shown" : "typed", text, plays, s);
+      const a = await backend.answer(attemptId, pos, kind, kind === "typed" ? text : "", plays, s);
       setAnswers((m) => new Map(m).set(pos, a));
-      setFeedback(settings.showOriginal === "each" ? a : null);
       goTo(pos + 1, false);
       drafts.current.delete(pos);
     } catch (e) {
@@ -355,10 +342,19 @@ function Dictation({
   };
 
   const jump = (i: number) => {
-    if (i !== pos) {
-      setFeedback(null);
-      goTo(i, true);
-    }
+    if (i !== pos) goTo(i, true);
+  };
+
+  /** Mod D: flag this sentence for the review, or take the flag off. */
+  const toggleFlag = (i = pos) => {
+    const v = !flagged.has(i);
+    setFlagged((f) => {
+      const n = new Set(f);
+      if (v) n.add(i);
+      else n.delete(i);
+      return n;
+    });
+    backend.flag(attemptId, i, v).catch((e) => setNote(String(e)));
   };
   const move = (d: number) => jump(Math.max(0, Math.min(pos + d, sentences.length)));
   /** Mod ↓: back to the first sentence not done yet. */
@@ -384,10 +380,9 @@ function Dictation({
         setAnswers((m) => {
           const n = new Map(m);
           for (let i = adFrom; i < to; i++)
-            n.set(i, { idx: i, kind: "ad", original: sentences[i].text, typed: "", plays: 0, credit: 0, total: 0, spelling: 0, comparison: null, flags: [] });
+            n.set(i, { idx: i, kind: "ad", original: sentences[i].text, typed: "", plays: 0, credit: 0, total: 0, spelling: 0, comparison: null });
           return n;
         });
-        setFeedback(null);
         goTo(to, false);
       } else focusBox();
       return;
@@ -462,6 +457,9 @@ function Dictation({
       } else if (is("arrowleft")) move(-1);
       else if (is("arrowright")) move(1);
       else if (is("arrowdown")) jump(firstNotDone());
+      else if (is("d", "KeyD")) {
+        if (phase === "dictating" && sentence) toggleFlag();
+      }
       else if (is("k", "KeyK")) toggleAd();
       else if (is("-", "Minus", "NumpadSubtract")) setSpeed(speed - SPEED_STEP);
       else if (is("=", "Equal", "NumpadAdd") || k === "+") setSpeed(speed + SPEED_STEP);
@@ -486,10 +484,10 @@ function Dictation({
       focusBox();
     } else if (e.key === "Tab" && e.shiftKey) {
       stop();
-      reveal();
+      submit("known");
     } else if (e.key === "Enter" && e.shiftKey) {
       stop();
-      submit();
+      submit("typed");
     }
   };
   useEffect(() => {
@@ -504,9 +502,9 @@ function Dictation({
   // The sentences just before this one, done or not, so it's clear where in the episode this is.
   const before = useMemo(() => {
     const list: number[] = [];
-    for (let i = pos - 1; i >= 0 && list.length < (feedback ? 2 : 3); i--) if (i !== feedback?.idx) list.unshift(i);
+    for (let i = Math.max(0, pos - 3); i < pos; i++) list.push(i);
     return list;
-  }, [pos, feedback]);
+  }, [pos]);
   const doneCount = [...answers.values()].filter((a) => a.kind !== "ad").length;
   const adCount = answers.size - doneCount;
   const toDo = total !== null ? total - adCount : null;
@@ -539,7 +537,17 @@ function Dictation({
   if (phase === "results" && summary) {
     return (
       <Page crumbs={crumbs} actions={actions}>
-        <Results summary={summary} answers={answers} maxPlays={settings.maxPlays} onResume={summary.attempt.finishedAt ? null : resume} onAgain={practiseAgain} onBack={() => navigate(`/library/${item.id}`)} />
+        <Review
+          summary={{ ...summary, flagged: flagged.size }}
+          answers={answers}
+          flagged={flagged}
+          sentences={sentences}
+          maxPlays={settings.maxPlays}
+          onFlag={(i) => toggleFlag(i)}
+          onResume={summary.attempt.finishedAt ? null : resume}
+          onAgain={summary.attempt.finishedAt ? practiseAgain : null}
+          onBack={() => navigate(`/library/${item.id}`)}
+        />
       </Page>
     );
   }
@@ -550,7 +558,7 @@ function Dictation({
         <section aria-label="Sentences" className="page" style={{ flexGrow: 1, minWidth: 0, gap: 4, padding: "24px 40px 32px 28px" }}>
           {before.length > 0 && (
             <div className="eyebrow" style={{ paddingLeft: 42, marginBottom: 6 }}>
-              Your text so far{settings.showOriginal === "end" ? " · the original shows when you stop or finish" : ""}
+              Your text so far · the original shows in the review
             </div>
           )}
           {before.map((i) => {
@@ -558,31 +566,18 @@ function Dictation({
             return (
               <div key={i} className="done-row" style={a ? undefined : { color: "var(--ink-tertiary)" }}>
                 <span className="mono num">{i + 1}</span>
-                <span className="ell" style={{ flexGrow: 1 }}>
-                  {!a ? "Not done yet" : a.kind === "ad" ? "Ad · left out" : a.typed || "(nothing typed)"}
+                <span className="ell" style={{ flexGrow: 1, ...(a?.kind === "known" ? { color: "var(--ink-tertiary)" } : {}) }}>
+                  {!a ? "Not done yet" : a.kind === "ad" ? "Ad · left out" : a.kind === "known" ? "Known · not typed" : a.typed || "(nothing typed)"}
                 </span>
-                {a?.kind === "shown" && <span className="tag">shown</span>}
+                {flagged.has(i) && (
+                  <span className="flag-label">
+                    <Icon name="flag" size={12} />
+                    Flagged
+                  </span>
+                )}
               </div>
             );
           })}
-
-          {feedback?.comparison && (
-            <div className="done-row" style={{ alignItems: "flex-start" }}>
-              <span className="mono num">{feedback.idx + 1}</span>
-              <div className="panel" style={{ flexGrow: 1, padding: "10px 14px", display: "flex", flexDirection: "column", gap: 6, color: "var(--ink)" }}>
-                <MarkedText words={feedback.comparison.original} flags={feedback.flags} />
-                {feedback.comparison.typed.length > 0 && (
-                  <span style={{ fontSize: 13, color: "var(--ink-subtle)" }}>
-                    <MarkedText words={feedback.comparison.typed} />
-                  </span>
-                )}
-                <span style={{ fontSize: 12, color: "var(--ink-subtle)" }}>
-                  {Math.round(feedback.credit * 10) / 10} of {feedback.total} words
-                  {feedback.spelling > 0 && ` · ${plural(feedback.spelling, "spelling mistake")}`}
-                </span>
-              </div>
-            </div>
-          )}
 
           {sentence ? (
             <div style={{ display: "flex", gap: 14, marginTop: 18 }}>
@@ -593,10 +588,15 @@ function Dictation({
                     Sentence {pos + 1}
                     {total ? ` of ${total}` : ""}
                   </span>
-                  {current && current.kind !== "ad" && (
-                    <span>· Done, {percent(current.total ? current.credit / current.total : 1)} · finishing it again replaces the answer</span>
-                  )}
+                  {current?.kind === "typed" && <span>· Done · finishing it again replaces the answer</span>}
+                  {current?.kind === "known" && <span>· Done: known</span>}
                   {current?.kind === "ad" && <span>· Left out as an ad</span>}
+                  {flagged.has(pos) && (
+                    <span className="flag-label">
+                      <Icon name="flag" size={12} />
+                      Flagged for review
+                    </span>
+                  )}
                 </div>
                 {phase === "ad" ? (
                   <div className="panel" style={{ padding: "14px 16px", display: "flex", alignItems: "center", gap: 14 }} role="status">
@@ -647,28 +647,19 @@ function Dictation({
                           </>
                         ) : playsLeft > 0 ? (
                           <>
-                            Played {plays === 1 ? "once" : `${plays} times`}. {shown ? "" : "Type what you caught; "}
-                            <Kbd keys="Tab" /> plays it again · {plural(playsLeft, "play")} left.
+                            Played {plays === 1 ? "once" : `${plays} times`} · {plural(playsLeft, "play")} left. <Kbd keys="Tab" /> plays it again.
                           </>
                         ) : (
                           <>
-                            No plays left. <Kbd keys="Mod P" /> plays it anyway · <Kbd keys="Shift Enter" /> finishes
-                            {shown ? "" : <>, <Kbd keys="Shift Tab" /> shows the original</>}.
+                            No plays left. <Kbd keys="Mod P" /> plays it anyway.
                           </>
                         ))}
                     </div>
                   </>
                 )}
 
-                {shown && phase === "dictating" && (
-                  <div className="panel" style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
-                    <div className="eyebrow">The original</div>
-                    <div className="selectable original">{sentence.text}</div>
-                  </div>
-                )}
-
                 <label htmlFor="dictation" className="eyebrow" style={{ marginTop: 4 }}>
-                  {shown ? "Your text · mark it, edit it if you like; it's compared with the original when you finish" : "Type what you hear"}
+                  Type what you hear
                 </label>
                 <textarea
                   id="dictation"
@@ -682,33 +673,28 @@ function Dictation({
                   autoCapitalize="off"
                   autoComplete="off"
                   disabled={phase !== "dictating"}
+                  placeholder={current?.kind === "known" ? "Known: not typed. Type here to answer it instead." : undefined}
                 />
-                {marked && marked.flags.length > 0 && (
-                  <div style={{ fontSize: 15, lineHeight: 1.6, color: "var(--ink-muted)", marginTop: -4 }} aria-label="Your marks">
-                    <FlaggedWords words={marked.words} flags={marked.flags} />
-                  </div>
-                )}
-                <div className="markup-help" aria-label="Marks">
-                  Mark words as you type:
-                  {FLAGS.map((f) => (
-                    <span key={f.flag} title={f.title}>
-                      <code>{f.syntax.replace("…", "word")}</code> {f.label}
-                    </span>
-                  ))}
-                </div>
-                <div style={{ fontSize: 12 }}>
-                  <Kbd keys="Enter" /> starts a new line · <Kbd keys="_" /> marks a part you didn't catch · <Kbd keys="Mod ←" /> <Kbd keys="Mod →" /> previous
-                  or next sentence · <Kbd keys="Mod ↓" /> first one not done
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <button type="button" className="btn btn-primary" onClick={() => submit()} disabled={busy || phase !== "dictating"}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <button type="button" className="btn btn-primary" onClick={() => submit("typed")} disabled={busy || phase !== "dictating"}>
                     Finish sentence <Kbd keys="Shift Enter" />
                   </button>
-                  {!shown && (
-                    <button type="button" className="btn" onClick={reveal} disabled={busy || phase !== "dictating"}>
-                      Show the original <Kbd keys="Shift Tab" />
-                    </button>
-                  )}
+                  <button type="button" className="btn" onClick={() => submit("known")} disabled={busy || phase !== "dictating"}>
+                    I know this one <Kbd keys="Shift Tab" />
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn btn-ghost${flagged.has(pos) ? " flag-label" : ""}`}
+                    aria-pressed={flagged.has(pos)}
+                    onClick={() => {
+                      toggleFlag();
+                      focusBox();
+                    }}
+                    disabled={phase !== "dictating"}
+                  >
+                    <Icon name="flag" size={14} />
+                    {flagged.has(pos) ? "Flagged" : "Flag for review"} <Kbd keys="Mod D" />
+                  </button>
                   <span style={{ flexGrow: 1 }} />
                   <button type="button" className="btn btn-ghost" onClick={toggleAd}>
                     {phase === "ad" ? "The episode is back" : "Skip section"} <Kbd keys="Mod K" />
@@ -764,6 +750,10 @@ function Dictation({
                   <div className="small">Sentences done</div>
                 </div>
                 <div className="cell">
+                  <div className="big">{flagged.size}</div>
+                  <div className="small">Flagged</div>
+                </div>
+                <div className="cell" style={{ gridColumn: "span 2" }}>
                   <div className="big mono">{clock(elapsed)}</div>
                   <div className="small">Time</div>
                 </div>
@@ -777,6 +767,7 @@ function Dictation({
       {phase === "stop" && (
         <StopDialog
           done={doneCount}
+          flagged={flagged.size}
           pos={pos}
           total={total}
           onResults={showResults}
@@ -793,6 +784,7 @@ function Dictation({
 
 function StopDialog({
   done,
+  flagged,
   pos,
   total,
   onResults,
@@ -800,6 +792,7 @@ function StopDialog({
   onCancel,
 }: {
   done: number;
+  flagged: number;
   pos: number;
   total: number | null;
   onResults: () => void;
@@ -825,11 +818,12 @@ function StopDialog({
         </h2>
         <p style={{ lineHeight: 1.55 }}>
           You've done {plural(done, "sentence")}
-          {total ? ` of ${total}` : ""}. Your progress is saved either way, and you can resume at sentence {pos + 1} any time.
+          {total ? ` of ${total}` : ""}
+          {flagged ? `, ${flagged} flagged for review` : ""}. Your progress is saved either way, and you can resume at sentence {pos + 1} any time.
         </p>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button type="button" className="btn btn-primary" onClick={onResults} autoFocus>
-            See the results so far <Kbd keys="Enter" />
+            Review so far <Kbd keys="Enter" />
           </button>
           <button type="button" className="btn" onClick={onLater}>
             Save and continue later
@@ -840,112 +834,6 @@ function StopDialog({
           </button>
         </div>
       </div>
-    </div>
-  );
-}
-
-/** The results so far. The full side-by-side view, with words to look up, arrives on day 5. */
-function Results({
-  summary: s,
-  answers,
-  maxPlays,
-  onResume,
-  onAgain,
-  onBack,
-}: {
-  summary: Summary;
-  answers: Map<number, Answer>;
-  maxPlays: number;
-  onResume: (() => void) | null;
-  onAgain: () => void;
-  onBack: () => void;
-}) {
-  const [onlyMistakes, setOnlyMistakes] = useState(false);
-  const list = [...answers.values()]
-    .filter((a) => a.kind !== "ad" && (!onlyMistakes || a.credit < a.total))
-    .sort((a, b) => a.idx - b.idx);
-  const finished = s.attempt.finishedAt !== null;
-  return (
-    <div className="page" style={{ gap: 20 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <h1 className="h1" style={{ flexGrow: 1 }}>
-          {finished ? "Finished" : "Results so far"}
-        </h1>
-        {onResume && (
-          <button type="button" className="btn btn-primary" onClick={onResume} autoFocus>
-            Resume at sentence {s.attempt.position + 1}
-          </button>
-        )}
-        {finished && (
-          <button type="button" className="btn btn-primary" onClick={onAgain} autoFocus>
-            Practise again
-          </button>
-        )}
-        <button type="button" className="btn" onClick={onBack}>
-          Back to the episode
-        </button>
-      </div>
-      <div className="cells" style={{ gridTemplateColumns: "repeat(5, minmax(0, 1fr))" }}>
-        <Cell big={percent(s.accuracy)} small="Accuracy" />
-        <Cell big={`${s.done}${s.transcriptDone ? ` / ${s.sentences - s.ads}` : ""}`} small="Sentences done" />
-        <Cell big={String(s.shown)} small="Original shown" />
-        <Cell big={String(s.withMistakes)} small="With mistakes" />
-        <Cell big={clock(s.attempt.seconds)} small="Time" />
-      </div>
-      <p style={{ fontSize: 12 }}>
-        {s.spelling > 0 && `${plural(s.spelling, "spelling mistake")}, counted as half a word each. `}
-        {s.ads > 0 && `${plural(s.ads, "sentence")} skipped as ads, left out of the score. `}
-        <span className="w w-missing">Boxed</span> words were missed, <span className="w w-wrong">red</span> ones were wrong, and{" "}
-        <span className="w w-spelling">underlined</span> ones misspelled. Your own marks:{" "}
-        {FLAGS.map((f, i) => (
-          <span key={f.flag}>
-            {i > 0 && ", "}
-            <span className={`f f-${f.flag} f-from f-to`}>{f.label}</span>
-          </span>
-        ))}
-        .
-      </p>
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <h2 className="eyebrow" style={{ flexGrow: 1 }}>
-          {plural(list.length, "sentence")}
-        </h2>
-        <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12 }}>
-          <input type="checkbox" checked={onlyMistakes} onChange={(e) => setOnlyMistakes(e.target.checked)} />
-          Only sentences with mistakes
-        </label>
-      </div>
-      <ol className="panel selectable" style={{ listStyle: "none", margin: 0, padding: 0 }}>
-        {list.map((a) => (
-          <li key={a.idx} className="result-row">
-            <span className="mono num">{a.idx + 1}</span>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0, flexGrow: 1 }}>
-              <span style={{ color: "var(--ink)" }}>{a.comparison ? <MarkedText words={a.comparison.original} flags={a.flags} /> : a.original}</span>
-              {a.comparison && (a.kind === "typed" || a.typed !== a.original) && (
-                <span style={{ fontSize: 13 }}>{a.comparison.typed.length ? <MarkedText words={a.comparison.typed} /> : "(nothing typed)"}</span>
-              )}
-            </div>
-            <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
-              <span className="mono" style={{ fontSize: 12, whiteSpace: "nowrap", color: "var(--ink)" }}>
-                {percent(a.total ? a.credit / a.total : 1)}
-              </span>
-              <span style={{ fontSize: 11, whiteSpace: "nowrap" }}>
-                {a.kind === "shown" && <span className="tag">shown</span>} {plural(a.plays, "play")}
-                {a.plays > maxPlays && ` · ${a.plays - maxPlays} over`}
-              </span>
-            </span>
-          </li>
-        ))}
-        {list.length === 0 && <li style={{ padding: 16 }}>{onlyMistakes ? "No mistakes." : "No sentences done yet."}</li>}
-      </ol>
-    </div>
-  );
-}
-
-function Cell({ big, small }: { big: string; small: string }) {
-  return (
-    <div className="cell">
-      <div className="big">{big}</div>
-      <div className="small">{small}</div>
     </div>
   );
 }

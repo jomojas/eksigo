@@ -21,6 +21,7 @@ const PATHS = {
   x: '<path d="M6 6l12 12M18 6L6 18"/>',
   rss: '<path d="M5 19h.01M5 12a7 7 0 017 7M5 5a14 14 0 0114 14"/>',
   focus: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
+  flag: '<path d="M5 21V4h12l-2 4.5 2 4.5H5"/>',
   replay: '<path d="M4 12a8 8 0 108-8H8"/><path d="M10 1L7 4l3 3"/>',
 } as const;
 

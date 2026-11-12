@@ -99,7 +99,7 @@ export type Item = {
 
 export type Mark = "correct" | "spelling" | "wrong" | "missing" | "extra" | "gap" | "ignored";
 export type Marked = { text: string; mark: Mark };
-export type Comparison = { original: Marked[]; typed: Marked[]; credit: number; total: number; spelling: number; flags: Flagged[] };
+export type Comparison = { original: Marked[]; typed: Marked[]; credit: number; total: number; spelling: number };
 
 export type Attempt = {
   id: number;
@@ -112,12 +112,7 @@ export type Attempt = {
   seconds: number;
 };
 
-/** What the learner marked (typed in the box, lib/markup.ts), on the original's written words `from..=to`. */
-export type Flag = "unknown" | "missed" | "unexpected" | "spelling" | "keep";
-export type Flagged = { from: number; to: number; flag: Flag };
-
-/** Typed, or the original shown (and maybe edited and marked); both are scored on the box. Or an ad. */
-export type AnswerKind = "typed" | "shown" | "ad";
+export type AnswerKind = "typed" | "known" | "ad";
 export type Answer = {
   idx: number;
   kind: AnswerKind;
@@ -128,18 +123,19 @@ export type Answer = {
   total: number;
   spelling: number;
   comparison: Comparison | null;
-  flags: Flagged[];
 };
 
-export type Session = { attempt: Attempt; answers: Answer[] };
+/** An attempt, its answers, and the sentences flagged for the review. */
+export type Session = { attempt: Attempt; answers: Answer[]; flagged: number[] };
 
 export type Summary = {
   attempt: Attempt;
   done: number;
-  /** Sentences where the original was shown. */
-  shown: number;
+  known: number;
   withMistakes: number;
   ads: number;
+  /** Sentences flagged for the review. */
+  flagged: number;
   credit: number;
   total: number;
   spelling: number;
@@ -152,7 +148,7 @@ export type Summary = {
 export type Practice = {
   attemptId: number;
   position: number;
-  /** Sentences answered (typed or shown). */
+  /** Sentences answered (typed or known). */
   done: number;
   sentences: number;
   transcriptDone: boolean;
@@ -253,6 +249,8 @@ export const backend = {
   savePosition: (attemptId: number, position: number, seconds: number) =>
     call<void>("dictation_position", { attemptId, position, seconds }, () => sample.savePosition(attemptId, position, seconds)),
   finishDictation: (attemptId: number) => call<Summary>("dictation_finish", { attemptId }, () => sample.finishDictation(attemptId)),
+  session: (attemptId: number) => call<Session>("dictation_session", { attemptId }, () => sample.session(attemptId)),
+  flag: (attemptId: number, idx: number, on: boolean) => call<void>("dictation_flag", { attemptId, idx, on }, () => sample.flag(attemptId, idx, on)),
   summary: (attemptId: number) => call<Summary>("dictation_summary", { attemptId }, () => sample.summary(attemptId)),
   attempts: (itemId: number) => call<Summary[]>("dictation_attempts", { itemId }, () => sample.attempts(itemId)),
   inProgress: () => call<InProgress[]>("dictation_in_progress", {}, () => sample.inProgress()),

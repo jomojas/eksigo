@@ -136,17 +136,6 @@ export function PlaybackSettings({ settings: s, update, onSpeed }: Props) {
           />
         </span>
       </div>
-      <div className="prop" style={{ flexWrap: "wrap", rowGap: 6 }}>
-        Show the original
-        <span className="seg" role="group" aria-label="Show the original" style={{ marginLeft: "auto" }}>
-          <button type="button" aria-pressed={s.showOriginal === "end"} onClick={() => update({ showOriginal: "end" })}>
-            When I stop
-          </button>
-          <button type="button" aria-pressed={s.showOriginal === "each"} onClick={() => update({ showOriginal: "each" })}>
-            Each sentence
-          </button>
-        </span>
-      </div>
     </div>
   );
 }

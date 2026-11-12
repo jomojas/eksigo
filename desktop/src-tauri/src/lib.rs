@@ -333,6 +333,14 @@ fn library_remove(app: AppHandle, db: State<Db>, downloads: State<Downloads>, tr
 struct Session {
     attempt: dictation::Attempt,
     answers: Vec<dictation::Answer>,
+    /// Sentences flagged for the review.
+    flagged: Vec<i64>,
+}
+
+fn session(conn: &rusqlite::Connection, attempt: dictation::Attempt) -> anyhow::Result<Session> {
+    let answers = dictation::answers(conn, attempt.id)?;
+    let flagged = dictation::flagged(conn, attempt.id)?;
+    Ok(Session { attempt, answers, flagged })
 }
 
 /// Opens dictation of an item: the unfinished attempt, or a new one (`again` starts a new one regardless).
@@ -341,14 +349,13 @@ fn dictation_start(app: AppHandle, db: State<Db>, item_id: i64, again: bool) -> 
     let s = {
         let conn = db.conn();
         let attempt = dictation::start(&conn, item_id, again).map_err(err)?;
-        let answers = dictation::answers(&conn, attempt.id).map_err(err)?;
-        Session { attempt, answers }
+        session(&conn, attempt).map_err(err)?
     };
     let _ = app.emit("practice", ());
     Ok(s)
 }
 
-/// Saves the answer to sentence `idx`: "typed" or "shown" (the box compared with the original, the marks counted), or "ad".
+/// Saves the answer to sentence `idx`: "typed" (compared with the original), "known" or "ad".
 #[tauri::command]
 fn dictation_answer(
     app: AppHandle,
@@ -387,6 +394,22 @@ fn dictation_finish(app: AppHandle, db: State<Db>, attempt_id: i64) -> CmdResult
     dictation::finish(&conn, attempt_id).map_err(err)?;
     let _ = app.emit("practice", ());
     dictation::summary(&conn, attempt_id).map_err(err)
+}
+
+/// One attempt with its answers, for its review (from the Episode page).
+#[tauri::command]
+fn dictation_session(db: State<Db>, attempt_id: i64) -> CmdResult<Session> {
+    let conn = db.conn();
+    let attempt = dictation::attempt(&conn, attempt_id).map_err(err)?;
+    session(&conn, attempt).map_err(err)
+}
+
+/// Flags sentence `idx` for the review, or takes the flag off.
+#[tauri::command]
+fn dictation_flag(app: AppHandle, db: State<Db>, attempt_id: i64, idx: i64, on: bool) -> CmdResult<()> {
+    dictation::flag(&db.conn(), attempt_id, idx, on).map_err(err)?;
+    let _ = app.emit("practice", ());
+    Ok(())
 }
 
 #[tauri::command]
@@ -488,6 +511,8 @@ pub fn run() {
             dictation_position,
             dictation_finish,
             dictation_summary,
+            dictation_session,
+            dictation_flag,
             dictation_attempts,
             dictation_in_progress,
             play,

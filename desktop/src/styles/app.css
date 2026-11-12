@@ -826,57 +826,58 @@ select.btn {
   color: var(--ink-tertiary);
 }
 
-/* The learner's own marks in the original (1–5). Shapes rather than colours: one accent only. */
-.f-unknown.f-from::before {
-  content: "⟨";
+/* A sentence flagged for the review. */
+.flag-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--primary);
+  white-space: nowrap;
 }
-.f-unknown.f-to::after {
-  content: "⟩";
-}
-.f-missed.f-from::before {
-  content: "[";
-}
-.f-missed.f-to::after {
-  content: "]";
-}
-.f-from::before,
-.f-to::after {
-  color: var(--ink-subtle);
-  font-weight: 600;
-  padding: 0 1px;
-}
-.f-unexpected {
-  background: var(--select-fill);
-  border-radius: 4px;
-  padding: 1px 3px;
-}
-.f-spelling {
-  text-decoration: underline dotted var(--ink-muted);
-  text-decoration-thickness: 2px;
-  text-underline-offset: 4px;
-}
-.f-keep {
-  text-decoration: underline double var(--ink-muted);
-  text-underline-offset: 4px;
-}
-.markup-help {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 14px;
+.done-row .flag-label {
   font-size: 12px;
+}
+.flag-btn {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  color: var(--ink-tertiary);
+}
+.flag-btn.on {
+  color: var(--primary);
+}
+.flag-btn.on svg {
+  fill: currentColor;
+}
+.btn[aria-pressed="true"].flag-label svg,
+.flag-label svg {
+  fill: currentColor;
+}
+
+/* The review: the original and what was typed, side by side. */
+.review-row {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) minmax(0, 1fr) 84px;
+  gap: 16px;
+  align-items: start;
+  padding: 12px 14px 12px 0;
+  border-bottom: 1px solid var(--hairline);
+  font-size: 14px;
+  line-height: 1.65;
+}
+.review-row:last-child {
+  border-bottom: none;
+}
+.review-head {
+  align-items: center;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  background: var(--surface-2);
+  font: 500 12px/1 var(--font-text);
   color: var(--ink-subtle);
 }
-.markup-help code {
-  font: 500 12px/1 var(--font-mono);
-  color: var(--ink-muted);
-  background: var(--surface-2);
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius-xs);
-  padding: 2px 5px;
-}
-.original {
-  font: 400 18px/1.6 var(--font-text);
-  color: var(--ink);
+.review-flagged {
+  background: var(--selected);
 }
 .current-num {
   width: 28px;
@@ -887,17 +888,6 @@ select.btn {
   color: var(--ink);
   padding-top: 1px;
 }
-.tag {
-  font: 500 10px/1 var(--font-text);
-  letter-spacing: 0.3px;
-  text-transform: uppercase;
-  color: var(--ink-subtle);
-  border: 1px solid var(--hairline-strong);
-  border-radius: var(--radius-pill);
-  padding: 2px 6px;
-  white-space: nowrap;
-}
-
 .scrim {
   position: fixed;
   inset: 0;

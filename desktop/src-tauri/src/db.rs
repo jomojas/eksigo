@@ -89,7 +89,7 @@ const MIGRATIONS: &[&str] = &[
     CREATE TABLE answers (
         attempt_id INTEGER NOT NULL REFERENCES attempts(id) ON DELETE CASCADE,
         idx        INTEGER NOT NULL,              -- the sentence
-        kind       TEXT NOT NULL,                 -- 'typed', 'shown' (since 5; was 'known') or 'ad'
+        kind       TEXT NOT NULL,                 -- 'typed', 'known' (I know this one) or 'ad' (left out)
         original   TEXT NOT NULL,
         typed      TEXT NOT NULL DEFAULT '',
         plays      INTEGER NOT NULL DEFAULT 0,
@@ -100,10 +100,18 @@ const MIGRATIONS: &[&str] = &[
         answered_at INTEGER NOT NULL,
         PRIMARY KEY (attempt_id, idx)
     );",
-    // 5: "I know this one" became "show the original": the original goes into the box, and the learner
-    // marks what they didn't know or catch. `flags` is the JSON list of those marks.
+    // 5: tried and replaced by 6: "show the original" with marks typed in the box.
     "ALTER TABLE answers ADD COLUMN flags TEXT NOT NULL DEFAULT '[]';
     UPDATE answers SET kind = 'shown', typed = original WHERE kind = 'known';",
+    // 6: back to "I know this one"; instead of marking words, the learner flags whole sentences to look
+    // at in the review. A flag can be set before the sentence is answered, so it has its own table.
+    "UPDATE answers SET kind = 'known', typed = '' WHERE kind = 'shown';
+    ALTER TABLE answers DROP COLUMN flags;
+    CREATE TABLE flagged (
+        attempt_id INTEGER NOT NULL REFERENCES attempts(id) ON DELETE CASCADE,
+        idx        INTEGER NOT NULL,
+        PRIMARY KEY (attempt_id, idx)
+    );",
 ];
 
 pub struct Db(pub Mutex<Connection>);

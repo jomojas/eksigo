@@ -7,6 +7,7 @@ import { Art } from "../components/Art";
 import { Icon } from "../components/Icon";
 import { Kbd, Page } from "../components/Shell";
 import { backend, on, type Episode, type Item, type Sentence, type Show, type Summary, type TranscriptStatus } from "../lib/backend";
+import { reviewPath } from "./Review";
 import { dictationPath, percent, progressLabel } from "../lib/dictation";
 import { fraction, useDownloads, useLibraryChanged } from "../lib/downloads";
 import { bytes, clock, plural, shortDate, whenDay } from "../lib/format";
@@ -211,6 +212,7 @@ function Actions({ episode, item, onChange, onError }: { episode: Episode | null
 
 /** Every attempt at this episode, newest first. The full results view for each arrives on day 5. */
 function Attempts({ item }: { item: Item }) {
+  const navigate = useNavigate();
   const [list, setList] = useState<Summary[]>([]);
   useEffect(() => {
     const load = () => backend.attempts(item.id).then(setList, () => {});
@@ -226,12 +228,22 @@ function Attempts({ item }: { item: Item }) {
       </h2>
       <div className="panel" style={{ overflow: "hidden" }}>
         {shown.map((s) => (
-          <div key={s.attempt.id} className="tr" style={{ gridTemplateColumns: "120px minmax(0,1fr) 90px 80px 110px", borderBottom: "1px solid var(--hairline)" }}>
+          <div
+            key={s.attempt.id}
+            className="tr"
+            role="link"
+            tabIndex={0}
+            title="Open the review"
+            onClick={() => navigate(reviewPath(item.id, s.attempt.id))}
+            onKeyDown={(e) => e.key === "Enter" && navigate(reviewPath(item.id, s.attempt.id))}
+            style={{ gridTemplateColumns: "120px minmax(0,1fr) 90px 80px 110px", borderBottom: "1px solid var(--hairline)", cursor: "pointer" }}
+          >
             <span>{whenDay(s.attempt.startedAt)}</span>
             <span>
               {plural(s.done, "sentence")}
               {s.transcriptDone ? ` of ${s.sentences - s.ads}` : ""}
-              {s.shown > 0 && ` · ${s.shown} shown`}
+              {s.known > 0 && ` · ${s.known} known`}
+              {s.flagged > 0 && ` · ${s.flagged} flagged`}
             </span>
             <b className="mono" style={{ fontSize: 12 }}>
               {percent(s.accuracy)}
