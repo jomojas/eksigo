@@ -51,6 +51,31 @@ pub struct Week {
     pub streak: i64,
 }
 
+/// Days with any practice, oldest first.
+fn practised_days(conn: &Connection) -> Result<Vec<NaiveDate>> {
+    let mut st = conn.prepare("SELECT day FROM practice_days GROUP BY day HAVING SUM(seconds) > 0 ORDER BY day")?;
+    let days = st.query_map([], |r| r.get::<_, String>(0))?.collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(days.iter().filter_map(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok()).collect())
+}
+
+/// (current, best): days in a row with practice. The current run ends today, or yesterday while today
+/// has none yet; the best is the longest run ever, the current one included.
+pub fn streaks(conn: &Connection, today: NaiveDate) -> Result<(i64, i64)> {
+    let days = practised_days(conn)?;
+    let (mut best, mut run, mut prev) = (0i64, 0i64, None::<NaiveDate>);
+    for &d in &days {
+        run = if prev.and_then(|p| p.succ_opt()) == Some(d) { run + 1 } else { 1 };
+        best = best.max(run);
+        prev = Some(d);
+    }
+    let yesterday = today - Days::new(1);
+    let current = match prev {
+        Some(last) if last == today || last == yesterday => run,
+        _ => 0,
+    };
+    Ok((current, best))
+}
+
 /// The week shown on Today.
 pub fn week(conn: &Connection, today: NaiveDate) -> Result<Week> {
     let from = today - Days::new(6);
@@ -63,20 +88,7 @@ pub fn week(conn: &Connection, today: NaiveDate) -> Result<Week> {
         })
         .collect();
 
-    let mut st = conn.prepare("SELECT day FROM practice_days GROUP BY day HAVING SUM(seconds) > 0 ORDER BY day DESC")?;
-    let practised = st.query_map([], |r| r.get::<_, String>(0))?.collect::<rusqlite::Result<Vec<_>>>()?;
-    let mut at = if practised.first() == Some(&day_of(today)) { today } else { today - Days::new(1) };
-    let mut streak = 0;
-    for p in practised {
-        if p > day_of(at) {
-            continue;
-        }
-        if p != day_of(at) {
-            break;
-        }
-        streak += 1;
-        at = at - Days::new(1);
-    }
+    let streak = streaks(conn, today)?.0;
     Ok(Week { days, streak })
 }
 
@@ -120,5 +132,10 @@ mod tests {
         assert_eq!(week(&c, day("2026-11-12")).unwrap().streak, 4);
         // A day missed ends it.
         assert_eq!(week(&c, day("2026-11-14")).unwrap().streak, 0);
+        assert_eq!(streaks(&c, day("2026-11-14")).unwrap(), (0, 4));
+        for d in ["2026-10-01", "2026-10-02", "2026-10-03", "2026-10-04", "2026-10-05"] {
+            add(&c, d, "words", 60).unwrap();
+        }
+        assert_eq!(streaks(&c, day("2026-11-12")).unwrap(), (4, 5));
     }
 }

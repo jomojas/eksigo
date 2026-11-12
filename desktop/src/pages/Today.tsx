@@ -1,5 +1,4 @@
-// Screens still to come. Each becomes the real screen on the day noted in docs/ROADMAP.md;
-// until then they show what a new learner would see with nothing added yet.
+// Today: what to practise next, and the week so far.
 
 import { type ReactNode, useEffect, useState } from "react";
 import { useNavigate } from "react-router";
@@ -10,10 +9,6 @@ import { backend, inApp, on, type NewEpisode, type PracticeCounts, type Week } f
 import { dictationPath, useInProgress } from "../lib/dictation";
 import { clock, plural, practised, whenDay } from "../lib/format";
 import { usePracticeCounts } from "../lib/words";
-
-function Soon({ day }: { day: string }) {
-  return <span className="badge badge-next">Arrives {day}</span>;
-}
 
 /** The week panel's data, kept fresh as practice happens. */
 function useWeek(): Week | null {
@@ -316,25 +311,6 @@ export function Today() {
           </section>
         </div>
         <WeekPanel week={week} words={words} />
-      </div>
-    </Page>
-  );
-}
-
-export function Progress() {
-  return (
-    <Page crumbs={["Progress"]}>
-      <div className="page">
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <h1 className="h1" style={{ flexGrow: 1 }}>
-            Progress
-          </h1>
-          <Soon day="after v0.1" />
-        </div>
-        <div className="empty">
-          <h2 className="h2">Your year of practice</h2>
-          <p>A grid of the days you practised, your streak and how your accuracy changes over time.</p>
-        </div>
       </div>
     </Page>
   );

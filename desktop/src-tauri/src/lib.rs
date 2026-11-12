@@ -10,6 +10,7 @@ pub mod models;
 pub mod player;
 pub mod podcasts;
 mod practice;
+mod progress;
 pub mod sentences;
 mod storage;
 pub mod transcribe;
@@ -566,6 +567,12 @@ fn activity_week(db: State<Db>) -> CmdResult<WeekSummary> {
     Ok(WeekSummary { week, words_started })
 }
 
+/// Everything on the Progress page.
+#[tauri::command]
+fn progress_get(db: State<Db>) -> CmdResult<progress::Progress> {
+    progress::progress(&db.conn(), chrono::Local::now().date_naive()).map_err(err)
+}
+
 /// Today's session, at most twenty words.
 #[tauri::command]
 fn practice_queue(db: State<Db>) -> CmdResult<Vec<practice::Item>> {
@@ -709,6 +716,7 @@ pub fn run() {
             practice_counts,
             shows_new_episodes,
             activity_week,
+            progress_get,
             practice_queue,
             practice_check,
             practice_grade,

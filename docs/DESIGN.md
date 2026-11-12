@@ -120,7 +120,12 @@ Checking a typed translation needs an LLM, so it can only come later, as an AI f
 - **Shadowing:** play a sentence, record yourself, then compare the two. Local Whisper turns the recording into text and shows which words came through clearly. Free.
 - **Retell:** summarise the episode out loud. *(AI)* feedback on content and grammar, plus a better version.
 
-**Progress:** a year grid like GitHub's (a square per day, darker for more minutes), the streak, minutes this week, accuracy over time, words known, and later the most common mistake types.
+**Progress (decided 2026-11-12):**
+- Four numbers: the current streak and the best (days in a row with any practice, dictation or words); time practised in the last seven days; **dictation accuracy** this calendar month and the change in points from last month; words known out of all saved words.
+- **Accuracy is dictation only**: the share of words heard right, half off for a spelling mistake, as on the results screen. Word practice grades are a different measure and stay out of it.
+- A year grid like GitHub's: 53 weeks, Monday to Sunday, darker for more minutes (under 15, under 30, under 60, an hour or more). **Minutes only**, no switch to sentences; the day under the mouse (or clicked, else today) is written out above the grid: time, episodes, sentences, words practised.
+- Accuracy over the last 12 weeks, one point per week starting Monday; weeks without dictation leave a gap. Hovering shows the week's accuracy and sentences.
+- *What you mishear most* is shown as coming later; it needs mistakes sorted by kind.
 
 ---
 
