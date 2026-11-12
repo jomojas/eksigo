@@ -112,6 +112,9 @@ const MIGRATIONS: &[&str] = &[
         idx        INTEGER NOT NULL,
         PRIMARY KEY (attempt_id, idx)
     );",
+    // 7: answers that came back from 'shown' kept the marks and score of that version; a known
+    // sentence counts as all correct and has no word-by-word comparison to show.
+    "UPDATE answers SET credit = total, spelling = 0, marks = NULL WHERE kind = 'known';",
 ];
 
 pub struct Db(pub Mutex<Connection>);
