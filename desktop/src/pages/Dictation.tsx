@@ -538,6 +538,7 @@ function Dictation({
     return (
       <Page crumbs={crumbs} actions={actions}>
         <Review
+          item={{ id: item.id, path: item.path }}
           summary={{ ...summary, flagged: flagged.size }}
           answers={answers}
           flagged={flagged}

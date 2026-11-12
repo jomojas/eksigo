@@ -1,9 +1,10 @@
 # Offline dictionaries
 
-Each file is a zlib-compressed SQLite database of English words with meanings in one language. It was built in v1 and copied here unchanged.
+Each file is a raw-deflate-compressed SQLite database of English words with meanings in one language. Most were built in v1 and copied here unchanged; `zh-1` is built by `scripts/build_zh_dictionary.py` from ECDICT's `ecdict.csv` and also has phrases ("follow through", "put sb off") and an English `definition` column.
 
 | File | Meanings in | Source | License |
 |---|---|---|---|
+| `zh-1.sqlite.deflate` | Chinese (and English definitions) | [ECDICT](https://github.com/skywind3000/ECDICT): 49,562 common words, 58,372 phrases, 37,794 word forms | MIT |
 | `en-1.sqlite.deflate` | English | [ECDICT](https://github.com/skywind3000/ECDICT) | MIT |
 | `ja-1.sqlite.deflate` | Japanese | [EJDict](https://github.com/kujirahand/EJDict) | Public domain |
 | `es-1.sqlite.deflate` | Spanish | [Wiktionary](https://www.wiktionary.org/) | CC BY-SA |

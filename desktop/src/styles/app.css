@@ -854,6 +854,105 @@ select.btn {
   fill: currentColor;
 }
 
+.note-box {
+  font: 400 13px/1.5 var(--font-text);
+  color: var(--ink);
+  background: var(--canvas);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+  resize: vertical;
+  outline: none;
+}
+.note-box:focus {
+  border-color: var(--primary);
+  box-shadow: var(--focus-ring);
+}
+.sel-mark {
+  background: var(--select-fill);
+  border-radius: 3px;
+}
+.link-btn {
+  font: inherit;
+  color: var(--ink-muted);
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: var(--hairline-strong);
+  text-underline-offset: 3px;
+}
+.select {
+  font: 500 13px/1 var(--font-text);
+  color: var(--ink);
+  background: var(--surface-1);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-md);
+  height: 32px;
+  padding: 0 10px;
+}
+
+/* The dictionary card. */
+.lookup {
+  position: fixed;
+  z-index: 40;
+  background: var(--surface-2);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.lookup-sub {
+  font-size: 12px;
+  color: var(--ink-subtle);
+  margin-top: 4px;
+}
+.lookup-ipa {
+  font-size: 11px;
+  color: var(--ink-subtle);
+}
+.lookup-found {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+.lookup-found b {
+  font-weight: 500;
+  color: var(--ink);
+}
+.lookup-note {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ink-subtle);
+}
+.lookup-credit {
+  font-size: 11px;
+  color: var(--ink-tertiary);
+}
+.wordline {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr);
+  gap: 4px 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  padding: 7px 0;
+  border-top: 1px solid var(--hairline);
+}
+.wordline b {
+  font-weight: 500;
+  color: var(--ink);
+}
+
 /* The review: the original and what was typed, side by side. */
 .review-row {
   display: grid;

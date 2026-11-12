@@ -1,19 +1,22 @@
 // The review of one attempt: the original and what was typed, side by side, with mistakes marked and the
 // sentences flagged during dictation. Shown when stopping or finishing, and from the Episode page
-// (`/library/:itemId/review/:attemptId`). Looking words up and saving them arrives with My words (day 5).
+// (`/library/:itemId/review/:attemptId`). Selecting words in the original opens the dictionary card.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type MouseEvent } from "react";
 import { useNavigate, useParams } from "react-router";
 import { Icon } from "../components/Icon";
-import { MarkedText } from "../components/Marks";
+import { LookupCard, type Selection } from "../components/LookupCard";
+import { IndexedText, MarkedText, selectedWords } from "../components/Marks";
 import { Page } from "../components/Shell";
 import { backend, on, type Answer, type Item, type Sentence, type Session, type Summary } from "../lib/backend";
 import { dictationPath, percent, useDictationSettings } from "../lib/dictation";
 import { clock, plural } from "../lib/format";
+import { usePlayer } from "../lib/playback";
 
 type Filter = "all" | "flagged" | "mistakes";
 
 export function Review({
+  item,
   summary: s,
   answers,
   flagged,
@@ -24,6 +27,7 @@ export function Review({
   onAgain,
   onBack,
 }: {
+  item: { id: number; path: string | null };
   summary: Summary;
   answers: Map<number, Answer>;
   flagged: Set<number>;
@@ -48,6 +52,28 @@ export function Review({
   const shown = rows.filter((i) => filter === "all" || (filter === "flagged" ? flagged.has(i) : mistaken(i)));
   const counts = { all: rows.length, flagged: rows.filter((i) => flagged.has(i)).length, mistakes: rows.filter(mistaken).length };
   const finished = s.attempt.finishedAt !== null;
+  const player = usePlayer(item.path);
+  const [playing, setPlaying] = useState<number | null>(null);
+  const playRow = (i: number) => {
+    const sen = sentences[i];
+    if (!sen) return;
+    setPlaying(i);
+    player.play(sen.startMs, sen.endMs, 1);
+  };
+  const [lookup, setLookup] = useState<Selection | null>(null);
+  /** Words selected in an original open the dictionary card. */
+  const onSelect = (i: number, e: MouseEvent<HTMLElement>) => {
+    const root = e.currentTarget;
+    window.setTimeout(() => {
+      const range = selectedWords(root);
+      const text = answers.get(i)?.original ?? sentences[i]?.text ?? "";
+      if (!range) return;
+      const words = text.split(/\s+/).filter(Boolean);
+      const r = window.getSelection()?.getRangeAt(0).getBoundingClientRect();
+      if (!r) return;
+      setLookup({ itemId: item.id, idx: i, from: range[0], to: range[1], text: words.slice(range[0], range[1] + 1).join(" "), typed: answers.get(i)?.typed ?? "", rect: r });
+    }, 0);
+  };
 
   return (
     <div className="page" style={{ gap: 16 }}>
@@ -95,7 +121,7 @@ export function Review({
           ))}
         </span>
         <span style={{ fontSize: 12 }}>
-          <span className="w w-missing">Boxed</span> words were missed, <span className="w w-wrong">red</span> ones wrong,{" "}
+          Select words in the original to look them up. <span className="w w-missing">Boxed</span> words were missed, <span className="w w-wrong">red</span> ones wrong,{" "}
           <span className="w w-spelling">underlined</span> ones misspelled (half a word).
           {s.ads > 0 && ` ${plural(s.ads, "sentence")} skipped as ads.`}
         </span>
@@ -118,6 +144,16 @@ export function Review({
                 </span>
                 <button
                   type="button"
+                  className="btn flag-btn"
+                  style={{ borderRadius: 9999, color: "var(--ink-muted)" }}
+                  aria-label={`Play sentence ${i + 1}`}
+                  onClick={() => (player.playing && playing === i ? player.stop() : playRow(i))}
+                  disabled={!item.path || !sentences[i]}
+                >
+                  <Icon name={player.playing && playing === i ? "pause" : "play"} size={11} />
+                </button>
+                <button
+                  type="button"
                   className={`btn btn-ghost flag-btn${isFlagged ? " on" : ""}`}
                   aria-pressed={isFlagged}
                   aria-label={isFlagged ? `Unflag sentence ${i + 1}` : `Flag sentence ${i + 1}`}
@@ -127,7 +163,9 @@ export function Review({
                   <Icon name="flag" size={13} />
                 </button>
               </span>
-              <span style={{ color: "var(--ink)" }}>{a?.comparison ? <MarkedText words={a.comparison.original} /> : (a?.original ?? sentences[i]?.text ?? "")}</span>
+              <span style={{ color: "var(--ink)", cursor: "text" }} onMouseUp={(e) => onSelect(i, e)}>
+                {a?.comparison ? <MarkedText words={a.comparison.original} indexed /> : <IndexedText text={a?.original ?? sentences[i]?.text ?? ""} />}
+              </span>
               <span>
                 {!a ? (
                   <span style={{ color: "var(--ink-tertiary)" }}>Not done yet</span>
@@ -155,6 +193,16 @@ export function Review({
             </div>
           );
         })}
+        {lookup && (
+          <LookupCard
+            sel={lookup}
+            path={item.path}
+            onClose={() => {
+              setLookup(null);
+              window.getSelection()?.removeAllRanges();
+            }}
+          />
+        )}
         {shown.length === 0 && (
           <div style={{ padding: 16 }}>
             {filter === "flagged" ? "No flagged sentences. Press Mod D while dictating to flag one." : filter === "mistakes" ? "No mistakes." : "No sentences done yet."}
@@ -219,6 +267,7 @@ export function ReviewScreen() {
         </div>
       ) : session && summary ? (
         <Review
+          item={{ id: itemId, path: item?.path ?? null }}
           summary={summary}
           answers={answers}
           flagged={flagged}

@@ -2,6 +2,8 @@ pub mod audio;
 pub mod compare;
 pub mod db;
 pub mod dictation;
+mod dictionary;
+mod words;
 pub mod library;
 pub mod models;
 pub mod player;
@@ -429,6 +431,53 @@ fn dictation_in_progress(db: State<Db>) -> CmdResult<Vec<dictation::InProgress>>
     dictation::in_progress(&db.conn()).map_err(err)
 }
 
+// ---------- dictionary and My words ----------
+
+/// Looks up a selection in the dictionary for `lang`, downloading the dictionary the first time.
+#[tauri::command]
+async fn dictionary_lookup(app: AppHandle, dicts: State<'_, dictionary::Dictionaries>, lang: String, text: String) -> CmdResult<dictionary::Lookup> {
+    let dir = app.path().app_data_dir().map_err(err)?.join("dictionaries");
+    dicts.ensure(&dir, &lang).await.map_err(err)?;
+    dicts.with(&lang, |d| d.lookup(&text)).map_err(err)
+}
+
+/// Where each word of a sentence is in the audio, for playing a selection as said.
+#[tauri::command]
+fn sentence_word_times(db: State<Db>, item_id: i64, idx: i64) -> CmdResult<Vec<[i64; 2]>> {
+    words::word_times(&db.conn(), item_id, idx).map_err(err)
+}
+
+#[tauri::command]
+fn words_add(app: AppHandle, db: State<Db>, word: words::NewWord) -> CmdResult<words::SavedWord> {
+    let w = words::add(&db.conn(), &word).map_err(err)?;
+    let _ = app.emit("words", ());
+    Ok(w)
+}
+
+#[tauri::command]
+fn words_list(db: State<Db>) -> CmdResult<Vec<words::SavedWord>> {
+    words::list(&db.conn()).map_err(err)
+}
+
+#[tauri::command]
+fn words_saved(db: State<Db>, text: String) -> CmdResult<Option<i64>> {
+    words::saved(&db.conn(), &text).map_err(err)
+}
+
+#[tauri::command]
+fn words_note(app: AppHandle, db: State<Db>, id: i64, note: String) -> CmdResult<()> {
+    words::set_note(&db.conn(), id, &note).map_err(err)?;
+    let _ = app.emit("words", ());
+    Ok(())
+}
+
+#[tauri::command]
+fn words_remove(app: AppHandle, db: State<Db>, id: i64) -> CmdResult<()> {
+    words::remove(&db.conn(), id).map_err(err)?;
+    let _ = app.emit("words", ());
+    Ok(())
+}
+
 // ---------- playback ----------
 
 #[derive(Deserialize)]
@@ -469,6 +518,7 @@ pub fn run() {
                 let _ = handle.emit("playback", e);
             }));
             app.manage(ModelCancel::default());
+            app.manage(dictionary::Dictionaries::default());
             let transcriber = Transcriber::start(app.handle().clone());
             // Transcripts interrupted by quitting carry on where they stopped.
             for item_id in transcribe::unfinished(&app.state::<Db>().conn())? {
@@ -515,6 +565,13 @@ pub fn run() {
             dictation_flag,
             dictation_attempts,
             dictation_in_progress,
+            dictionary_lookup,
+            sentence_word_times,
+            words_add,
+            words_list,
+            words_saved,
+            words_note,
+            words_remove,
             play,
             stop_playback,
         ])

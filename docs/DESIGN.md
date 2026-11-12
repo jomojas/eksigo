@@ -92,7 +92,13 @@ The **review** (after stopping or finishing, and from each attempt on the Episod
 **Today's Continue list:** clicking a row opens the episode's page; **Resume** opens dictation.
 
 **Results: the original and the learner's text side by side**, sentence by sentence like a split diff, each row with a play button. Words the learner missed are marked in the original; wrong words are red in the learner's text. Above: accuracy, sentences done, known, flagged, time; filters All, Flagged, With mistakes; a filter for sentences with mistakes; **Resume** and **Practise these again**. The same results open later from the Episode page.
-- **Selecting a word or phrase** in either column shows its offline dictionary meaning and pronunciation, **Add to My words** (`A`), and later, with an AI key, *Explain in this sentence*.
+- **Selecting a word or phrase** in the original opens a dictionary card (decided 2026-11-12). Any selection works, whether or not the dictionary has it:
+  1. **The whole phrase**, made flexible: case and punctuation ignored, words in their base form (*followed through* finds *follow through*), people and things matched to the dictionary's *sb* / *sth* / *one's* or left out (*give it up* finds *give up*).
+  2. Otherwise **the longest phrase inside** the selection, and **every word on its own** with its meaning; the card says plainly "Not in the dictionary as a phrase".
+  3. **Pronunciation for anything selected:** ▶ *As said in the episode* plays exactly those words, from the word timings transcription keeps; *Slow voice* reads them with the computer's own voice. The dictionary's IPA where it has it.
+  4. **Add to My words** (`A`) for any selection, with the sentence, what was typed, the words' place in the audio, the meaning (or each word's), and the learner's own note.
+  5. *Explain in this sentence* needs an AI key (later).
+- **The dictionary:** downloaded once from `GET /v1/dictionaries` for the language chosen in Settings (*Word meanings in*, by default the computer's language). Chinese (`zh-1`, 5 MB) is built from ECDICT: about 50,000 common words, 58,000 phrases and their word forms, with English definitions.
 - Later: mark **"the transcript is wrong here"** (doesn't count against the learner), adjust a sentence's start or end, merge or split sentences.
 - Later: **mistakes grouped by rules, without AI**: dropped small words (weak forms: *to, of, have, can*), numbers, names, similar-sounding words (*can/can't, fifteen/fifty*, from a pronunciation dictionary), dropped endings (*-ed, -s*).
 - *(AI, optional)* a written review in the learner's language (section 5).

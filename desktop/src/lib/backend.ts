@@ -144,6 +144,39 @@ export type Summary = {
   transcriptDone: boolean;
 };
 
+// ---------- dictionary and My words ----------
+
+export type Entry = { headword: string; ipa: string; meaning: string; definition: string };
+export type WordLine = { text: string; entry: Entry | null };
+/** A selection looked up: the whole phrase, or the longest phrase inside it, and each word on its own. */
+export type Lookup = { query: string; entry: Entry | null; whole: boolean; words: WordLine[]; source: string };
+
+export type WordContext = {
+  itemId: number | null;
+  itemTitle: string | null;
+  path: string | null;
+  idx: number;
+  sentence: string;
+  typed: string;
+  startMs: number;
+  endMs: number;
+  addedAt: number;
+};
+export type SavedWord = { id: number; text: string; headword: string; ipa: string; meaning: string; note: string; addedAt: number; contexts: WordContext[] };
+export type NewWord = {
+  text: string;
+  headword: string;
+  ipa: string;
+  meaning: string;
+  note: string;
+  itemId: number;
+  idx: number;
+  /** The selected written words of the sentence, from..=to. */
+  from: number;
+  to: number;
+  typed: string;
+};
+
 /** The latest dictation of an item, for the Practice column. */
 export type Practice = {
   attemptId: number;
@@ -255,6 +288,15 @@ export const backend = {
   attempts: (itemId: number) => call<Summary[]>("dictation_attempts", { itemId }, () => sample.attempts(itemId)),
   inProgress: () => call<InProgress[]>("dictation_in_progress", {}, () => sample.inProgress()),
 
+  // Dictionary and My words
+  lookup: (lang: string, text: string) => call<Lookup>("dictionary_lookup", { lang, text }, () => sample.lookup(text)),
+  wordTimes: (itemId: number, idx: number) => call<[number, number][]>("sentence_word_times", { itemId, idx }, () => sample.wordTimes(itemId, idx)),
+  addWord: (word: NewWord) => call<SavedWord>("words_add", { word }, () => sample.addWord(word)),
+  words: () => call<SavedWord[]>("words_list", {}, () => sample.words()),
+  wordSaved: (text: string) => call<number | null>("words_saved", { text }, () => sample.wordSaved(text)),
+  setWordNote: (id: number, note: string) => call<void>("words_note", { id, note }, () => sample.setWordNote(id, note)),
+  removeWord: (id: number) => call<void>("words_remove", { id }, () => sample.removeWord(id)),
+
   // Playback
   play: (args: { id: number; path: string; startMs: number; endMs: number | null; speed: number }) =>
     call<void>("play", { args }, () => sample.play(args)),
@@ -274,6 +316,7 @@ type Events = {
   download: DownloadProgress;
   library: null;
   practice: null;
+  words: null;
   playback: PlaybackEvent;
   transcript: TranscriptStatus;
   "model-download": ModelProgress;
