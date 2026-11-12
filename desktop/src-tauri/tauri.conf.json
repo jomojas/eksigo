@@ -61,7 +61,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "UPDATER_PUBLIC_KEY",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEI2OEY5NEE1M0UxNjNCQkMKUldTOE94WStwWlNQdG85VkIzYTNaY09taFVYbHBVL1pyaDkyS0srcUtjNUpUb2Jtbi81OCtpbWYK",
       "endpoints": [
         "https://github.com/jomojas/eksigo/releases/latest/download/latest.json"
       ],
