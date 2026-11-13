@@ -15,7 +15,7 @@ fn day_of(d: NaiveDate) -> String {
     d.format("%Y-%m-%d").to_string()
 }
 
-/// Adds `seconds` of practice of `kind` ("dictation", later "words") to `day`.
+/// Adds `seconds` of practice of `kind` ("dictation", "words" or "listening") to `day`.
 pub fn add(conn: &Connection, day: &str, kind: &str, seconds: i64) -> Result<()> {
     if seconds <= 0 {
         return Ok(());
@@ -26,6 +26,11 @@ pub fn add(conn: &Connection, day: &str, kind: &str, seconds: i64) -> Result<()>
         params![day, kind, seconds],
     )?;
     Ok(())
+}
+
+/// Seconds of `kind` on `day`.
+pub fn seconds_on(conn: &Connection, day: &str, kind: &str) -> Result<i64> {
+    Ok(conn.query_row("SELECT COALESCE(SUM(seconds), 0) FROM practice_days WHERE day = ?1 AND kind = ?2", params![day, kind], |r| r.get(0))?)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -106,9 +111,12 @@ mod tests {
         add(&c, "2026-11-10", "words", 10).unwrap();
         add(&c, "2026-11-12", "dictation", 0).unwrap();
         add(&c, "2026-11-12", "dictation", 5).unwrap();
+        add(&c, "2026-11-12", "listening", 40).unwrap();
+        assert_eq!(seconds_on(&c, "2026-11-12", "listening").unwrap(), 40);
+        assert_eq!(seconds_on(&c, "2026-11-12", "dictation").unwrap(), 5);
         assert_eq!(
             days(&c, "2026-11-01").unwrap(),
-            vec![Day { day: "2026-11-10".into(), seconds: 100 }, Day { day: "2026-11-12".into(), seconds: 5 }]
+            vec![Day { day: "2026-11-10".into(), seconds: 100 }, Day { day: "2026-11-12".into(), seconds: 45 }]
         );
         assert_eq!(days(&c, "2026-11-11").unwrap().len(), 1);
     }

@@ -24,6 +24,9 @@ const PATHS = {
   speaker: '<path d="M11 5L6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 010 7"/>',
   flag: '<path d="M5 21V4h12l-2 4.5 2 4.5H5"/>',
   replay: '<path d="M4 12a8 8 0 108-8H8"/><path d="M10 1L7 4l3 3"/>',
+  eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  "eye-off": '<path d="M3 3l18 18M10.6 5.1A10.9 10.9 0 0112 5c6.5 0 10 7 10 7a17 17 0 01-3.2 4.1M6.6 6.6C3.8 8.4 2 12 2 12s3.5 7 10 7a9.7 9.7 0 005.4-1.6"/>',
+  headphones: '<path d="M3 14v-2a9 9 0 0118 0v2"/><rect x="3" y="14" width="4" height="6" rx="1.5"/><rect x="17" y="14" width="4" height="6" rx="1.5"/>',
 } as const;
 
 export type IconName = keyof typeof PATHS;
