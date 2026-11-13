@@ -44,6 +44,28 @@ export type ModelProgress = { id: string; received: number; total: number; state
 export type Account = { id: number; name: string | null; email: string | null; plan: "free" | "premium"; provider: string };
 export type Provider = "apple" | "google";
 
+/** AI (ai.rs): ChatGPT (Plus or Pro) through the browser, or the learner's own key. `using`: what explanations use. */
+export type AiStatus = {
+  using: "chatgpt" | "key" | null;
+  chatgpt: { email: string | null; plan: string | null; limited: boolean; reconnect: boolean } | null;
+  key: { provider: string; name: string; model: string; baseUrl: string } | null;
+};
+/** `baseUrl` only for "other"; an empty `model` is the provider's usual one. */
+export type AiKey = { provider: string; baseUrl: string; model: string };
+/** Why an AI request gave no answer. `notSetUp`: neither ChatGPT nor a key; `limit`: ChatGPT's weekly limit for Eksigo. */
+export type AiProblem = { kind: "notSetUp" | "limit" | "reconnect" | "failed"; message?: string };
+export type WhyItem = { original: string; typed: string; said: string; why: string };
+export type Why = { items: WhyItem[] };
+/** `sentences`: numbers as shown, from 1. */
+export type EpisodeReview = { summary: string; patterns: { title: string; count: number; explanation: string; sentences: number[] }[]; next: string };
+export const MANAGE_USAGE = "https://chatgpt.com/settings/usage";
+
+/** An AI command's failure as a problem to show (Rust sends `{kind, message}`; anything else is a plain failure). */
+export function aiProblem(e: unknown): AiProblem {
+  if (e && typeof e === "object" && "kind" in e) return e as AiProblem;
+  return { kind: "failed", message: String(e) };
+}
+
 /** A show in search results, charts or recommendations. */
 export type Listing = {
   appleId: string | null;
@@ -211,6 +233,8 @@ export type SavedWord = {
   ipa: string;
   meaning: string;
   note: string;
+  /** What it meant in its sentence, from the AI; empty without. */
+  explanation: string;
   addedAt: number;
   level: Level;
   /** When it next comes up for practice; null while new. */
@@ -269,6 +293,8 @@ export type NewWord = {
   ipa: string;
   meaning: string;
   note: string;
+  /** What it means in this sentence, from the AI; empty without. */
+  explanation?: string;
   itemId: number;
   idx: number;
   /** The selected written words of the sentence, from..=to. */
@@ -356,6 +382,20 @@ export const backend = {
   openSignInAgain: () => call<void>("account_open_again", {}, () => undefined),
   signOut: () => call<void>("account_sign_out", {}, () => sample.signOut()),
   deleteAccount: () => call<void>("account_delete", {}, () => sample.signOut()),
+
+  // AI. `aiConnect` resolves once the browser comes back: null when cancelled. Failures of the requests below
+  // are AiProblem objects (see aiProblem).
+  aiStatus: () => call<AiStatus>("ai_status", {}, () => sample.aiStatus()),
+  aiConnect: () => call<AiStatus | null>("ai_connect", {}, () => sample.aiConnect()),
+  aiCancel: () => call<void>("ai_cancel", {}, () => sample.aiCancel()),
+  aiOpenAgain: () => call<void>("ai_open_again", {}, () => undefined),
+  aiDisconnect: () => call<AiStatus>("ai_disconnect", {}, () => sample.aiDisconnect()),
+  aiSetKey: (key: AiKey, secret: string) => call<AiStatus>("ai_set_key", { key, secret }, () => sample.aiSetKey(key, secret)),
+  aiRemoveKey: () => call<AiStatus>("ai_remove_key", {}, () => sample.aiRemoveKey()),
+  aiExplain: (lang: string, text: string, sentence: string) => call<string>("ai_explain", { lang, text, sentence }, () => sample.aiExplain(text)),
+  aiWhy: (lang: string, attemptId: number, idx: number) => call<Why>("ai_why", { lang, attemptId, idx }, () => sample.aiWhy()),
+  aiReview: (lang: string, attemptId: number) => call<EpisodeReview | null>("ai_review", { lang, attemptId }, () => sample.aiReview()),
+  manageUsage: () => (inApp ? openUrl(MANAGE_USAGE) : Promise.resolve(void window.open(MANAGE_USAGE, "_blank"))),
 
   translationModel: () => call<TranslationModel>("translation_model", {}, () => sample.translationModel()),
   downloadTranslation: () => call<void>("translation_download", {}, () => sample.downloadTranslation()),
@@ -459,6 +499,7 @@ type Events = {
   transcript: TranscriptStatus;
   "model-download": ModelProgress;
   account: Account | null;
+  ai: AiStatus;
 };
 
 /** Listens to an event from the Rust core (sample.ts plays them in a browser). Returns the unlisten function. */

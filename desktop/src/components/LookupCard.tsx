@@ -1,9 +1,12 @@
 // The card for words selected in a review or on Listen (DESIGN.md, "Results"): one word's meaning from the
-// dictionary, or for several words one translation of them from the translator on this computer; the words
-// as said in the episode or read slowly; and Add to My words.
+// dictionary, or for several words one translation of them from the translator on this computer; with AI set
+// up, what they mean in this sentence (design D17); the words as said in the episode or read slowly; and Add
+// to My words, which keeps the explanation too.
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { backend, isTranslationModel, on, type Entry, type Lookup } from "../lib/backend";
+import { useNavigate } from "react-router";
+import { aiProblem, backend, isTranslationModel, on, type AiProblem, type Entry, type Lookup } from "../lib/backend";
+import { problemText, SETTINGS_AI, useAi } from "../lib/ai";
 import { usePlayer } from "../lib/playback";
 import { useActivity } from "../lib/transcripts";
 import { firstLine, speak, useMeaningLanguage } from "../lib/words";
@@ -18,6 +21,8 @@ export type Selection = {
   to: number;
   text: string;
   typed: string;
+  /** The whole sentence, for explaining the words in it. */
+  sentence: string;
   rect: DOMRect;
 };
 
@@ -25,6 +30,9 @@ const WIDTH = 360;
 
 /** The translation of a selection of several words. */
 type Machine = { state: "loading" } | { state: "done"; text: string } | { state: "missing" } | { state: "failed" };
+
+/** What the AI said a selection means in its sentence, by language, sentence and words: asked once per run. */
+const explained = new Map<string, string>();
 
 /** Ready to show: the first translation also loads the model, which takes a few seconds. */
 let translatorWarm = false;
@@ -55,6 +63,31 @@ export function LookupCard({
   const [machine, setMachine] = useState<Machine | null>(null);
   const [translatorReady, setTranslatorReady] = useState(0);
   const { translation: translatorProgress } = useActivity();
+  const { status: ai } = useAi();
+  const navigate = useNavigate();
+  const [explanation, setExplanation] = useState<{ state: "loading" } | { state: "done"; text: string } | { state: "problem"; problem: AiProblem } | null>(null);
+  const [retry, setRetry] = useState(0);
+  const usingAi = !!ai?.using;
+
+  // With AI set up, what the words mean in this sentence is asked for at once: no button to press.
+  useEffect(() => {
+    if (!usingAi) return setExplanation(null);
+    const key = `${lang}|${sel.sentence}|${sel.text}`;
+    const known = explained.get(key);
+    if (known) return setExplanation({ state: "done", text: known });
+    let live = true;
+    setExplanation({ state: "loading" });
+    backend.aiExplain(lang, sel.text, sel.sentence).then(
+      (text) => {
+        explained.set(key, text);
+        if (live) setExplanation({ state: "done", text });
+      },
+      (e) => live && setExplanation({ state: "problem", problem: aiProblem(e) }),
+    );
+    return () => {
+      live = false;
+    };
+  }, [usingAi, lang, sel.text, sel.sentence, retry]);
 
   useEffect(() => {
     let live = true;
@@ -108,7 +141,7 @@ export function LookupCard({
     const top = below + h > window.innerHeight - 12 ? Math.max(12, sel.rect.top - h - 8) : below;
     const left = Math.min(Math.max(12, sel.rect.left), window.innerWidth - WIDTH - 12);
     setPos({ top, left });
-  }, [sel.rect, result, error, docked, machine]);
+  }, [sel.rect, result, error, docked, machine, explanation]);
 
   const save = async () => {
     if (!result || savedId) return;
@@ -126,6 +159,7 @@ export function LookupCard({
         ipa: fromDictionary ? entry.ipa : "",
         meaning,
         note,
+        explanation: explanation?.state === "done" ? explanation.text : "",
         itemId: sel.itemId,
         idx: sel.idx,
         from: sel.from,
@@ -262,6 +296,68 @@ export function LookupCard({
         </label>
       )}
 
+      {result && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingTop: 12, borderTop: "1px solid var(--hairline)" }} aria-live="polite">
+          {!usingAi ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12 }} className="muted">
+              <span style={{ flexGrow: 1 }}>What it means in this sentence needs AI.</span>
+              <button
+                type="button"
+                className="btn btn-sm btn-ghost"
+                style={{ color: "var(--ink)" }}
+                onClick={() => {
+                  onClose();
+                  navigate(SETTINGS_AI);
+                }}
+              >
+                Set up AI
+              </button>
+            </div>
+          ) : (
+            <>
+              <div style={{ display: "flex", alignItems: "center" }}>
+                <span className="eyebrow">In this sentence</span>
+                <span style={{ flexGrow: 1 }} />
+                <span className="ai-source">
+                  <span className="dot dot-ok" aria-hidden="true" />
+                  {ai?.using === "chatgpt" ? "ChatGPT plan" : ai?.key?.name}
+                </span>
+              </div>
+              {explanation?.state === "done" && <div className="ai-text">{explanation.text}</div>}
+              {explanation?.state === "loading" && <div className="lookup-sub">Explaining…</div>}
+              {explanation?.state === "problem" && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <span className="lookup-sub" style={{ flexGrow: 1, minWidth: 180 }}>
+                    {problemText(explanation.problem)}
+                  </span>
+                  {explanation.problem.kind === "limit" ? (
+                    <button type="button" className="btn btn-sm" onClick={() => backend.manageUsage()}>
+                      Manage usage
+                      <Icon name="external" size={12} />
+                    </button>
+                  ) : explanation.problem.kind === "failed" ? (
+                    <button type="button" className="btn btn-sm btn-ghost" onClick={() => setRetry((n) => n + 1)}>
+                      Try again
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-ghost"
+                      onClick={() => {
+                        onClose();
+                        navigate(SETTINGS_AI);
+                      }}
+                    >
+                      Settings › AI
+                    </button>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
       <div style={{ display: "flex", alignItems: "center", gap: 8, paddingTop: 12, borderTop: "1px solid var(--hairline)", flexWrap: "wrap" }}>
         {savedId ? (
           <span className="flag-label" style={{ color: "var(--semantic-success)" }}>
@@ -274,12 +370,7 @@ export function LookupCard({
             Add to My words <Kbd keys="A" />
           </button>
         )}
-        <button type="button" className="btn btn-sm btn-ghost" disabled title="Needs an AI key (Settings, later)">
-          Explain in this sentence
-        </button>
-        <span className="badge badge-next" style={{ height: 20, fontSize: 11 }}>
-          AI key
-        </span>
+        {!savedId && explanation?.state === "done" && <span className="lookup-sub">The explanation is saved with it.</span>}
       </div>
       {dictionary && result?.source && <div className="lookup-credit">Meanings: {result.source}</div>}
     </div>

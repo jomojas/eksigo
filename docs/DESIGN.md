@@ -215,7 +215,11 @@ Only the aligned mistakes go to the AI, never the whole transcript. That keeps i
 
 - **One rule: every AI feature works with whatever AI the learner already pays for. Premium only means they need none**, plus server transcription. Nothing is locked behind payment that their own AI wouldn't unlock.
 - **How a learner connects AI (decided 2026-11-13).** Learners shouldn't have to create API keys. In Settings › AI and the welcome, in this order:
-  1. **Sign in with ChatGPT**, for ChatGPT Plus and Pro subscribers: OpenAI's official programme lets *approved* apps use the subscriber's plan, with a limit per app the subscriber sets. Eksigo applies to OpenAI when the AI work starts; until it is approved, this option isn't shown.
+  1. **Sign in with ChatGPT**, for ChatGPT Plus and Pro subscribers: OpenAI's official programme lets apps use the subscriber's plan, with a weekly limit per app the subscriber sets in ChatGPT. **No approval needed (checked 2026-11-13):** plan usage is open to open-source apps that run on the user's computer, which Eksigo is (AGPL, and AI calls go straight from the desktop). OpenAI's interest form is for paid or hosted apps; Eksigo fills it in for Premium, without waiting on it.
+     - How it works: the app listens on `127.0.0.1` and opens `auth.openai.com` with PKCE, a nonce, the scopes `openid profile email offline_access resource.invoke chatgpt.tokens.use.direct`, the resource `https://api.openai.com/v1` and a stable, opaque install ID (`ext_agent_host_id`, a `urn:uuid`). The first time, OpenAI registers this install and returns its client ID with the code; it is kept and reused. No secret, no key, no Eksigo server.
+     - Requests go to OpenAI's Responses API with the access token, `store: false` and streamed. The model is picked from the plan's list (a small one), not chosen by the learner. The refresh token renews the access token; Disconnect revokes it.
+     - When the weekly limit is reached, Settings, the card and the review say so and offer **Manage usage** (`chatgpt.com/settings/usage`). Dictation and the dictionary carry on as usual.
+     - OpenAI's DevKit is under a noncommercial licence, so Eksigo has its own Rust implementation of the same protocol rather than the kit's code.
   2. **Eksigo Premium**, for everyone else: sign in and subscribe on the web, nothing to set up. For many Chinese learners, who can't easily subscribe to ChatGPT or Claude, this is the main way.
   3. **Use my own key** (OpenAI, DeepSeek, Anthropic, Groq, OpenRouter or any OpenAI-compatible URL), under *Advanced*.
 - **Not offered: Claude subscriptions.** Anthropic's terms allow Claude Free, Pro and Max logins only in Claude.ai and Claude Code, and it has blocked third-party apps that used them (2026). Using a subscriber's Claude login would break and could get their account suspended. Nor does Eksigo borrow the Codex CLI's ChatGPT login unofficially. Either is reconsidered only if the provider offers an official programme.
@@ -223,7 +227,12 @@ Only the aligned mistakes go to the AI, never the whole transcript. That keeps i
   - Supported providers: OpenAI, DeepSeek, Anthropic, Groq, or any OpenAI-compatible endpoint.
   - The app calls the provider directly, and the key never reaches our server.
   - Keys are stored in the macOS Keychain or the Windows Credential Manager, never in a plain file.
-  - A *Test key* button checks the key, and the app shows the estimated cost per episode.
+  - *Test key* tries the key with a tiny request and keeps it only when it works. Each provider has a usual small model (OpenAI `gpt-5-mini`, DeepSeek `deepseek-chat`, Anthropic `claude-haiku-5-5`, Groq `openai/gpt-oss-120b`, OpenRouter `openai/gpt-5-mini`); another can be named. The estimated cost per episode is not shown yet: prices change too often to keep in the app.
+- **What AI does (built 2026-11-13, designs D16–D18), always in the learner's language with English words kept in English:**
+  - **In this sentence** on the lookup card: what the selection means here, asked as soon as the card opens; saved with the word.
+  - **Why did I miss this?** under a sentence with mistakes: each mistake, how it is actually said (IPA) and why it is easy to mishear.
+  - **Episode review**, written by itself when a finished episode's review opens: a line on how it went, the mistakes grouped by cause with their sentence numbers, and one thing to practise next time.
+  - Only the sentence, what was typed (mistakes marked) and the episode title are sent. Why and the review are kept on the computer per attempt and language, so each is asked once.
 - **One AI client:** our server acts as one more OpenAI-compatible provider, *Eksigo (Premium)*. Choosing it changes only the URL and uses the login token instead of a key; *Sign in with ChatGPT* likewise supplies a token for OpenAI. One code path to test.
 - **Premium is sold only on the web**, through a merchant of record (Paddle or Lemon Squeezy) that handles VAT and sales tax. Not in the iPhone app:
   - All AI is on the desktop now, and one payment channel means one webhook and one refund flow.

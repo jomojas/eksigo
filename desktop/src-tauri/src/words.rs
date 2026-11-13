@@ -36,6 +36,9 @@ pub struct NewWord {
     pub ipa: String,
     pub meaning: String,
     pub note: String,
+    /// What it means in this sentence, from the AI (ai.rs); empty without.
+    #[serde(default)]
+    pub explanation: String,
     pub item_id: i64,
     pub idx: i64,
     /// The selected written words of the sentence, `from..=to`.
@@ -71,6 +74,7 @@ pub struct SavedWord {
     pub ipa: String,
     pub meaning: String,
     pub note: String,
+    pub explanation: String,
     pub added_at: i64,
     /// "new", "learning", "familiar" or "known" (practice.rs).
     pub level: String,
@@ -96,10 +100,11 @@ pub fn add(conn: &Connection, w: &NewWord) -> Result<SavedWord> {
         conn.query_row("SELECT text, start_ms, end_ms FROM sentences WHERE item_id = ?1 AND idx = ?2", params![w.item_id, w.idx], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
     let t = now();
     conn.execute(
-        "INSERT INTO saved_words (text, headword, ipa, meaning, note, added_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)
+        "INSERT INTO saved_words (text, headword, ipa, meaning, note, explanation, added_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?7, ?6, ?6)
          ON CONFLICT (text) DO UPDATE SET updated_at = excluded.updated_at,
-           note = CASE WHEN saved_words.note = '' THEN excluded.note ELSE saved_words.note END",
-        params![w.text.trim(), w.headword, w.ipa, w.meaning, w.note.trim(), t],
+           note = CASE WHEN saved_words.note = '' THEN excluded.note ELSE saved_words.note END,
+           explanation = CASE WHEN saved_words.explanation = '' THEN excluded.explanation ELSE saved_words.explanation END",
+        params![w.text.trim(), w.headword, w.ipa, w.meaning, w.note.trim(), t, w.explanation.trim()],
     )?;
     let id: i64 = conn.query_row("SELECT id FROM saved_words WHERE text = ?1", [w.text.trim()], |r| r.get(0))?;
     conn.execute(
@@ -148,7 +153,7 @@ fn contexts(conn: &Connection, id: i64) -> Result<Vec<Context>> {
 pub fn get(conn: &Connection, id: i64) -> Result<SavedWord> {
     let mut w = conn.query_row(
         "SELECT id, text, headword, ipa, meaning, note, added_at, level, due_at,
-           (SELECT COUNT(*) FROM word_reviews WHERE word_id = saved_words.id AND mode != 'known')
+           (SELECT COUNT(*) FROM word_reviews WHERE word_id = saved_words.id AND mode != 'known'), explanation
          FROM saved_words WHERE id = ?1",
         [id],
         |r| {
@@ -163,6 +168,7 @@ pub fn get(conn: &Connection, id: i64) -> Result<SavedWord> {
                 level: r.get(7)?,
                 due_at: r.get(8)?,
                 reviews: r.get(9)?,
+                explanation: r.get(10)?,
                 contexts: vec![],
             })
         },
@@ -209,6 +215,7 @@ mod tests {
             ipa: String::new(),
             meaning: "坚持到底".into(),
             note: note.into(),
+            explanation: String::new(),
             item_id: 1,
             idx: 0,
             from,

@@ -12,8 +12,9 @@ import { useDictationSettings } from "../lib/dictation";
 import { MEANING_LANGUAGES, useMeaningLanguage } from "../lib/words";
 import { checkForUpdate, restartToUpdate, useUpdate } from "../lib/updates";
 import { cancelSignIn, deleteAccount, displayName, providerName, signIn, signOut, useAccount } from "../lib/account";
+import { cancelConnect, connectChatGpt, disconnectChatGpt, removeKey, saveKey, useAi } from "../lib/ai";
 
-// Settings (design D12): every section v0.1 has, plus AI, which arrives later. The open
+// Settings (design D12): every section, with AI (D16). The open
 // section is in the address (#/settings?s=storage), so other screens can link straight to one.
 
 type SectionId = "general" | "dictation" | "speech" | "dictionaries" | "ai" | "account" | "storage" | "shortcuts" | "about";
@@ -23,7 +24,7 @@ const SECTIONS: { id: SectionId; label: string; later?: boolean; words: string }
   { id: "dictation", label: "Dictation", words: "playback speed plays mode auto manual pause slow" },
   { id: "speech", label: "Speech model", words: "whisper transcription model download phrase translator machine translation" },
   { id: "dictionaries", label: "Dictionaries", words: "meanings language translation chinese japanese korean spanish french english" },
-  { id: "ai", label: "AI", later: true, words: "key openai deepseek explain" },
+  { id: "ai", label: "AI", words: "chatgpt key openai deepseek anthropic groq openrouter explain review" },
   { id: "account", label: "Account and sync", words: "sign in apple google iphone sync" },
   { id: "storage", label: "Storage", words: "space disk size folder data episodes audio delete" },
   { id: "shortcuts", label: "Shortcuts", words: "keys keyboard" },
@@ -91,9 +92,7 @@ export function Settings() {
           {section === "dictation" && <Dictation />}
           {section === "speech" && <Speech />}
           {section === "dictionaries" && <Dictionaries />}
-          {section === "ai" && (
-            <Later title="AI" text="Explanations of a word in its sentence and a review of each episode, in your language, using your own key from OpenAI, DeepSeek, Anthropic or any compatible service. The key stays in your computer's keychain." />
-          )}
+          {section === "ai" && <AiSection />}
           {section === "account" && <AccountSection />}
           {section === "storage" && <Storage onOpen={setSection} />}
           {section === "shortcuts" && <Shortcuts />}
@@ -117,18 +116,6 @@ function Header({ title, text }: { title: string; text?: string }) {
   );
 }
 
-function Later({ title, text }: { title: string; text: string }) {
-  return (
-    <section style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <h1 className="h1">{title}</h1>
-        <span className="badge badge-next">After v0.1</span>
-      </div>
-      <p className="muted" style={{ fontSize: 14, lineHeight: 1.6, maxWidth: 640 }}>{text}</p>
-    </section>
-  );
-}
-
 function Row({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 24, padding: "14px 0", borderBottom: "1px solid var(--hairline)" }}>
@@ -137,6 +124,282 @@ function Row({ label, hint, children }: { label: string; hint?: string; children
         {hint && <div className="muted" style={{ marginTop: 4, fontSize: 12 }}>{hint}</div>}
       </div>
       {children}
+    </div>
+  );
+}
+
+/** AI (design D16): ChatGPT first, Premium later, and the learner's own key under Advanced. */
+function AiSection() {
+  const { status, waiting, error } = useAi();
+  const [lang] = useMeaningLanguage();
+  const [advanced, setAdvanced] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const chatgpt = status?.chatgpt ?? null;
+  const connected = !!chatgpt && !chatgpt.reconnect;
+  const language = MEANING_LANGUAGES.find(([c]) => c === lang)?.[1] ?? "English";
+  if (status === undefined) return null;
+  return (
+    <section aria-labelledby="ai" style={{ maxWidth: 680, display: "flex", flexDirection: "column" }}>
+      <h1 id="ai" className="h1">
+        AI
+      </h1>
+      <p className="muted" style={{ fontSize: 14, lineHeight: 1.55, marginTop: 8, maxWidth: 620 }}>
+        AI explains a word in its sentence, tells you why you misheard a sentence, and reviews each episode you finish. It uses an AI you already have.
+        Only the sentence and what you typed are sent, never the audio.
+      </p>
+
+      <div className="panel ai-card" style={{ marginTop: 22 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <span className="ai-logo" aria-hidden="true">
+            <Icon name="chat" size={18} />
+          </span>
+          <div style={{ flexGrow: 1, minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <span className="account-row-t">ChatGPT</span>
+              {connected && !chatgpt.limited && (
+                <span className="badge" style={{ height: 20, fontSize: 11 }}>
+                  <span className="dot dot-ok" aria-hidden="true" />
+                  Connected
+                </span>
+              )}
+              {connected && chatgpt.limited && (
+                <span className="badge" style={{ height: 20, fontSize: 11 }}>
+                  <span className="dot dot-bad" aria-hidden="true" />
+                  Weekly limit reached
+                </span>
+              )}
+            </div>
+            <div className="account-row-h" style={{ marginTop: 3 }}>
+              {chatgpt?.reconnect
+                ? "The connection to ChatGPT ended. Connect again to keep using your plan."
+                : "For ChatGPT Plus and Pro. Eksigo uses your plan, so there's nothing extra to pay."}
+            </div>
+          </div>
+          {!connected && !waiting && (
+            <button type="button" className="btn btn-primary" style={{ height: 36, padding: "0 14px" }} onClick={connectChatGpt}>
+              {chatgpt?.reconnect ? "Connect again" : "Continue with ChatGPT"}
+            </button>
+          )}
+        </div>
+
+        {waiting && (
+          <div role="status" style={{ display: "flex", gap: 14, alignItems: "flex-start", borderTop: "1px solid var(--hairline)", paddingTop: 14 }}>
+            <span className="spin" aria-hidden="true" />
+            <div style={{ flexGrow: 1 }}>
+              <div className="account-row-t">Finish connecting in your browser</div>
+              <div className="account-row-h">
+                {inApp
+                  ? "OpenAI's page opened in your browser. Sign in, then allow Eksigo to use your ChatGPT plan. Eksigo carries on here when you're done."
+                  : "In the app, OpenAI's page opens in your browser. Here in the preview, ChatGPT connects after two seconds."}
+              </div>
+              <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                <button type="button" className="btn btn-sm" onClick={() => backend.aiOpenAgain()}>
+                  <Icon name="external" size={13} />
+                  Open the page again
+                </button>
+                <button type="button" className="btn btn-sm btn-ghost" onClick={cancelConnect}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {connected && (
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            {chatgpt.limited && (
+              <div className="ai-warn" role="alert" style={{ marginBottom: 12 }}>
+                <Icon name="alert" size={16} />
+                <div style={{ flexGrow: 1 }}>
+                  <div className="account-row-t">You've used this week's limit for Eksigo</div>
+                  <div className="account-row-h" style={{ color: "var(--ink-muted)" }}>
+                    You set it in ChatGPT. AI comes back when the limit resets, or raise it now. Dictation, looking words up and practice work as usual.
+                  </div>
+                </div>
+                <button type="button" className="btn btn-sm btn-primary" style={{ flexShrink: 0 }} onClick={() => backend.manageUsage()}>
+                  Manage usage
+                  <Icon name="external" size={12} />
+                </button>
+              </div>
+            )}
+            <div className="ai-kv">
+              <span>Account</span>
+              <b>{[chatgpt.email, chatgpt.plan && chatgpt.plan[0].toUpperCase() + chatgpt.plan.slice(1)].filter(Boolean).join(" · ") || "Connected"}</b>
+            </div>
+            <div className="ai-kv">
+              <span>Using ChatGPT plan</span>
+              <b style={{ fontWeight: 400, color: "var(--ink-subtle)" }}>for explanations and reviews, up to the weekly limit you set in ChatGPT</b>
+            </div>
+            <div style={{ display: "flex", gap: 8, paddingTop: 12, borderTop: "1px solid var(--hairline)" }}>
+              {!chatgpt.limited && (
+                <button type="button" className="btn btn-sm" onClick={() => backend.manageUsage()}>
+                  Manage usage
+                  <Icon name="external" size={12} />
+                </button>
+              )}
+              <button
+                type="button"
+                className="btn btn-sm btn-ghost"
+                disabled={busy}
+                onClick={async () => {
+                  setBusy(true);
+                  await disconnectChatGpt().catch(() => {});
+                  setBusy(false);
+                }}
+              >
+                Disconnect
+              </button>
+            </div>
+          </div>
+        )}
+        {error && (
+          <div className="notice notice-error" role="alert" style={{ fontSize: 13 }}>
+            {error}
+          </div>
+        )}
+      </div>
+
+      <div className="panel ai-card" style={{ marginTop: 10, flexDirection: "row", alignItems: "center", gap: 14 }}>
+        <span className="ai-logo" aria-hidden="true" style={{ font: "600 15px/1 var(--font-display)" }}>
+          E
+        </span>
+        <div style={{ flexGrow: 1, minWidth: 0 }}>
+          <div className="account-row-t">Eksigo Premium</div>
+          <div className="account-row-h" style={{ marginTop: 3 }}>
+            For when you don't have ChatGPT: subscribe once on eksigo.com, nothing to set up.
+          </div>
+        </div>
+        <span className="badge badge-next">Later</span>
+      </div>
+
+      <button type="button" className="ai-disclosure" aria-expanded={advanced || !!status.key} onClick={() => setAdvanced((a) => !a)} disabled={!!status.key}>
+        <Icon name={advanced || status.key ? "chevron" : "chevron-right"} size={12} />
+        Advanced
+      </button>
+      {!(advanced || status.key) ? (
+        <div className="muted" style={{ fontSize: 13, marginTop: 8, paddingLeft: 20 }}>
+          Use my own API key: OpenAI, DeepSeek, Anthropic, Groq, OpenRouter or any OpenAI-compatible service.
+        </div>
+      ) : (
+        <OwnKey />
+      )}
+
+      <p className="muted" style={{ fontSize: 12, lineHeight: 1.6, marginTop: 22, paddingTop: 14, borderTop: "1px solid var(--hairline)" }}>
+        Explanations are written in {language}, your language in General.{status.key && chatgpt ? " With ChatGPT and a key both set, Eksigo uses ChatGPT." : ""}
+      </p>
+    </section>
+  );
+}
+
+const KEY_PROVIDERS: [string, string][] = [
+  ["openai", "OpenAI"],
+  ["deepseek", "DeepSeek"],
+  ["anthropic", "Anthropic"],
+  ["groq", "Groq"],
+  ["openrouter", "OpenRouter"],
+  ["other", "Other"],
+];
+
+/** The learner's own API key: tested before it's kept, then shown without the key itself. */
+function OwnKey() {
+  const { status } = useAi();
+  const saved = status?.key ?? null;
+  const [provider, setProvider] = useState(saved?.provider ?? "openai");
+  const [secret, setSecret] = useState("");
+  const [baseUrl, setBaseUrl] = useState("");
+  const [model, setModel] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const store = isMac ? "Mac Keychain" : "Windows Credential Manager";
+  const test = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await saveKey({ provider, baseUrl, model }, secret);
+      setSecret("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+    setBusy(false);
+  };
+  if (saved)
+    return (
+      <div className="panel ai-card" style={{ marginTop: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span className="account-row-t">Your own API key</span>
+          <span className="badge" style={{ height: 20, fontSize: 11 }}>
+            <span className="dot dot-ok" aria-hidden="true" />
+            {status?.using === "key" ? "In use" : "Kept"}
+          </span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--ink-muted)" }}>
+          <span className="dot dot-ok" aria-hidden="true" />
+          Works with {saved.name}, model {saved.model}.
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, paddingTop: 12, borderTop: "1px solid var(--hairline)", fontSize: 12 }} className="muted">
+          <Icon name="lock" size={13} />
+          <span style={{ flexGrow: 1 }}>
+            Kept in the {store} and sent only to {saved.name}, never to Eksigo.
+          </span>
+          <button type="button" className="btn btn-sm btn-ghost" onClick={() => removeKey()}>
+            Remove key
+          </button>
+        </div>
+      </div>
+    );
+  return (
+    <div className="panel ai-card" style={{ marginTop: 10 }}>
+      <span className="account-row-t">Your own API key</span>
+      <span className="seg" role="group" aria-label="Provider" style={{ alignSelf: "flex-start", flexWrap: "wrap" }}>
+        {KEY_PROVIDERS.map(([id, name]) => (
+          <button key={id} type="button" aria-pressed={provider === id} onClick={() => setProvider(id)}>
+            {name}
+          </button>
+        ))}
+      </span>
+      {provider === "other" && (
+        <label className="lookup-note">
+          Address (OpenAI-compatible)
+          <span className="input">
+            <input type="url" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://api.example.com/v1" spellCheck={false} />
+          </span>
+        </label>
+      )}
+      <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+        <label className="lookup-note" style={{ flexGrow: 1 }}>
+          Key
+          <span className="input">
+            <input
+              type="password"
+              value={secret}
+              onChange={(e) => setSecret(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && !busy && test()}
+              placeholder="Paste the key"
+              autoComplete="off"
+              spellCheck={false}
+              className="mono"
+            />
+          </span>
+        </label>
+        <label className="lookup-note" style={{ width: 190 }}>
+          Model{provider === "other" ? "" : " (optional)"}
+          <span className="input">
+            <input type="text" value={model} onChange={(e) => setModel(e.target.value)} placeholder={provider === "other" ? "model name" : "the usual one"} spellCheck={false} />
+          </span>
+        </label>
+        <button type="button" className="btn" disabled={busy || !secret.trim()} onClick={test}>
+          {busy ? "Testing…" : "Test key"}
+        </button>
+      </div>
+      {error && (
+        <div className="notice notice-error" role="alert" style={{ fontSize: 13 }}>
+          {error}
+        </div>
+      )}
+      <div className="muted" style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
+        <Icon name="lock" size={13} />
+        The key is kept only when it works: in the {store}, sent only to the provider.
+      </div>
     </div>
   );
 }

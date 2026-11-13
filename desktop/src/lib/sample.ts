@@ -3,6 +3,10 @@
 
 import type {
   Account,
+  AiKey,
+  AiStatus,
+  EpisodeReview,
+  Why,
   Provider,
   GradeArgs,
   Graded,
@@ -196,6 +200,8 @@ function makeSentences(durationMs: number, upToMs: number): Sentence[] {
 
 const listeners = new Map<string, Set<(p: unknown) => void>>();
 let sampleAccount: Account | null = null;
+let sampleAi: AiStatus = { using: null, chatgpt: null, key: null };
+let cancelSampleAi: (() => void) | null = null;
 let cancelSampleSignIn: (() => void) | null = null;
 
 function emit(event: string, payload: unknown) {
@@ -233,6 +239,7 @@ const savedWords: SavedWord[] = SEED_WORDS.map(([text, meaning, idx], i) => {
     ipa: "",
     meaning,
     note: "",
+    explanation: "",
     addedAt: Math.floor(Date.now() / 1000) - (8 - i) * 86_400,
     level: (i < 2 ? "learning" : "new") as Level,
     dueAt: i < 2 ? Math.floor(Date.now() / 1000) - 3600 : null,
@@ -531,6 +538,82 @@ export const sample = {
     cancelSampleSignIn = null;
   },
 
+  // Pretend AI: connecting ChatGPT "opens the browser" and comes back after two seconds; any key works.
+  aiStatus: (): AiStatus => sampleAi,
+
+  aiConnect(): Promise<AiStatus | null> {
+    return new Promise((resolve) => {
+      const t = window.setTimeout(() => {
+        cancelSampleAi = null;
+        sampleAi = { ...sampleAi, using: "chatgpt", chatgpt: { email: "alex.lin@gmail.com", plan: "plus", limited: false, reconnect: false } };
+        emit("ai", sampleAi);
+        resolve(sampleAi);
+      }, 2000);
+      cancelSampleAi = () => {
+        window.clearTimeout(t);
+        resolve(null);
+      };
+    });
+  },
+
+  aiCancel() {
+    cancelSampleAi?.();
+    cancelSampleAi = null;
+  },
+
+  async aiDisconnect(): Promise<AiStatus> {
+    await new Promise((r) => setTimeout(r, 300));
+    sampleAi = { ...sampleAi, chatgpt: null, using: sampleAi.key ? "key" : null };
+    emit("ai", sampleAi);
+    return sampleAi;
+  },
+
+  async aiSetKey(key: AiKey, secret: string): Promise<AiStatus> {
+    await new Promise((r) => setTimeout(r, 800));
+    if (!secret.trim()) throw { kind: "failed", message: "Paste the key first." };
+    const names: Record<string, [string, string]> = { openai: ["OpenAI", "gpt-5-mini"], deepseek: ["DeepSeek", "deepseek-chat"], anthropic: ["Anthropic", "claude-haiku-5-5"], groq: ["Groq", "openai/gpt-oss-120b"], openrouter: ["OpenRouter", "openai/gpt-5-mini"], other: ["your provider", ""] };
+    const [name, model] = names[key.provider] ?? ["your provider", ""];
+    sampleAi = { ...sampleAi, key: { provider: key.provider, name, model: key.model || model, baseUrl: key.baseUrl }, using: sampleAi.chatgpt && !sampleAi.chatgpt.reconnect ? "chatgpt" : "key" };
+    emit("ai", sampleAi);
+    return sampleAi;
+  },
+
+  async aiRemoveKey(): Promise<AiStatus> {
+    sampleAi = { ...sampleAi, key: null, using: sampleAi.chatgpt ? "chatgpt" : null };
+    emit("ai", sampleAi);
+    return sampleAi;
+  },
+
+  async aiExplain(text: string): Promise<string> {
+    if (!sampleAi.using) throw { kind: "notSetUp" };
+    await new Promise((r) => setTimeout(r, 1200));
+    return `这里的 “${text}” 指把已经开始或答应的事真正做完，而不是半途而废。常见搭配：follow through on a plan / a promise。`;
+  },
+
+  async aiWhy(): Promise<Why> {
+    if (!sampleAi.using) throw { kind: "notSetUp" };
+    await new Promise((r) => setTimeout(r, 1500));
+    return {
+      items: [
+        { original: "don't have to", typed: "_", said: "/ˈdəʊn ˈhæftə/", why: "三个词连成一口气。don't 的 t 不发音，have to 读成 “haf-ta”，所以听起来只有两个音节。" },
+        { original: "start", typed: "stay", said: "/stɑː(t) bɪˈfɔː/", why: "start 末尾的 t 后面紧跟 before 的 b，t 几乎被吞掉，只剩 “star”。" },
+      ],
+    };
+  },
+
+  async aiReview(): Promise<EpisodeReview | null> {
+    if (!sampleAi.using) throw { kind: "notSetUp" };
+    await new Promise((r) => setTimeout(r, 2500));
+    return {
+      summary: "听得不错。漏听的地方几乎都不是生词，而是快语速下的连读、弱读和吞音。",
+      patterns: [
+        { title: "弱读和连读", count: 3, explanation: "have to 读成 haf-ta，going to 读成 gonna。", sentences: [1, 2] },
+        { title: "词尾的 t 和 d 被吞掉", count: 2, explanation: "start 听成 stay：后面紧跟辅音时，词尾的 t 几乎不发音。", sentences: [2] },
+      ],
+      next: "用 0.85× 再听这几句，先跟着读一遍再听写。",
+    };
+  },
+
   async signOut() {
     await new Promise((r) => setTimeout(r, 300));
     sampleAccount = null;
@@ -782,6 +865,7 @@ export const sample = {
         ipa: w.ipa,
         meaning: w.meaning,
         note: w.note.trim(),
+        explanation: w.explanation?.trim() ?? "",
         addedAt: now(),
         level: "new",
         dueAt: null,

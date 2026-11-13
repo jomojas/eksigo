@@ -179,6 +179,7 @@ export function ListenScreen() {
         to: range[1],
         text: words.slice(range[0], range[1] + 1).join(" "),
         typed: "",
+        sentence: sentences[i].text,
         rect: r.getBoundingClientRect(),
       });
     }, 0);
