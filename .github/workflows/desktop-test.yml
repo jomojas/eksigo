@@ -13,6 +13,14 @@ jobs:
       matrix:
         os: [macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    env:
+      # As in release.yml: whisper.cpp built for a common processor, not this runner's. Otherwise a build cached on a
+      # newer runner crashes on an older one (exit code 132, an instruction the processor doesn't have).
+      GGML_NATIVE: "OFF"
+      GGML_AVX: "ON"
+      GGML_AVX2: "ON"
+      GGML_FMA: "ON"
+      GGML_F16C: "ON"
     defaults:
       run:
         working-directory: desktop
@@ -30,6 +38,8 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
+          # Bumped when GGML_* below change: whisper.cpp's build doesn't notice them, so the cached copy would stay.
+          key: ggml-generic-cpu-v1
           workspaces: |
             desktop/src-tauri
             desktop/translate

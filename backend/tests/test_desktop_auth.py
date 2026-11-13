@@ -171,6 +171,7 @@ def test_cancelling_at_apple(client):
 
 
 def test_providers_that_are_not_set_up(settings, cfg):
+    cfg.auth.google_web_client_id = cfg.auth.apple_services_id = ""
     _, challenge = pkce()
     with TestClient(create_app(settings, cfg), follow_redirects=False) as c:
         for provider in ("apple", "google"):
