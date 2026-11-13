@@ -20,6 +20,14 @@ class AuthConfig(BaseModel):
     google_client_ids: list[str] = []
     # A session unused for this long must sign in again.
     session_idle_days: int = 180
+    # Signing in on the desktop goes through the browser and this server. Google: a "Web application" OAuth
+    # client whose secret is EKSIGO_GOOGLE_CLIENT_SECRET. Apple: a Services ID; with a Sign in with Apple key
+    # (team and key ID here, the key itself in EKSIGO_APPLE_PRIVATE_KEY) Apple sign-ins are revoked on deletion.
+    # Empty: that provider is off on the desktop.
+    google_web_client_id: str = ""
+    apple_services_id: str = ""
+    apple_team_id: str = ""
+    apple_key_id: str = ""
 
 
 class Config(BaseModel):
@@ -31,6 +39,9 @@ class Settings:
     data_dir: Path
     config_path: Path
     public_base_url: str
+    google_client_secret: str = ""
+    # The .p8 file's text. In .env on one line, with its line breaks written as \n.
+    apple_private_key: str = ""
 
     @property
     def db_path(self) -> Path:
@@ -42,6 +53,8 @@ def load_settings() -> Settings:
         data_dir=Path(os.environ.get("EKSIGO_DATA_DIR", BACKEND_DIR / "data")),
         config_path=Path(os.environ.get("EKSIGO_CONFIG", BACKEND_DIR / "config.yaml")),
         public_base_url=os.environ.get("EKSIGO_PUBLIC_BASE_URL", "http://localhost:8000").rstrip("/"),
+        google_client_secret=os.environ.get("EKSIGO_GOOGLE_CLIENT_SECRET", ""),
+        apple_private_key=os.environ.get("EKSIGO_APPLE_PRIVATE_KEY", "").replace("\\n", "\n").strip(),
     )
 
 

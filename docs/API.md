@@ -40,6 +40,22 @@ Returns `{"token": "...", "user": User}`.
 ```
 Returns `{"token": "...", "user": User}`. The e-mail is kept only when Google marks it verified.
 
+### Signing in on the desktop
+The browser goes through the server (DESIGN.md section 8):
+1. **`GET /v1/auth/desktop/{apple|google}?port=&state=&challenge=`.**
+   - `port`: the app's listener on `127.0.0.1`, 1024–65535.
+   - `state`: the app's own random value, at least 16 characters.
+   - `challenge`: PKCE S256 (base64url of the SHA-256 of the verifier).
+
+   The server redirects to Apple or Google, or answers `404` when that provider isn't set up.
+2. **`GET /v1/auth/google/callback` and `POST /v1/auth/apple/callback`** are for Apple and Google. They send the browser to `http://127.0.0.1:{port}/callback?state=…` with either:
+   - `code`: one use, valid 5 minutes, or
+   - `error`: `cancelled` or `failed`.
+
+   The learner has 15 minutes to finish in the browser.
+3. **`POST /v1/auth/desktop/token`** with `{"code": "...", "verifier": "..."}` returns `{"token": "...", "user": User}`. A wrong verifier uses up the code.
+4. **`GET /v1/auth/done?ok=1&provider=google`** is the page the app shows the browser at the end.
+
 ### `POST /v1/auth/dev`
 `{"name": "me"}`. Local development only: answers `404` unless the server runs with `EKSIGO_DEV_LOGIN=1`.
 
@@ -49,12 +65,13 @@ Ends this session. Returns `204`.
 ### `GET /v1/me`
 Returns `User`:
 ```json
-{"id": 12, "name": "Mei Lin", "email": "x@privaterelay.appleid.com", "plan": "free"}
+{"id": 12, "name": "Mei Lin", "email": "x@privaterelay.appleid.com", "plan": "free", "provider": "apple"}
 ```
-`plan` is `free` or `premium`.
+- `plan`: `free` or `premium`.
+- `provider`: `apple`, `google` or `dev`.
 
 ### `DELETE /v1/me`
-Deletes the account and all its sessions. Returns `204`. Account IDs are never reused.
+Deletes the account and all its sessions. If it signed in with Apple on the desktop and the server has a Sign in with Apple key, it also revokes the sign-in at Apple. Returns `204`. Account IDs are never reused.
 
 ## Free resources (no account needed)
 

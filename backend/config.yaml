@@ -8,3 +8,8 @@ auth:
   google_client_ids:
     - 1034250709893-dck1asb1ukaip3obnsl6ij55j0jp4t8e.apps.googleusercontent.com
   session_idle_days: 180
+  # Signing in on the desktop through the browser (backend/README.md, "Desktop sign-in"). Not secret; empty turns it off.
+  google_web_client_id: 1034250709893-3roeeq6oac36cptkovvi9j96r5ij1cfq.apps.googleusercontent.com
+  apple_services_id: com.eksigo.desktop.signin
+  apple_team_id: XHVYM8BZF6
+  apple_key_id: 2F643K3VP5

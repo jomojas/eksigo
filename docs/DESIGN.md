@@ -264,11 +264,23 @@ The VPS is small (2 vCPU, 4 GB RAM, 40 GB SSD), so **the server stores only smal
 Accounts stay **optional** on every app. Listening on the phone and dictating on the desktop need none. An account is asked for only to turn on sync (section 7) or Premium (section 6).
 - **Sign in with Apple or Google**, the same accounts on the phone and the desktop.
   - **iPhone:** the native sheets, as built (v1 design, "Accounts").
-  - **Desktop:** the system browser opens the provider's web sign-in and returns to the app. Sign in with Apple on the web needs a Services ID and a return URL set up in the Apple developer account; Google needs a desktop OAuth client.
+  - **Desktop:** the system browser opens the provider's web sign-in and returns to the app (built 2026-11-13). Apple and Google only return to an https address they know, so the browser goes through the server:
+    1. The app listens on `127.0.0.1` at a random port and opens `api.eksigo.com/v1/auth/desktop/{apple|google}` with that port, a state and a PKCE challenge.
+    2. The server sends the browser to Apple or Google, which send it back to `/v1/auth/{provider}/callback`.
+    3. The server checks the identity token, finds or creates the user, and sends the browser to the app's listener with a one-time code.
+    4. The app trades the code and its PKCE verifier for a session token. It then shows the browser the server's "You're signed in" page (design D15).
+
+    Setup: Apple needs a Services ID with the return URL `https://api.eksigo.com/v1/auth/apple/callback`. Google needs a *Web application* OAuth client with `https://api.eksigo.com/v1/auth/google/callback`.
+- **Decided 2026-11-13:**
+  - **No sign-in in the welcome.** It is offered in Settings › Account and sync and by "Sign in to sync" in the sidebar.
+  - **Apple and Google stay separate accounts.** No merging, even when the e-mail is the same.
+  - **Signing in keeps what is on the computer.** Its words and practice are added to the account silently, never with a question (with sync, section 7).
 - **How it works:** the provider's identity token goes to the server (`POST /v1/auth/apple`, `POST /v1/auth/google`). The server checks it, finds or creates the user, and returns an opaque session token. Sessions unused for 180 days expire.
 - **Where the session token lives:** the iPhone Keychain (this device only), and the macOS Keychain or Windows Credential Manager on the desktop. Never in a plain file.
 - **What the server stores:** the provider's user ID, the e-mail it shares, the name, the plan and the AI allowance use, plus the synced data in section 7.
-- **Sign out and delete:** in Settings on each app. Deleting removes the user, sessions, allowance use and synced data from the server (App Store guideline 5.1.1(v)). Still to do: revoke the Apple token on deletion, which needs a Sign in with Apple private key.
+- **Sign out and delete:** in Settings on each app. Signing out or deleting leaves everything on the computer. Deleting removes the user, sessions, allowance use and synced data from the server (App Store guideline 5.1.1(v)).
+  - Desktop Apple sign-ins are also revoked at Apple, once the server has a Sign in with Apple key (`EKSIGO_APPLE_PRIVATE_KEY`).
+  - Still to do: the iPhone's Apple sign-ins (the app must send its authorization code).
 
 ---
 

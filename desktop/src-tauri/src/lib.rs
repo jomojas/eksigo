@@ -1,3 +1,4 @@
+mod account;
 pub mod activity;
 pub mod audio;
 pub mod compare;
@@ -68,6 +69,69 @@ fn get_setting(db: State<Db>, key: String) -> CmdResult<Option<String>> {
 #[tauri::command]
 fn set_setting(db: State<Db>, key: String, value: String) -> CmdResult<()> {
     db.set_setting(&key, &value).map_err(err)
+}
+
+// ---------- the account (account.rs) ----------
+
+/// The account as last seen on this computer: shown at once, before the server answers.
+#[tauri::command]
+fn account_get(db: State<Db>) -> Option<account::Account> {
+    account::stored(&db)
+}
+
+/// The account as the server has it now; `None` when the session ended elsewhere.
+#[tauri::command]
+async fn account_refresh(app: AppHandle, db: State<'_, Db>) -> CmdResult<Option<account::Account>> {
+    let before = account::stored(&db);
+    let now = account::refresh(&db).await.map_err(err)?;
+    if now != before {
+        let _ = app.emit("account", &now);
+    }
+    Ok(now)
+}
+
+/// Opens the browser and waits for it to come back. `None`: cancelled, in the app or in the browser.
+#[tauri::command]
+async fn account_sign_in(app: AppHandle, db: State<'_, Db>, sign_in: State<'_, account::SignIn>, provider: String) -> CmdResult<Option<account::Account>> {
+    use tauri_plugin_opener::OpenerExt;
+    let open = |url: &str| app.opener().open_url(url, None::<&str>).map_err(|e| anyhow::anyhow!("Couldn't open the browser: {e}"));
+    match account::sign_in(&db, &sign_in, &provider, open).await {
+        Ok(a) => {
+            let _ = app.emit("account", Some(&a));
+            Ok(Some(a))
+        }
+        Err(account::NotSignedIn::Cancelled) => Ok(None),
+        Err(account::NotSignedIn::Failed(e)) => Err(e),
+    }
+}
+
+#[tauri::command]
+fn account_cancel(sign_in: State<account::SignIn>) {
+    sign_in.cancel();
+}
+
+/// Opens the waiting sign-in's page again, for a closed tab.
+#[tauri::command]
+fn account_open_again(app: AppHandle, sign_in: State<account::SignIn>) -> CmdResult<()> {
+    use tauri_plugin_opener::OpenerExt;
+    match sign_in.url() {
+        Some(url) => app.opener().open_url(url, None::<&str>).map_err(err),
+        None => Ok(()),
+    }
+}
+
+#[tauri::command]
+async fn account_sign_out(app: AppHandle, db: State<'_, Db>) -> CmdResult<()> {
+    account::sign_out(&db).await.map_err(err)?;
+    let _ = app.emit("account", None::<account::Account>);
+    Ok(())
+}
+
+#[tauri::command]
+async fn account_delete(app: AppHandle, db: State<'_, Db>) -> CmdResult<()> {
+    account::delete(&db).await.map_err(err)?;
+    let _ = app.emit("account", None::<account::Account>);
+    Ok(())
 }
 
 // ---------- speech models and transcripts ----------
@@ -758,6 +822,7 @@ pub fn run() {
                 let _ = handle.emit("playback", e);
             }));
             app.manage(ModelCancel::default());
+            app.manage(account::SignIn::default());
             app.manage(dictionary::Dictionaries::default());
             app.manage(TranslationDownload::default());
             app.manage(translate::Translator::default());
@@ -778,6 +843,13 @@ pub fn run() {
             app_info,
             get_setting,
             set_setting,
+            account_get,
+            account_refresh,
+            account_sign_in,
+            account_cancel,
+            account_open_again,
+            account_sign_out,
+            account_delete,
             models_list,
             model_download,
             model_cancel,

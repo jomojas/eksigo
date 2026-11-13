@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
-import { backend, inApp, isTranslationModel, on, type DictionaryList, type ModelInfo, type StorageUsage, type TranslationModel } from "../lib/backend";
+import { backend, inApp, isTranslationModel, on, type Account, type DictionaryList, type ModelInfo, type StorageUsage, type TranslationModel } from "../lib/backend";
 import { useTheme, type ThemeChoice } from "../lib/theme";
 import { Kbd, Page, useAppInfo } from "../components/Shell";
 import { Icon } from "../components/Icon";
@@ -11,8 +11,9 @@ import { PlaybackSettings } from "../components/DictationSettings";
 import { useDictationSettings } from "../lib/dictation";
 import { MEANING_LANGUAGES, useMeaningLanguage } from "../lib/words";
 import { checkForUpdate, restartToUpdate, useUpdate } from "../lib/updates";
+import { cancelSignIn, deleteAccount, displayName, providerName, signIn, signOut, useAccount } from "../lib/account";
 
-// Settings (design D12): every section v0.1 has, plus AI and Account, which arrive later. The open
+// Settings (design D12): every section v0.1 has, plus AI, which arrives later. The open
 // section is in the address (#/settings?s=storage), so other screens can link straight to one.
 
 type SectionId = "general" | "dictation" | "speech" | "dictionaries" | "ai" | "account" | "storage" | "shortcuts" | "about";
@@ -23,7 +24,7 @@ const SECTIONS: { id: SectionId; label: string; later?: boolean; words: string }
   { id: "speech", label: "Speech model", words: "whisper transcription model download phrase translator machine translation" },
   { id: "dictionaries", label: "Dictionaries", words: "meanings language translation chinese japanese korean spanish french english" },
   { id: "ai", label: "AI", later: true, words: "key openai deepseek explain" },
-  { id: "account", label: "Account and sync", later: true, words: "sign in apple google iphone sync" },
+  { id: "account", label: "Account and sync", words: "sign in apple google iphone sync" },
   { id: "storage", label: "Storage", words: "space disk size folder data episodes audio delete" },
   { id: "shortcuts", label: "Shortcuts", words: "keys keyboard" },
   { id: "about", label: "About", words: "version update updates licence license credits" },
@@ -93,9 +94,7 @@ export function Settings() {
           {section === "ai" && (
             <Later title="AI" text="Explanations of a word in its sentence and a review of each episode, in your language, using your own key from OpenAI, DeepSeek, Anthropic or any compatible service. The key stays in your computer's keychain." />
           )}
-          {section === "account" && (
-            <Later title="Account and sync" text="Sign in with Apple or Google to keep My words and your progress on the iPhone app too. Eksigo works fully without an account." />
-          )}
+          {section === "account" && <AccountSection />}
           {section === "storage" && <Storage onOpen={setSection} />}
           {section === "shortcuts" && <Shortcuts />}
           {section === "about" && <About />}
@@ -139,6 +138,214 @@ function Row({ label, hint, children }: { label: string; hint?: string; children
       </div>
       {children}
     </div>
+  );
+}
+
+/** Account and sync (design D14). Optional: everything works without one. */
+function AccountSection() {
+  const { account, waiting, error } = useAccount();
+  return (
+    <section aria-labelledby="account" style={{ maxWidth: 680 }}>
+      <h1 id="account" className="h1">
+        Account and sync
+      </h1>
+      {account === undefined ? null : account ? (
+        <SignedIn account={account} />
+      ) : (
+        <>
+          <p className="muted" style={{ fontSize: 14, lineHeight: 1.55, marginTop: 8, maxWidth: 600 }}>
+            An account keeps your words and practice the same on this computer and your iPhone. Everything works without one; nothing you've done is lost
+            when you sign in.
+          </p>
+          {waiting ? (
+            <div className="account-wait" role="status">
+              <span className="spin" aria-hidden="true" />
+              <div style={{ flexGrow: 1 }}>
+                <div className="account-row-t">Finish signing in in your browser</div>
+                <div className="account-row-h">
+                  {inApp
+                    ? `A ${providerName(waiting)} sign-in page opened in your browser. Eksigo carries on here when you're done.`
+                    : `In the app, a ${providerName(waiting)} sign-in page opens in your browser. Here in the preview, you're signed in after two seconds.`}
+                </div>
+                <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                  <button type="button" className="btn btn-sm" onClick={() => backend.openSignInAgain()}>
+                    <Icon name="upload" size={13} />
+                    Open the page again
+                  </button>
+                  <button type="button" className="btn btn-sm btn-ghost" onClick={cancelSignIn}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 10, marginTop: 24 }}>
+              <button type="button" className="btn provider provider-apple" onClick={() => signIn("apple")}>
+                <AppleLogo />
+                Continue with Apple
+              </button>
+              <button type="button" className="btn provider" onClick={() => signIn("google")}>
+                <GoogleLogo />
+                Continue with Google
+              </button>
+              <p className="muted" style={{ fontSize: 12, lineHeight: 1.5, marginTop: 4 }}>
+                Your browser opens to sign in, then sends you back here.
+              </p>
+            </div>
+          )}
+          {error && (
+            <div className="notice notice-error" role="alert" style={{ marginTop: 16, fontSize: 13 }}>
+              {error}
+            </div>
+          )}
+          <div className="syncs" aria-label="What syncs">
+            <div>
+              <Icon name="words" size={15} />
+              <span>
+                <b>My words</b>Each word with its sentences, your notes, its level and when it's next due.
+              </span>
+            </div>
+            <div>
+              <Icon name="progress" size={15} />
+              <span>
+                <b>Practice days</b>Minutes per day, so your streak and Progress are the same everywhere.
+              </span>
+            </div>
+            <div>
+              <Icon name="headphones" size={15} />
+              <span>
+                <b>Listening</b>Which episodes you've listened to, and where you stopped.
+              </span>
+            </div>
+            <div>
+              <Icon name="lock" size={15} />
+              <span>
+                <b>Stays on this computer</b>Audio, transcripts and what you typed, sentence by sentence.
+              </span>
+            </div>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+function SignedIn({ account }: { account: Account }) {
+  const [confirm, setConfirm] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const run = async (f: () => Promise<void>) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await f();
+    } catch (e) {
+      setError(String(e));
+      setBusy(false);
+    }
+  };
+  const name = displayName(account);
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 20, paddingBottom: 20, borderBottom: "1px solid var(--hairline)" }}>
+        <span className="avatar" aria-hidden="true">
+          {name.slice(0, 1).toUpperCase()}
+        </span>
+        <div style={{ flexGrow: 1, minWidth: 0 }}>
+          <div className="ell" style={{ font: "600 16px/1.3 var(--font-display)", letterSpacing: -0.2, color: "var(--ink)" }}>
+            {name}
+          </div>
+          <div className="muted ell" style={{ fontSize: 13, marginTop: 3 }}>
+            {[account.email, `signed in with ${providerName(account.provider)}`].filter(Boolean).join(" · ")}
+          </div>
+        </div>
+        <span className="badge">{account.plan === "premium" ? "Premium" : "Free"}</span>
+      </div>
+      <div className="account-row">
+        <div style={{ flexGrow: 1, minWidth: 0 }}>
+          <div className="account-row-t">Sync</div>
+          <div className="account-row-h">My words, practice days and listening start syncing in the next update. Until then, they stay on this computer.</div>
+        </div>
+        <span className="badge badge-next" style={{ flexShrink: 0 }}>
+          Next update
+        </span>
+      </div>
+      <div className="account-row">
+        <div style={{ flexGrow: 1, minWidth: 0 }}>
+          <div className="account-row-t">Plan</div>
+          <div className="account-row-h">
+            {account.plan === "premium" ? "Premium: everything, with AI included." : "Free: everything except the AI features. Premium, for AI without your own subscription, comes later."}
+          </div>
+        </div>
+        {account.plan !== "premium" && (
+          <span className="badge badge-next" style={{ flexShrink: 0 }}>
+            Premium · later
+          </span>
+        )}
+      </div>
+      <div className="account-row">
+        <div style={{ flexGrow: 1, minWidth: 0 }}>
+          <div className="account-row-t">Sign out</div>
+          <div className="account-row-h">Your words and practice stay on this computer; they just stop syncing.</div>
+        </div>
+        <button type="button" className="btn" style={{ flexShrink: 0 }} disabled={busy} onClick={() => run(signOut)}>
+          Sign out
+        </button>
+      </div>
+      {confirm ? (
+        <div className="account-confirm" role="alertdialog" aria-labelledby="delete-title" aria-describedby="delete-text">
+          <div id="delete-title" className="account-row-t">
+            Delete your account?
+          </div>
+          <div id="delete-text" style={{ fontSize: 13, lineHeight: 1.5, color: "var(--ink-muted)" }}>
+            Your account and everything synced to it are removed from Eksigo's server, and your iPhone signs out. This can't be undone. Everything stays on
+            this computer.
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button type="button" className="btn btn-danger" disabled={busy} onClick={() => run(deleteAccount)}>
+              {busy ? "Deleting…" : "Delete account"}
+            </button>
+            <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => setConfirm(false)} autoFocus>
+              Keep it
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="account-row" style={{ borderBottom: "none" }}>
+          <div style={{ flexGrow: 1, minWidth: 0 }}>
+            <div className="account-row-t">Delete account</div>
+            <div className="account-row-h">Removes your account and everything synced from Eksigo's server. This computer keeps its own copy.</div>
+          </div>
+          <button type="button" className="btn btn-ghost danger" style={{ flexShrink: 0 }} disabled={busy} onClick={() => setConfirm(true)}>
+            Delete account…
+          </button>
+        </div>
+      )}
+      {error && (
+        <div className="notice notice-error" role="alert" style={{ marginTop: 16, fontSize: 13 }}>
+          {error}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function AppleLogo({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M16.4 12.6c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.2-2.8.8-3.5.8-.7 0-1.8-.8-3-.8-1.5 0-3 .9-3.8 2.3-1.6 2.8-.4 7 1.2 9.3.8 1.1 1.7 2.4 2.9 2.3 1.2 0 1.6-.7 3-.7s1.8.7 3 .7c1.3 0 2.1-1.1 2.8-2.3.9-1.3 1.3-2.6 1.3-2.6s-2.5-1-2.5-3.7zM14.1 5.8c.6-.8 1.1-1.9 1-3-.9 0-2.1.6-2.7 1.4-.6.7-1.1 1.8-1 2.9 1 .1 2.1-.5 2.7-1.3z" />
+    </svg>
+  );
+}
+
+export function GoogleLogo({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+      <path fill="#4285F4" d="M22.5 12.3c0-.8-.1-1.5-.2-2.2H12v4.2h5.9a5 5 0 01-2.2 3.3v2.7h3.5c2.1-1.9 3.3-4.7 3.3-8z" />
+      <path fill="#34A853" d="M12 23c3 0 5.5-1 7.3-2.7l-3.5-2.7c-1 .7-2.3 1.1-3.8 1.1-2.9 0-5.4-2-6.3-4.7H2.1v2.8A11 11 0 0012 23z" />
+      <path fill="#FBBC05" d="M5.7 14c-.2-.7-.4-1.3-.4-2s.1-1.4.4-2V7.2H2.1a11 11 0 000 9.6z" />
+      <path fill="#EA4335" d="M12 5.4c1.6 0 3.1.6 4.2 1.7l3.2-3.2A11 11 0 0012 1 11 11 0 002.1 7.2L5.7 10c.9-2.7 3.4-4.6 6.3-4.6z" />
+    </svg>
   );
 }
 
