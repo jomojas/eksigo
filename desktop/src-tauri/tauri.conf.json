@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "identifier": "com.eksigo.desktop",
   "build": {
-    "beforeDevCommand": "npm run dev",
+    "beforeDevCommand": "node scripts/translator.mjs && npm run dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run build",
+    "beforeBuildCommand": "node scripts/translator.mjs && npm run build",
     "frontendDist": "../dist"
   },
   "app": {
@@ -57,7 +57,10 @@
     },
     "macOS": {
       "minimumSystemVersion": "11.0"
-    }
+    },
+    "externalBin": [
+      "binaries/eksigo-translate"
+    ]
   },
   "plugins": {
     "updater": {

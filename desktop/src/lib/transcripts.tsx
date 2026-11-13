@@ -1,26 +1,28 @@
 // Transcription progress for the whole app: the status bar, the Library and the Episode page all read it.
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { on, type ModelProgress, type TranscriptStatus } from "./backend";
+import { isTranslationModel, on, type ModelProgress, type TranscriptStatus } from "./backend";
 
-type Activity = { transcripts: Map<number, TranscriptStatus>; model: ModelProgress | null };
+/** `model`: the speech model downloading; `translation`: the phrase translator downloading. */
+type Activity = { transcripts: Map<number, TranscriptStatus>; model: ModelProgress | null; translation: ModelProgress | null };
 
-const Ctx = createContext<Activity>({ transcripts: new Map(), model: null });
+const Ctx = createContext<Activity>({ transcripts: new Map(), model: null, translation: null });
 
 export function TranscriptsProvider({ children }: { children: ReactNode }) {
   const [transcripts, setTranscripts] = useState(new Map<number, TranscriptStatus>());
   const [model, setModel] = useState<ModelProgress | null>(null);
+  const [translation, setTranslation] = useState<ModelProgress | null>(null);
 
   useEffect(() => {
     const offT = on("transcript", (s) => setTranscripts((m) => new Map(m).set(s.itemId, s)));
-    const offM = on("model-download", (p) => setModel(p.state === "downloading" ? p : null));
+    const offM = on("model-download", (p) => (isTranslationModel(p.id) ? setTranslation : setModel)(p.state === "downloading" ? p : null));
     return () => {
       offT();
       offM();
     };
   }, []);
 
-  return <Ctx.Provider value={{ transcripts, model }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ transcripts, model, translation }}>{children}</Ctx.Provider>;
 }
 
 export const useActivity = () => useContext(Ctx);

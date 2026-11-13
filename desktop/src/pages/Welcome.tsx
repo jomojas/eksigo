@@ -87,7 +87,8 @@ export function Welcome({ onDone }: { onDone: () => void }) {
           ) : (
             <>
               <Heading title="The speech model">
-                It turns episodes into sentences. It runs on this computer, so your audio never leaves it.
+                It turns episodes into sentences. It runs on this computer, so your audio never leaves it. After it, Eksigo also downloads
+                its phrase translator (about 1.1 GB), for phrases the dictionary doesn't have.
               </Heading>
               <div className="welcome-options" role="radiogroup" aria-label="Speech model">
                 <Option on title="Fast" size={fast ? bytes(fast.bytes) : "150 MB"} onPick={() => {}}>

@@ -1,4 +1,4 @@
-//! The speech models: which exist, which are on this computer, and downloading one. A download is checked
+//! The speech models and the phrase translation models: which exist, which are on this computer, and downloading one. A download is checked
 //! against the model's SHA-256 before it is used, and goes to a mirror when Hugging Face can't be reached.
 
 use std::{
@@ -24,6 +24,8 @@ pub struct Model {
     pub sha256: &'static str,
     /// Not offered in v0.1.0 (ROADMAP.md: "Left out of v0.1.0").
     pub available: bool,
+    /// Where the file is downloaded from, tried in turn: the file name is appended.
+    pub sources: &'static [&'static str],
 }
 
 /// English-only models: learners practise English, and these are faster and more accurate at it.
@@ -35,6 +37,7 @@ pub const MODELS: &[Model] = &[
         bytes: 147_964_211,
         sha256: "a03779c86df3323075f5e796cb2ce5029f00ec8869eee3fdfb897afe36c6d002",
         available: true,
+        sources: WHISPER,
     },
     Model {
         id: "small.en",
@@ -43,19 +46,46 @@ pub const MODELS: &[Model] = &[
         bytes: 487_614_201,
         sha256: "",
         available: false,
+        sources: WHISPER,
     },
 ];
 
 pub const DEFAULT: &str = "base.en";
 
-const SOURCES: &[&str] = &[
+const WHISPER: &[&str] = &[
     "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/",
     // A mirror that is reachable from mainland China, where huggingface.co is blocked.
     "https://hf-mirror.com/ggerganov/whisper.cpp/resolve/main/",
 ];
 
+/// The phrase translation models (DESIGN.md, "Results"), run by the translator helper (translate.rs). Chosen
+/// by testing on real episode phrases (2026-11-13); one is downloaded, by where the computer is set to.
+pub const TRANSLATION: &[Model] = &[
+    // Tencent's HY-MT 1.5, made for translation: the best of those tested at idioms and natural speech.
+    // Its licence doesn't cover the EU, the UK or South Korea.
+    Model {
+        id: "hy-mt-1.5",
+        name: "HY-MT 1.5",
+        file: "HY-MT1.5-1.8B-Q4_K_M.gguf",
+        bytes: 1_133_080_512,
+        sha256: "4383ac0c3c8e476de98ff979c2a3f069f8c4fb385e7860cf2d28da896cc477c7",
+        available: true,
+        sources: &["https://huggingface.co/tencent/HY-MT1.5-1.8B-GGUF/resolve/main/", "https://hf-mirror.com/tencent/HY-MT1.5-1.8B-GGUF/resolve/main/"],
+    },
+    // Qwen 2.5 (Apache 2.0), for those places: a little weaker at idioms.
+    Model {
+        id: "qwen-2.5",
+        name: "Qwen 2.5",
+        file: "qwen2.5-1.5b-instruct-q4_k_m.gguf",
+        bytes: 1_117_320_736,
+        sha256: "6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e",
+        available: true,
+        sources: &["https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/", "https://hf-mirror.com/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/"],
+    },
+];
+
 pub fn find(id: &str) -> Result<&'static Model> {
-    MODELS.iter().find(|m| m.id == id).ok_or_else(|| anyhow!("unknown speech model {id}"))
+    MODELS.iter().chain(TRANSLATION).find(|m| m.id == id).ok_or_else(|| anyhow!("unknown model {id}"))
 }
 
 pub fn path(dir: &Path, m: &Model) -> PathBuf {
@@ -111,7 +141,7 @@ pub async fn download(dir: &Path, m: &'static Model, cancel: &AtomicBool, progre
     }
     std::fs::create_dir_all(dir)?;
     let mut last_err = anyhow!("no download source");
-    for source in SOURCES {
+    for source in m.sources {
         match fetch(dir, m, &format!("{source}{}", m.file), cancel, progress).await {
             Ok(p) => return Ok(p),
             Err(e) if cancel.load(Ordering::Relaxed) => return Err(e),

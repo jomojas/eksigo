@@ -19,3 +19,7 @@ xcuserdata/
 *.xcuserstate
 DerivedData/
 .build/
+
+# The phrase translator, built by desktop/scripts/translator.mjs
+desktop/translate/target/
+desktop/src-tauri/binaries/

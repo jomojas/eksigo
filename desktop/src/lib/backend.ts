@@ -33,6 +33,11 @@ export type TranscriptStatus = {
 export type Sentence = { idx: number; startMs: number; endMs: number; text: string };
 
 export type ModelInfo = { id: string; name: string; bytes: number; installed: boolean; available: boolean; path: string };
+/** The phrase translation model this computer gets (Rust: translate.rs). */
+export type TranslationModel = { id: string; name: string; bytes: number; installed: boolean; downloading: boolean };
+/** `text` null: nothing to translate into (meanings in English). `missing`: the model isn't here yet. */
+export type Translation = { text: string | null; missing: boolean };
+export const isTranslationModel = (id: string) => id === "hy-mt-1.5" || id === "qwen-2.5";
 export type ModelProgress = { id: string; received: number; total: number; state: "downloading" | "done" | "failed" | "cancelled"; error: string | null };
 
 /** A show in search results, charts or recommendations. */
@@ -339,6 +344,10 @@ export const backend = {
   downloadModel: () => call<void>("model_download", {}, () => sample.downloadModel()),
   cancelModel: () => call<void>("model_cancel", {}, () => undefined),
   deleteModel: (id: string) => call<void>("model_delete", { id }, () => sample.deleteModel()),
+  translationModel: () => call<TranslationModel>("translation_model", {}, () => sample.translationModel()),
+  downloadTranslation: () => call<void>("translation_download", {}, () => sample.downloadTranslation()),
+  translate: (lang: string, itemId: number, idx: number, text: string) =>
+    call<Translation>("phrase_translate", { lang, itemId, idx, text }, () => sample.translate(text)),
   transcribe: (itemId: number) => call<void>("transcribe", { itemId }, () => sample.transcribe(itemId)),
   cancelTranscript: (itemId: number) => call<void>("transcribe_cancel", { itemId }, () => undefined),
   transcriptStatus: (itemId: number) => call<TranscriptStatus>("transcript_status", { itemId }, () => sample.transcriptStatus(itemId)),

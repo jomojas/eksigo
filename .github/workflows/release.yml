@@ -78,7 +78,9 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: desktop/src-tauri
+          workspaces: |
+            desktop/src-tauri
+            desktop/translate
           key: release
 
       - name: Install the interface's packages
@@ -96,6 +98,13 @@ jobs:
             fs.writeFileSync(f, JSON.stringify(c, null, 2) + "\n");
             console.log("version", c.version);
           ' "${{ github.ref_name }}"
+
+      # The phrase translator the app bundles (desktop/translate): on Mac one file for both processors, like the
+      # app. Tauri's own build command builds it again, quickly from the cache, but this names the target.
+      - name: Build the phrase translator
+        working-directory: desktop
+        shell: bash
+        run: node scripts/translator.mjs ${{ runner.os == 'macOS' && 'universal-apple-darwin' || '' }}
 
       - uses: tauri-apps/tauri-action@v0
         env:
@@ -121,9 +130,10 @@ jobs:
         if: runner.os == 'Windows'
         shell: bash
         run: |
-          exe=desktop/src-tauri/target/release/eksigo.exe
-          test -f "$exe"
-          if grep -a -i -o -E '(msvcp|vcruntime)140[_0-9a-z]*\.dll' "$exe" | sort -u | grep .; then
-            echo "eksigo.exe needs the Visual C++ runtime above, which a fresh Windows lacks"; exit 1
-          fi
+          for exe in desktop/src-tauri/target/release/eksigo.exe desktop/src-tauri/binaries/eksigo-translate-x86_64-pc-windows-msvc.exe; do
+            test -f "$exe"
+            if grep -a -i -o -E '(msvcp|vcruntime)140[_0-9a-z]*\.dll' "$exe" | sort -u | grep .; then
+              echo "$exe needs the Visual C++ runtime above, which a fresh Windows lacks"; exit 1
+            fi
+          done
           echo "no Visual C++ runtime needed"
