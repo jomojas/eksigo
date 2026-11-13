@@ -1,6 +1,7 @@
 // My words (design D09): every word or phrase saved from a review, with its meaning, the learner's note,
 // each sentence it was heard in, its level and when it's next practised.
 
+import { listenPath } from "./Listen";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { Icon } from "../components/Icon";
@@ -238,8 +239,8 @@ function Context({ c, text }: { c: WordContext; text: string }) {
           <button
             type="button"
             className="link-btn"
-            title="Open the episode at this sentence"
-            onClick={() => navigate(`/library/${c.itemId}`, { state: { at: c.sentenceStartMs } })}
+            title="Listen from this sentence"
+            onClick={() => navigate(listenPath(c.itemId ?? 0), { state: { at: c.sentenceStartMs } })}
           >
             {c.itemTitle}
           </button>

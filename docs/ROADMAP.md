@@ -6,7 +6,7 @@ The order we build v2 in, desktop first. It expands [DESIGN.md](DESIGN.md) secti
 
 **Design reference:** the Linear-style canvas, https://claude.ai/artifact/9ZrDQTW2L9JBaDHDnwDC6f. Each desktop screen is marked *v0.1* or *next*.
 
-## v0.1.0 in ten days
+## v0.1.0 in eleven days
 
 The riskiest parts come first: Whisper building on both systems, then the dictation loop.
 
@@ -21,7 +21,8 @@ The riskiest parts come first: Whisper building on both systems, then the dictat
 | 7 | **Word levels and practice.** Levels New · Learning · Familiar · Known with the next practice date (D09); the Practice screen (D10): *Listen and type* (the saved sentence played as said, the word left as a gap), *Listen and recall* and *Pick the meaning*; grades Again · Hard · Good · Easy set the next date; *I know this*; "Practise 12 due" on My words and Today. | A saved word comes up for practice, its grade moves its level and next date |
 | 8 | **Progress.** The D11 page: streak and best, time this week, accuracy this month, words known; the year grid by minutes (decided: no sentences switch; accuracy is dictation only), with the day's detail; accuracy over the last 12 weeks. *What you mishear most* stays for later. | A week of practice shows correctly on every part of the page |
 | 9 | **First launch and release.** The welcome (D13): language, the speech model download, AI later (decided: two steps, the AI step comes with AI); `tauri-action` release workflow on version tags, Mac signed and notarised, Windows unsigned, drafts the owner publishes; the updater; the AGPL-3.0 license. | A test tag produces installable builds for both systems |
-| 10 | **Test and ship.** Install on a clean Mac and Windows machine, fix what breaks, tag **v0.1.0**. Point the eksigo.com download buttons at the release. | v0.1.0 is on GitHub Releases and downloadable from eksigo.com |
+| 10 | **Listen (added 2026-11-13).** The Listen page (D07): the episode straight through, sentences hidden as bars until shown (`S`, or all with `Shift+S`), shown ones stay shown; `↑ ↓` between sentences; select words to look them up in the docked card and save them; listening time counts towards the streak. The Episode page offers Dictate and Listen side by side. | A learner can listen to an episode, show a sentence, save a word from it, and see the minutes on Today |
+| 11 | **Test and ship.** Install on a clean Mac and Windows machine, fix what breaks, tag **v0.1.0**. Point the eksigo.com download buttons at the release. | v0.1.0 is on GitHub Releases and downloadable from eksigo.com |
 
 ### Left out of v0.1.0, added in the following weeks
 
@@ -55,6 +56,8 @@ The riskiest parts come first: Whisper building on both systems, then the dictat
 # After v0.1.0
 
 Rough times; the order can change with feedback from the first users.
+
+**Order decided 2026-11-13:** accounts and sync, then the iPhone app (listen and review on the phone, practise on the computer), then the website and finding the first users. AI, Premium and the rest follow. Speaking is postponed (under *Later*). Video and YouTube are not planned (DESIGN.md, *Listen*).
 
 ## Website v2 (1–2 days)
 
@@ -99,12 +102,9 @@ Rough times; the order can change with feedback from the first users.
 
 **Done when:** a test purchase turns on Premium, and the AI review works without a key.
 
-## Speaking (about 1 week)
-
-- Shadowing: record a sentence and compare it with local Whisper. Free.
-- Retell: summarise the episode out loud, with AI feedback.
-
 ## Later
+
+- **Speaking (postponed 2026-11-13):** shadowing (record a sentence and compare it with local Whisper, free) and retelling the episode out loud with AI feedback.
 
 - Audio fingerprint matching on the phone
 - Automatic ad detection
