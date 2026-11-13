@@ -931,8 +931,8 @@ select.btn {
   font-weight: 500;
   color: var(--ink);
 }
-.lookup-machine {
-  font-size: 15px;
+.lookup-translation {
+  font-size: 16px;
   line-height: 1.5;
   color: var(--ink);
 }

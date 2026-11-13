@@ -1,6 +1,6 @@
-// The dictionary card for words selected in a review (DESIGN.md, "Results"): the phrase if the dictionary
-// has it, else a machine translation of the whole selection and each word; the words as said in the episode
-// or read slowly; and Add to My words.
+// The card for words selected in a review or on Listen (DESIGN.md, "Results"): one word's meaning from the
+// dictionary, or for several words one translation of them from the translator on this computer; the words
+// as said in the episode or read slowly; and Add to My words.
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { backend, isTranslationModel, on, type Entry, type Lookup } from "../lib/backend";
@@ -23,7 +23,7 @@ export type Selection = {
 
 const WIDTH = 360;
 
-/** The machine translation of a selection the dictionary doesn't have as a phrase. */
+/** The translation of a selection of several words. */
 type Machine = { state: "loading" } | { state: "done"; text: string } | { state: "missing" } | { state: "failed" };
 
 /** Ready to show: the first translation also loads the model, which takes a few seconds. */
@@ -71,11 +71,12 @@ export function LookupCard({
     };
   }, [lang, sel.text, sel.itemId, sel.idx]);
 
-  // A phrase the dictionary doesn't have gets a machine translation, read in its sentence. If the translator
-  // isn't here yet it starts downloading (normally it came when the app first opened), and the translation
-  // follows once it has.
-  const entry0 = result?.entry ?? null;
-  const wantsMachine = !!result && result.words.length > 0 && !(result.whole && entry0) && lang !== "en";
+  // Several words get one translation, read in their sentence; the learner doesn't need to know where it came
+  // from. If the translator isn't here yet it starts downloading (normally it came when the app first opened),
+  // and the translation follows once it has. Meanings in English have nothing to translate into, so they,
+  // and a translation that fails, show the dictionary instead: the phrase, or each word.
+  const several = !!result && result.words.length > 0;
+  const wantsMachine = several && lang !== "en";
   useEffect(() => on("model-download", (p) => isTranslationModel(p.id) && p.state === "done" && setTranslatorReady((n) => n + 1)), []);
   useEffect(() => {
     if (!wantsMachine) return setMachine(null);
@@ -112,17 +113,17 @@ export function LookupCard({
   const save = async () => {
     if (!result || savedId) return;
     const entry = result.entry;
+    const translated = machine?.state === "done" ? machine.text : null;
     const words = result.words.map((w) => `${w.text}${w.entry && w.entry.headword !== w.text ? ` (${w.entry.headword})` : ""}: ${w.entry ? firstLine(w.entry.meaning) : "—"}`);
-    const translated = machine?.state === "done" ? `${machine.text} (machine translation)` : null;
+    const fromDictionary = !translated && !!entry && result.whole;
     const meaning =
-      entry && result.whole
-        ? entry.meaning
-        : [translated, entry ? `${entry.headword}: ${firstLine(entry.meaning)}` : null, ...words].filter(Boolean).join("\n");
+      translated ??
+      (fromDictionary ? entry.meaning : machine ? "" : [entry ? `${entry.headword}: ${firstLine(entry.meaning)}` : null, ...words].filter(Boolean).join("\n"));
     try {
       const w = await backend.addWord({
         text: result.query || sel.text,
-        headword: entry && result.whole ? entry.headword : "",
-        ipa: entry && result.whole ? entry.ipa : "",
+        headword: fromDictionary ? entry.headword : "",
+        ipa: fromDictionary ? entry.ipa : "",
         meaning,
         note,
         itemId: sel.itemId,
@@ -173,7 +174,10 @@ export function LookupCard({
 
   const entry = result?.entry ?? null;
   const single = result ? result.words.length === 0 : !sel.text.trim().includes(" ");
-  const title = result?.whole && entry ? entry.headword : sel.text.replace(/^[^\p{L}\p{N}']+|[^\p{L}\p{N}']+$/gu, "");
+  // The dictionary is shown for one word, and for several only when there's no translation to show.
+  const dictionary = !!result && (single || !wantsMachine || machine?.state === "failed");
+  const translated = machine?.state === "done";
+  const title = dictionary && result?.whole && entry ? entry.headword : sel.text.replace(/^[^\p{L}\p{N}']+|[^\p{L}\p{N}']+$/gu, "");
 
   return (
     <div ref={card} className={docked ? "lookup lookup-docked" : "lookup"} role="dialog" aria-label={title} style={docked ? undefined : { top: pos.top, left: pos.left, width: WIDTH }}>
@@ -181,9 +185,9 @@ export function LookupCard({
         <div className="h2" style={{ fontSize: 18 }}>
           {title}
         </div>
-        {result?.whole && entry && entry.headword !== result.query && <div className="lookup-sub">from “{result.query}”</div>}
-        {result?.whole && entry?.ipa && <div className="lookup-sub mono">{entry.ipa}</div>}
-        {result && !result.whole && !single && <div className="lookup-sub">Not in the dictionary as a phrase · each word</div>}
+        {dictionary && result?.whole && entry && entry.headword !== result.query && <div className="lookup-sub">from “{result.query}”</div>}
+        {dictionary && result?.whole && entry?.ipa && <div className="lookup-sub mono">{entry.ipa}</div>}
+        {dictionary && result && !result.whole && !single && <div className="lookup-sub">Not in the dictionary as a phrase · each word</div>}
       </div>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
         <button type="button" className="btn btn-sm" onClick={asSaid} disabled={!path || times.length === 0}>
@@ -203,33 +207,30 @@ export function LookupCard({
       )}
       {!result && !error && <div className="lookup-sub">Looking it up… (the dictionary downloads once, about 5 MB)</div>}
 
-      {result && result.whole && entry && <Meaning entry={entry} />}
-      {machine && (
-        <div className="lookup-found" aria-live="polite">
-          <div className="lookup-sub">Machine translation</div>
+      {machine && !dictionary && (
+        <div aria-live="polite">
           {machine.state === "done" ? (
-            <span className="lookup-machine">{machine.text}</span>
+            <div className="lookup-translation">{machine.text}</div>
           ) : machine.state === "loading" ? (
-            <span className="lookup-sub">{translatorWarm ? "Translating…" : "Translating… the first one takes a few seconds"}</span>
-          ) : machine.state === "missing" ? (
-            <span className="lookup-sub">
+            <div className="lookup-sub">{translatorWarm ? "Translating…" : "Translating… the first one takes a few seconds"}</div>
+          ) : (
+            <div className="lookup-sub">
               The translator is downloading{translatorProgress ? ` · ${Math.round((translatorProgress.received / translatorProgress.total) * 100)}%` : ""}. The
               translation shows here when it's ready.
-            </span>
-          ) : (
-            <span className="lookup-sub">Couldn't translate this one.</span>
+            </div>
           )}
         </div>
       )}
-      {result && !result.whole && entry && (
+      {dictionary && result.whole && entry && <Meaning entry={entry} />}
+      {dictionary && !result.whole && entry && (
         <div className="lookup-found">
           <div className="lookup-sub">Phrase inside</div>
           <b>{entry.headword}</b>
           <span>{firstLine(entry.meaning)}</span>
         </div>
       )}
-      {result && single && !entry && <div className="lookup-sub">Not in the dictionary. Add it with your own note.</div>}
-      {result && result.words.length > 0 && (
+      {dictionary && single && !entry && <div className="lookup-sub">Not in the dictionary. Add it with your own note.</div>}
+      {dictionary && result.words.length > 0 && (
         <div>
           {result.words.map((w, i) => (
             <div key={i} className="wordline">
@@ -252,7 +253,7 @@ export function LookupCard({
         </div>
       )}
 
-      {result && (!result.whole || !entry) && !savedId && (
+      {result && !translated && (!dictionary || !result.whole || !entry) && !savedId && (
         <label className="lookup-note">
           Your note
           <span className="input">
@@ -268,7 +269,7 @@ export function LookupCard({
             In My words
           </span>
         ) : (
-          <button type="button" className="btn btn-sm btn-primary" onClick={save} disabled={!result}>
+          <button type="button" className="btn btn-sm btn-primary" onClick={save} disabled={!result || machine?.state === "loading"}>
             <Icon name="plus" size={13} />
             Add to My words <Kbd keys="A" />
           </button>
@@ -280,7 +281,7 @@ export function LookupCard({
           AI key
         </span>
       </div>
-      {result?.source && <div className="lookup-credit">Meanings: {result.source}</div>}
+      {dictionary && result?.source && <div className="lookup-credit">Meanings: {result.source}</div>}
     </div>
   );
 }
