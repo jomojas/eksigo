@@ -27,7 +27,7 @@ The riskiest parts come first: Whisper building on both systems, then the dictat
 
 - **First after v0.1.0 (decided 2026-11-12): a human-like voice for looking words up.** A neural voice (Kokoro, Apache 2.0) on api.eksigo.com, `GET /v1/speak?text=` returning audio for a selected word or phrase, each made once and kept; it replaces *Slow voice*, which uses the computer's own voice until then.
 
-- **Then: machine translation for phrases (decided 2026-11-13).** When a selection isn't in the dictionary as a phrase, the card also shows a translation of the whole selection from a small model on the computer, downloaded once, free and offline. First, candidate models are tested on real episode phrases for quality, size and speed.
+- **Then: machine translation for phrases (decided 2026-11-13).** When a selection isn't in the dictionary as a phrase, the card also shows a translation of the whole selection from a small model on the computer (HY-MT 1.5, or Qwen 2.5 in the EU, the UK and South Korea; DESIGN.md, *Results*), downloaded by itself when the app first opens.
 
 - Publisher transcripts (`podcast:transcript`) and their alignment
 - The *Accurate* speech model
