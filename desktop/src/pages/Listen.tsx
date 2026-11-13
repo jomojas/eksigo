@@ -29,6 +29,8 @@ const KEYS: [string, string][] = [
 const RESTART_MS = 1200;
 /** Listening time is saved this often while playing, and when playback stops. */
 const SAVE_EVERY_S = 15;
+/** After the learner scrolls away, the sentence being heard comes back to the middle this long after they stop. */
+const BACK_AFTER_MS = 2500;
 
 export function ListenScreen() {
   const itemId = Number(useParams().itemId);
@@ -215,29 +217,43 @@ export function ListenScreen() {
     };
   }, [player.playing, flush]);
 
-  // Keeps the sentence being heard in view while following; scrolling away stops following until the
-  // learner plays, replays or moves to a sentence.
+  // Keeps the sentence being heard in the middle of the space under the player. Scrolling away pauses that;
+  // it comes back by itself a few seconds after the scrolling stops, or at once on play, replay or ↑ ↓.
   const list = useRef<HTMLOListElement>(null);
+  const bar = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!follow || current < 0) return;
     const row = document.getElementById(`listen-${current}`);
     const scroller = row?.closest(".content");
     if (!row || !scroller) return;
     const view = scroller.getBoundingClientRect();
+    const top = bar.current?.getBoundingClientRect().bottom ?? view.top;
     const r = row.getBoundingClientRect();
-    const top = view.top + 150;
-    if (r.top >= top && r.bottom <= view.bottom - 48) return;
-    scroller.scrollBy({ top: r.top - (top + (view.bottom - top) / 3), behavior: "smooth" });
+    const off = (r.top + r.bottom) / 2 - (top + view.bottom) / 2;
+    if (Math.abs(off) > 24) scroller.scrollBy({ top: off, behavior: "smooth" });
   }, [current, follow]);
   useEffect(() => {
     const scroller = list.current?.closest(".content");
     if (!scroller) return;
-    const away = () => setFollow(false);
+    let back = 0;
+    const away = () => {
+      setFollow(false);
+      window.clearTimeout(back);
+      back = window.setTimeout(() => setFollow(true), BACK_AFTER_MS);
+    };
+    // The scroll bar dragged, or the page keys.
+    const onDown = (e: Event) => e.target === scroller && away();
+    const onKey = (e: KeyboardEvent) => ["PageUp", "PageDown", "Home", "End"].includes(e.key) && away();
     scroller.addEventListener("wheel", away, { passive: true });
     scroller.addEventListener("touchmove", away, { passive: true });
+    scroller.addEventListener("mousedown", onDown);
+    window.addEventListener("keydown", onKey);
     return () => {
+      window.clearTimeout(back);
       scroller.removeEventListener("wheel", away);
       scroller.removeEventListener("touchmove", away);
+      scroller.removeEventListener("mousedown", onDown);
+      window.removeEventListener("keydown", onKey);
     };
   }, [sentences.length > 0]);
 
@@ -283,7 +299,7 @@ export function ListenScreen() {
           {item && item.state !== "ready" && <div className="notice">This episode isn’t downloaded. Download it on its page first.</div>}
 
           {/* Stays at the top while the sentences scroll under it. */}
-          <div style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--canvas)", padding: "12px 0", margin: "-12px 0" }}>
+          <div ref={bar} style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--canvas)", padding: "12px 0", margin: "-12px 0" }}>
             <div className="panel" style={{ padding: "12px 16px", display: "flex", alignItems: "center", gap: 12 }}>
               <button
                 type="button"
