@@ -1,4 +1,5 @@
 //! Time spent practising, by day on this computer's calendar, for the Progress page and the streak.
+//! Other devices' days arrive by sync and add up (the `practice_all` view).
 //! Kept as it happens: an attempt's total alone can't say which days it was spread over.
 
 use anyhow::Result;
@@ -30,7 +31,7 @@ pub fn add(conn: &Connection, day: &str, kind: &str, seconds: i64) -> Result<()>
 
 /// Seconds of `kind` on `day`.
 pub fn seconds_on(conn: &Connection, day: &str, kind: &str) -> Result<i64> {
-    Ok(conn.query_row("SELECT COALESCE(SUM(seconds), 0) FROM practice_days WHERE day = ?1 AND kind = ?2", params![day, kind], |r| r.get(0))?)
+    Ok(conn.query_row("SELECT COALESCE(SUM(seconds), 0) FROM practice_all WHERE day = ?1 AND kind = ?2", params![day, kind], |r| r.get(0))?)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -42,7 +43,7 @@ pub struct Day {
 
 /// Seconds practised each day from `from` on (any kind), oldest first; days without practice are left out.
 pub fn days(conn: &Connection, from: &str) -> Result<Vec<Day>> {
-    let mut st = conn.prepare("SELECT day, SUM(seconds) FROM practice_days WHERE day >= ?1 GROUP BY day ORDER BY day")?;
+    let mut st = conn.prepare("SELECT day, SUM(seconds) FROM practice_all WHERE day >= ?1 GROUP BY day ORDER BY day")?;
     let rows = st.query_map([from], |r| Ok(Day { day: r.get(0)?, seconds: r.get(1)? }))?.collect::<rusqlite::Result<_>>()?;
     Ok(rows)
 }
@@ -58,7 +59,7 @@ pub struct Week {
 
 /// Days with any practice, oldest first.
 fn practised_days(conn: &Connection) -> Result<Vec<NaiveDate>> {
-    let mut st = conn.prepare("SELECT day FROM practice_days GROUP BY day HAVING SUM(seconds) > 0 ORDER BY day")?;
+    let mut st = conn.prepare("SELECT day FROM practice_all GROUP BY day HAVING SUM(seconds) > 0 ORDER BY day")?;
     let days = st.query_map([], |r| r.get::<_, String>(0))?.collect::<rusqlite::Result<Vec<_>>>()?;
     Ok(days.iter().filter_map(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok()).collect())
 }

@@ -84,9 +84,9 @@ Rough times; the order can change with feedback from the first users.
 ## Accounts and sync, server and desktop (about 1 week)
 
 - Desktop sign-in with Apple and Google through the system browser, and Settings › Account and sync, with sign out and delete account (done 2026-11-13). Jomo sets up Apple's Services ID and key and Google's Web application OAuth client (`backend/README.md`).
-- Server: sync endpoints for listening history, saved words, missed sentences and practice summaries (section 7), with tests, in `backend/` and `docs/API.md`.
-- Desktop syncs when it opens and after each session.
-- *Today* shows the episodes listened to on the phone.
+- Server: `POST /v1/sync` for saved words, word reviews, missed sentences, practice summaries, practice days and the phone's listening (section 7), with tests, in `backend/` and `docs/API.md` (done 2026-11-13).
+- Desktop syncs when it opens, a few seconds after words or practice change, and every ten minutes; Settings › Account shows the state, with *Sync now* (done 2026-11-13, design D20).
+- *Today* shows the episodes listened to on the phone (done 2026-11-13).
 
 **Done when:** words saved on the desktop appear through the API for the same account, and history posted for the phone shows up in *Today*.
 

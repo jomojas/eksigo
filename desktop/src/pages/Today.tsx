@@ -5,10 +5,39 @@ import { useNavigate } from "react-router";
 import { Art } from "../components/Art";
 import { Icon } from "../components/Icon";
 import { addAudio, Kbd, Page } from "../components/Shell";
-import { backend, inApp, on, type NewEpisode, type PracticeCounts, type Week } from "../lib/backend";
+import { backend, inApp, on, type Heard, type NewEpisode, type PracticeCounts, type Week } from "../lib/backend";
 import { dictationPath, useInProgress } from "../lib/dictation";
 import { clock, plural, practised, whenDay } from "../lib/format";
 import { usePracticeCounts } from "../lib/words";
+
+/** Episodes heard on the phone in the last three days (design D20); empty without an account. */
+function useHeard(): Heard[] | null {
+  const [list, setList] = useState<Heard[] | null>(null);
+  useEffect(() => {
+    let live = true;
+    const load = () => backend.heard().then((l) => live && setList(l), () => live && setList([]));
+    load();
+    const offs = [on("heard", load), on("practice", load), on("account", load)];
+    return () => {
+      live = false;
+      offs.forEach((off) => off());
+    };
+  }, []);
+  return list;
+}
+
+const heardWhen = (ms: number) => {
+  const day = whenDay(Math.floor(ms / 1000));
+  const time = new Date(ms).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  return day === "Today" || day === "Yesterday" ? `${day.toLowerCase()}, ${time}` : day;
+};
+
+const heardHow = (h: Heard) =>
+  h.finished || (h.positionS != null && h.durationS != null && h.positionS >= h.durationS - 30)
+    ? "listened to all of it"
+    : h.positionS != null && h.positionS > 0
+      ? `stopped at ${clock(h.positionS)}${h.durationS ? ` of ${Math.round(h.durationS / 60)} min` : ""}`
+      : "";
 
 /** The week panel's data, kept fresh as practice happens. */
 function useWeek(): Week | null {
@@ -16,7 +45,7 @@ function useWeek(): Week | null {
   useEffect(() => {
     const load = () => backend.week().then(setWeek, () => {});
     load();
-    const offs = [on("practice", load), on("words", load)];
+    const offs = [on("practice", load), on("words", load), on("activity", load)];
     return () => offs.forEach((off) => off());
   }, []);
   return week;
@@ -178,6 +207,24 @@ export function Today() {
   const first = continuing[0];
   const resumeAt = first ? Math.min(first.position + 1, first.sentences || first.position + 1) : 0;
 
+  const heard = useHeard();
+  const [opening, setOpening] = useState<string | null>(null);
+  const [heardError, setHeardError] = useState<string | null>(null);
+  // An episode heard on the phone: found in the Library or read from its feed, then opened or practised.
+  const practiseHeard = async (h: Heard, start: boolean) => {
+    setOpening(h.audioUrl);
+    setHeardError(null);
+    try {
+      const id = await backend.heardEpisode(h);
+      if (!start) navigate(`/podcasts/episode/${id}`);
+      else navigate(dictationPath(await backend.download(id)));
+    } catch (err) {
+      setHeardError(String(err));
+    } finally {
+      setOpening(null);
+    }
+  };
+
   const practise = async (e: NewEpisode) => {
     try {
       const itemId = e.itemId ?? (await backend.download(e.id));
@@ -256,15 +303,32 @@ export function Today() {
             </article>
           )}
 
-          <section aria-labelledby="heard">
-            <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
-              <h2 id="heard" className="eyebrow" style={{ flexGrow: 1 }}>
-                Heard on your phone today
+          {heard && heard.length > 0 && (
+            <section aria-labelledby="heard">
+              <h2 id="heard" className="eyebrow" style={{ marginBottom: 8 }}>
+                Heard on your iPhone
               </h2>
-              <span className="badge badge-next">With the phone app · later</span>
-            </div>
-            <div className="panel today-note">Episodes you listen to on your phone will show up here, ready to practise.</div>
-          </section>
+              {heardError && (
+                <div className="muted" role="alert" style={{ fontSize: 12, marginBottom: 8 }}>
+                  {heardError}
+                </div>
+              )}
+              <div className="panel" style={{ overflow: "hidden" }}>
+                {heard.map((h) => (
+                  <Row
+                    key={h.audioUrl}
+                    art={<Art url={h.artworkUrl} size={36} />}
+                    title={h.title}
+                    sub={[h.show, heardWhen(h.listenedAt), heardHow(h)].filter(Boolean).join(" · ")}
+                    action={h.practised ? "Practise again" : "Practise"}
+                    disabled={opening === h.audioUrl}
+                    onOpen={() => practiseHeard(h, false)}
+                    onAction={() => practiseHeard(h, true)}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
 
           <section aria-labelledby="new">
             <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>

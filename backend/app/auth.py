@@ -182,8 +182,8 @@ def sign_out(conn: sqlite3.Connection, authorization: str | None) -> None:
 
 
 def delete_user(conn: sqlite3.Connection, user_id: int) -> None:
-    """Delete the account and, through the foreign keys, its sessions (App Store guideline 5.1.1(v)). Synced data
-    added later must be deleted with it."""
+    """Delete the account and, through the foreign keys, its sessions and synced data (App Store guideline
+    5.1.1(v))."""
     with conn:
         conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
 

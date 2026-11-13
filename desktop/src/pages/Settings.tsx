@@ -12,6 +12,7 @@ import { useDictationSettings } from "../lib/dictation";
 import { MEANING_LANGUAGES, useMeaningLanguage } from "../lib/words";
 import { checkForUpdate, restartToUpdate, useUpdate } from "../lib/updates";
 import { cancelSignIn, deleteAccount, displayName, providerName, signIn, signOut, useAccount } from "../lib/account";
+import { syncedAgo, syncNow, useSync } from "../lib/sync";
 import { cancelConnect, connectChatGpt, disconnectChatGpt, removeKey, saveKey, setModel, useAi } from "../lib/ai";
 
 // Settings (design D12): every section, with AI (D16). The open
@@ -540,6 +541,50 @@ function AccountSection() {
   );
 }
 
+/** Sync (design D20): it runs by itself; this says how it went, with Sync now for when you can't wait. */
+function SyncRow() {
+  const sync = useSync();
+  if (!sync) return null;
+  const syncing = sync.state === "syncing";
+  const counts = `${plural(sync.words, "word")}, ${plural(sync.days, "practice day")}`;
+  const help = syncing && sync.first
+    ? `Adding this computer's ${counts} to your account.`
+    : sync.state === "failed"
+      ? (sync.error ?? "Couldn't sync.")
+      : `Automatic: when Eksigo opens, after each session, and every few minutes. On this computer: ${counts}, ${plural(sync.episodes, "episode")}.`;
+  return (
+    <div className="account-row">
+      <div style={{ flexGrow: 1, minWidth: 0 }}>
+        <div className="account-row-t">Sync</div>
+        <div className="account-row-h">{help}</div>
+      </div>
+      <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 12 }} role="status">
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--ink-muted)" }}>
+          {syncing ? (
+            <>
+              <span className="spin spin-sm" aria-hidden="true" />
+              Syncing…
+            </>
+          ) : sync.state === "failed" ? (
+            <>
+              <span className="dot dot-bad" aria-hidden="true" />
+              {sync.last ? `Last synced ${syncedAgo(sync.last)}` : "Not synced yet"}
+            </>
+          ) : (
+            <>
+              <span className="dot dot-ok" aria-hidden="true" />
+              {sync.last ? `Synced ${syncedAgo(sync.last)}` : "Not synced yet"}
+            </>
+          )}
+        </span>
+        <button type="button" className="btn btn-sm" disabled={syncing} onClick={() => syncNow().catch(() => {})}>
+          {sync.state === "failed" ? "Try now" : "Sync now"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function SignedIn({ account }: { account: Account }) {
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -571,15 +616,7 @@ function SignedIn({ account }: { account: Account }) {
         </div>
         <span className="badge">{account.plan === "premium" ? "Premium" : "Free"}</span>
       </div>
-      <div className="account-row">
-        <div style={{ flexGrow: 1, minWidth: 0 }}>
-          <div className="account-row-t">Sync</div>
-          <div className="account-row-h">My words, practice days and listening start syncing in the next update. Until then, they stay on this computer.</div>
-        </div>
-        <span className="badge badge-next" style={{ flexShrink: 0 }}>
-          Next update
-        </span>
-      </div>
+      <SyncRow />
       <div className="account-row">
         <div style={{ flexGrow: 1, minWidth: 0 }}>
           <div className="account-row-t">Plan</div>

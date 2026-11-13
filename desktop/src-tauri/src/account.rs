@@ -81,10 +81,10 @@ pub enum NotSignedIn {
 // ---------------------------------------------------------------- stored account
 
 fn keychain() -> Result<keyring::Entry> {
-    keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_USER).context("opening the keychain")
+    crate::keychain_entry(KEYCHAIN_SERVICE, KEYCHAIN_USER).context("opening the keychain")
 }
 
-fn token() -> Option<String> {
+pub(crate) fn token() -> Option<String> {
     keychain().ok()?.get_password().ok()
 }
 

@@ -9,6 +9,7 @@ import { Icon, type IconName } from "./Icon";
 import { restartToUpdate, useUpdate } from "../lib/updates";
 import { Welcome, WELCOMED } from "../pages/Welcome";
 import { displayName, useAccount } from "../lib/account";
+import { useSync } from "../lib/sync";
 import { useAi } from "../lib/ai";
 
 const NAV: { to: string; label: string; icon: IconName }[] = [
@@ -214,6 +215,7 @@ function AppShell() {
  * itself shows as the open screen. */
 function AccountChip() {
   const { account } = useAccount();
+  const sync = useSync();
   if (account === undefined) return null;
   const to = "/settings?s=account";
   if (!account)
@@ -232,6 +234,16 @@ function AccountChip() {
       <span className="ell" style={{ flexGrow: 1 }}>
         {name}
       </span>
+      {sync && sync.state !== "off" && (
+        <span className="nav-sync" title={sync.state === "failed" ? (sync.error ?? undefined) : undefined}>
+          {sync.state === "syncing" ? (
+            <span className="spin spin-xs" aria-hidden="true" />
+          ) : (
+            <span className={sync.state === "failed" ? "dot dot-ring" : "dot dot-ok"} aria-hidden="true" />
+          )}
+          {sync.state === "syncing" ? "Syncing" : sync.state === "failed" ? "Not synced" : "Synced"}
+        </span>
+      )}
     </NavLink>
   );
 }
