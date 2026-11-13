@@ -205,7 +205,7 @@ export function ListenScreen() {
     setAsking(null);
     if (resume.current) {
       resume.current = false;
-      playFrom(at);
+      if (!player.playing) playFrom(at);
     }
   };
   const closeLookup = useCallback(() => {
@@ -213,9 +213,9 @@ export function ListenScreen() {
     window.getSelection()?.removeAllRanges();
     if (resume.current) {
       resume.current = false;
-      playFrom(at);
+      if (!player.playing) playFrom(at);
     }
-  }, [playFrom, at]);
+  }, [playFrom, at, player.playing]);
   const [saved, setSaved] = useState<string[]>([]);
 
   // Time listening: counted while playing, saved every few seconds and when playback stops or the page closes.

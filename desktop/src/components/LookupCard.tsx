@@ -218,8 +218,10 @@ export function LookupCard({
   };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => keys.current(e);
+    // Floating by the selection, a click elsewhere closes it; in the side panel (Listen) it stays until
+    // another selection replaces it, or Esc.
     const onDown = (e: MouseEvent) => {
-      if (card.current && !card.current.contains(e.target as Node)) onClose();
+      if (!docked && card.current && !card.current.contains(e.target as Node)) onClose();
     };
     window.addEventListener("keydown", onKey, true);
     window.addEventListener("mousedown", onDown, true);
@@ -227,7 +229,7 @@ export function LookupCard({
       window.removeEventListener("keydown", onKey, true);
       window.removeEventListener("mousedown", onDown, true);
     };
-  }, [onClose]);
+  }, [onClose, docked]);
 
   const entry = result?.entry ?? null;
   const single = result ? result.words.length === 0 : !sel.text.trim().includes(" ");
@@ -366,7 +368,7 @@ export function LookupCard({
                 if (question.trim()) ask(question.trim());
               }}
             >
-              <input type="text" value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="Ask about these words…" aria-label="Ask about these words" disabled={busy} />
+              <input type="text" value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="Ask about these words…" aria-label="Ask about these words" />
               <button type="submit" className="btn btn-sm btn-ghost" style={{ height: 24, padding: "0 6px" }} aria-label="Send" disabled={!question.trim() || busy}>
                 <Icon name="send" size={12} stroke={2} />
               </button>
