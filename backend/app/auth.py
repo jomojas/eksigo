@@ -68,11 +68,13 @@ class GoogleKeys(SigningKeys):
     provider = "Google"
 
 
-def verify_apple_token(token: str, nonce: str | None, cfg: Config, keys: AppleKeys) -> dict[str, Any]:
-    """Check signature, issuer, audience and expiry; with a nonce, check it was this sign-in's."""
+def verify_apple_token(token: str, nonce: str | None, cfg: Config, keys: AppleKeys,
+                       audience: list[str] | None = None) -> dict[str, Any]:  # fmt: skip
+    """Check signature, issuer, audience (by default the iPhone app's) and expiry; with a nonce, check it was this
+    sign-in's."""
     try:
         kid = jwt.get_unverified_header(token).get("kid", "")
-        claims = jwt.decode(token, keys.get(kid), algorithms=["RS256"], audience=cfg.auth.apple_audiences,
+        claims = jwt.decode(token, keys.get(kid), algorithms=["RS256"], audience=audience or cfg.auth.apple_audiences,
                             issuer=APPLE_ISSUER, options={"require": ["sub", "exp", "iat"]})  # fmt: skip
     except jwt.PyJWTError as e:
         raise APIError(401, "invalid_token", f"Apple sign-in failed: {e}") from e
@@ -81,13 +83,14 @@ def verify_apple_token(token: str, nonce: str | None, cfg: Config, keys: AppleKe
     return claims
 
 
-def verify_google_token(token: str, cfg: Config, keys: GoogleKeys) -> dict[str, Any]:
+def verify_google_token(token: str, cfg: Config, keys: GoogleKeys, audience: list[str] | None = None) -> dict[str, Any]:
     """Check signature, issuer, audience (an app's OAuth client ID) and expiry of a Google ID token."""
-    if not cfg.auth.google_client_ids:
+    audience = audience or cfg.auth.google_client_ids
+    if not audience:
         raise APIError(404, "not_found", "Google sign-in isn't set up")
     try:
         kid = jwt.get_unverified_header(token).get("kid", "")
-        claims = jwt.decode(token, keys.get(kid), algorithms=["RS256"], audience=cfg.auth.google_client_ids,
+        claims = jwt.decode(token, keys.get(kid), algorithms=["RS256"], audience=audience,
                             options={"require": ["sub", "exp", "iat", "iss"]})  # fmt: skip
     except jwt.PyJWTError as e:
         raise APIError(401, "invalid_token", f"Google sign-in failed: {e}") from e
@@ -185,5 +188,16 @@ def delete_user(conn: sqlite3.Connection, user_id: int) -> None:
         conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
 
 
+def save_apple_refresh_token(conn: sqlite3.Connection, user_id: int, token: str, client_id: str) -> None:
+    with conn:
+        conn.execute("UPDATE users SET apple_refresh_token = ?, apple_client_id = ? WHERE id = ?",
+                     (token, client_id, user_id))  # fmt: skip
+
+
+def provider(user: sqlite3.Row) -> str:
+    return "apple" if user["apple_sub"] else "google" if user["google_sub"] else "dev"
+
+
 def user_json(user: sqlite3.Row) -> dict[str, Any]:
-    return {"id": user["id"], "name": user["name"], "email": user["email"], "plan": user["plan"]}
+    return {"id": user["id"], "name": user["name"], "email": user["email"], "plan": user["plan"],
+            "provider": provider(user)}  # fmt: skip

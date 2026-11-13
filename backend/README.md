@@ -15,6 +15,30 @@ EKSIGO_DEV_LOGIN=1 uv run uvicorn app.main:create_app --factory --reload
 - **Signing in without Apple or Google:** `POST /v1/auth/dev` works because of `EKSIGO_DEV_LOGIN=1`. Never set it on the VPS.
 - **Tests:** `uv run pytest -q`
 
+## Desktop sign-in (once)
+
+The desktop signs in through the browser and this server (DESIGN.md section 8). Each provider is off until it is set up.
+
+**Google**
+1. Google Cloud console, the project of the iPhone's client: *APIs & Services → Credentials → Create credentials → OAuth client ID → Web application*.
+2. Authorized redirect URI: `https://api.eksigo.com/v1/auth/google/callback`.
+3. Put the client ID in `config.yaml` under `google_web_client_id`.
+4. Put the secret in `/opt/eab/.env` as `EKSIGO_GOOGLE_CLIENT_SECRET=…`.
+
+**Apple**
+1. Apple developer account, *Identifiers → Services IDs → +*: for example `com.eksigo.desktop.signin`. Turn on *Sign in with Apple* and configure it:
+   - primary App ID: `com.eksigo.app`
+   - domain: `api.eksigo.com`
+   - return URL: `https://api.eksigo.com/v1/auth/apple/callback`
+2. Put the Services ID in `config.yaml` under `apple_services_id`.
+3. For revoking on deletion: *Keys → +* with *Sign in with Apple*. Download the `.p8` file.
+   - Put the team ID and key ID in `config.yaml` (`apple_team_id`, `apple_key_id`).
+   - Put the key in `/opt/eab/.env` as `EKSIGO_APPLE_PRIVATE_KEY=` on one line, its line breaks written as `\n`.
+
+Then restart: `docker compose up -d`.
+
+**Trying it locally:** run the server with `EKSIGO_PUBLIC_BASE_URL=http://localhost:8000` and add `http://localhost:8000/v1/auth/google/callback` to the Google client. Start the app with `EKSIGO_API=http://localhost:8000 npm run tauri dev`. Apple accepts only https return URLs, so Apple is tried on the real server.
+
 ## Operator commands (on the VPS, in `/opt/eab`)
 
 ```bash

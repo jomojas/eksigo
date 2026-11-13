@@ -40,6 +40,10 @@ export type Translation = { text: string | null; missing: boolean };
 export const isTranslationModel = (id: string) => id === "hy-mt-1.5" || id === "qwen-2.5";
 export type ModelProgress = { id: string; received: number; total: number; state: "downloading" | "done" | "failed" | "cancelled"; error: string | null };
 
+/** The optional account (account.rs). `provider`: "apple", "google", or "dev" for a development sign-in. */
+export type Account = { id: number; name: string | null; email: string | null; plan: "free" | "premium"; provider: string };
+export type Provider = "apple" | "google";
+
 /** A show in search results, charts or recommendations. */
 export type Listing = {
   appleId: string | null;
@@ -344,6 +348,15 @@ export const backend = {
   downloadModel: () => call<void>("model_download", {}, () => sample.downloadModel()),
   cancelModel: () => call<void>("model_cancel", {}, () => undefined),
   deleteModel: (id: string) => call<void>("model_delete", { id }, () => sample.deleteModel()),
+  // The account. `signIn` resolves once the browser comes back: null when cancelled.
+  account: () => call<Account | null>("account_get", {}, () => sample.account()),
+  refreshAccount: () => call<Account | null>("account_refresh", {}, () => sample.account()),
+  signIn: (provider: Provider) => call<Account | null>("account_sign_in", { provider }, () => sample.signIn(provider)),
+  cancelSignIn: () => call<void>("account_cancel", {}, () => sample.cancelSignIn()),
+  openSignInAgain: () => call<void>("account_open_again", {}, () => undefined),
+  signOut: () => call<void>("account_sign_out", {}, () => sample.signOut()),
+  deleteAccount: () => call<void>("account_delete", {}, () => sample.signOut()),
+
   translationModel: () => call<TranslationModel>("translation_model", {}, () => sample.translationModel()),
   downloadTranslation: () => call<void>("translation_download", {}, () => sample.downloadTranslation()),
   translate: (lang: string, itemId: number, idx: number, text: string) =>
@@ -445,6 +458,7 @@ type Events = {
   playback: PlaybackEvent;
   transcript: TranscriptStatus;
   "model-download": ModelProgress;
+  account: Account | null;
 };
 
 /** Listens to an event from the Rust core (sample.ts plays them in a browser). Returns the unlisten function. */

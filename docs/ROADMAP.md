@@ -80,7 +80,7 @@ Rough times; the order can change with feedback from the first users.
 
 ## Accounts and sync, server and desktop (about 1 week)
 
-- Desktop sign-in with Apple and Google through the system browser. Jomo sets up Apple's Services ID and return URL and Google's desktop OAuth client.
+- Desktop sign-in with Apple and Google through the system browser, and Settings › Account and sync, with sign out and delete account (done 2026-11-13). Jomo sets up Apple's Services ID and key and Google's Web application OAuth client (`backend/README.md`).
 - Server: sync endpoints for listening history, saved words, missed sentences and practice summaries (section 7), with tests, in `backend/` and `docs/API.md`.
 - Desktop syncs when it opens and after each session.
 - *Today* shows the episodes listened to on the phone.

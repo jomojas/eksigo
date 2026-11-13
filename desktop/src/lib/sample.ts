@@ -2,6 +2,8 @@
 // and Library items kept in memory, with downloads and playback simulated by timers. Never used in the app.
 
 import type {
+  Account,
+  Provider,
   GradeArgs,
   Graded,
   Level,
@@ -193,6 +195,9 @@ function makeSentences(durationMs: number, upToMs: number): Sentence[] {
 // ---------- events ----------
 
 const listeners = new Map<string, Set<(p: unknown) => void>>();
+let sampleAccount: Account | null = null;
+let cancelSampleSignIn: (() => void) | null = null;
+
 function emit(event: string, payload: unknown) {
   listeners.get(event)?.forEach((h) => h(payload));
 }
@@ -501,6 +506,35 @@ export const sample = {
 
   deleteModel() {
     modelInstalled = false;
+  },
+
+  // A pretend account: signing in "opens the browser" and comes back after two seconds.
+  account: (): Account | null => sampleAccount,
+
+  signIn(provider: Provider): Promise<Account | null> {
+    return new Promise((resolve) => {
+      const t = window.setTimeout(() => {
+        cancelSampleSignIn = null;
+        sampleAccount = { id: 1, name: "Alex Lin", email: provider === "google" ? "alex.lin@gmail.com" : "x7k2@privaterelay.appleid.com", plan: "free", provider };
+        emit("account", sampleAccount);
+        resolve(sampleAccount);
+      }, 2000);
+      cancelSampleSignIn = () => {
+        window.clearTimeout(t);
+        resolve(null);
+      };
+    });
+  },
+
+  cancelSignIn() {
+    cancelSampleSignIn?.();
+    cancelSampleSignIn = null;
+  },
+
+  async signOut() {
+    await new Promise((r) => setTimeout(r, 300));
+    sampleAccount = null;
+    emit("account", null);
   },
 
   translationModel: (): TranslationModel => ({ id: "hy-mt-1.5", name: "HY-MT 1.5", bytes: 1_133_080_512, installed: translationInstalled, downloading: false }),

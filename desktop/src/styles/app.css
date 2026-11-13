@@ -1496,3 +1496,134 @@ select.btn {
     height: 10px;
   }
 }
+
+/* Account and sync (design D14) */
+.provider {
+  height: 40px;
+  padding: 0 16px;
+  font-size: 14px;
+  gap: 10px;
+  min-width: 232px;
+  justify-content: flex-start;
+}
+.provider-apple {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--canvas);
+}
+.provider-apple:hover:not(:disabled) {
+  background: var(--ink-muted);
+  border-color: var(--ink-muted);
+}
+.avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 9999px;
+  background: var(--surface-3);
+  border: 1px solid var(--hairline-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 600 16px/1 var(--font-display);
+  color: var(--ink);
+  flex-shrink: 0;
+}
+.avatar-sm {
+  width: 22px;
+  height: 22px;
+  font-size: 11px;
+}
+.account-row {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+.account-row-t {
+  font: 500 14px/1.3 var(--font-text);
+  color: var(--ink);
+}
+.account-row-h {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-subtle);
+  margin-top: 4px;
+}
+.account-wait {
+  border: 1px solid var(--hairline-strong);
+  background: var(--surface-2);
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  margin-top: 24px;
+}
+.spin {
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  border: 2px solid var(--hairline-strong);
+  border-top-color: var(--ink);
+  flex-shrink: 0;
+  margin-top: 2px;
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation-duration: 3s;
+  }
+}
+.syncs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background: var(--hairline);
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  overflow: hidden;
+  margin-top: 20px;
+}
+.syncs > div {
+  background: var(--surface-1);
+  padding: 14px 16px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-subtle);
+}
+.syncs svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.syncs b {
+  display: block;
+  font-weight: 500;
+  color: var(--ink);
+}
+.account-confirm {
+  border: 1px solid var(--semantic-error);
+  background: var(--error-fill);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+}
+.btn-danger {
+  background: var(--semantic-error);
+  border-color: var(--semantic-error);
+  color: #ffffff;
+}
+.btn.danger {
+  color: var(--semantic-error);
+}

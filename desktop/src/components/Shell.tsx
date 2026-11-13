@@ -8,6 +8,7 @@ import { isMac, keyLabel, modKey } from "../lib/platform";
 import { Icon, type IconName } from "./Icon";
 import { restartToUpdate, useUpdate } from "../lib/updates";
 import { Welcome, WELCOMED } from "../pages/Welcome";
+import { displayName, useAccount } from "../lib/account";
 
 const NAV: { to: string; label: string; icon: IconName }[] = [
   { to: "/today", label: "Today", icon: "today" },
@@ -171,6 +172,7 @@ function AppShell() {
               ))
             )}
             <div style={{ flexGrow: 1 }} />
+            <AccountChip />
             <NavLink to="/settings" className="nav">
               <Icon name="settings" />
               Settings
@@ -203,6 +205,32 @@ function AppShell() {
         </footer>
       </div>
     </ShellContext.Provider>
+  );
+}
+
+/** Above Settings: "Sign in to sync", or who is signed in (design D14). Both open Settings › Account; Settings
+ * itself shows as the open screen. */
+function AccountChip() {
+  const { account } = useAccount();
+  if (account === undefined) return null;
+  const to = "/settings?s=account";
+  if (!account)
+    return (
+      <NavLink to={to} className={() => "nav"} style={{ color: "var(--ink-subtle)" }}>
+        <Icon name="user" />
+        Sign in to sync
+      </NavLink>
+    );
+  const name = displayName(account);
+  return (
+    <NavLink to={to} className={() => "nav"} title={account.email ?? name} style={{ fontWeight: 500 }}>
+      <span className="avatar avatar-sm" aria-hidden="true">
+        {name.slice(0, 1).toUpperCase()}
+      </span>
+      <span className="ell" style={{ flexGrow: 1 }}>
+        {name}
+      </span>
+    </NavLink>
   );
 }
 
