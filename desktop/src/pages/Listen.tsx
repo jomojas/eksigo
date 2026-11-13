@@ -230,13 +230,14 @@ export function ListenScreen() {
     const top = bar.current?.getBoundingClientRect().bottom ?? view.top;
     const r = row.getBoundingClientRect();
     const off = (r.top + r.bottom) / 2 - (top + view.bottom) / 2;
-    if (Math.abs(off) > 24) scroller.scrollBy({ top: off, behavior: "smooth" });
+    if (Math.abs(off) > 24) glide(scroller, off);
   }, [current, follow]);
   useEffect(() => {
     const scroller = list.current?.closest(".content");
     if (!scroller) return;
     let back = 0;
     const away = () => {
+      stopGlide();
       setFollow(false);
       window.clearTimeout(back);
       back = window.setTimeout(() => setFollow(true), BACK_AFTER_MS);
@@ -487,4 +488,32 @@ export function ListenScreen() {
       </div>
     </Page>
   );
+}
+
+let gliding = 0;
+
+/** Stops a glide under way, so the learner's own scrolling wins. */
+function stopGlide() {
+  cancelAnimationFrame(gliding);
+  gliding = 0;
+}
+
+/** Scrolls `el` by `by` px gently: a short move to the next sentence takes about half a second, a long way
+ * back after the learner scrolled away up to 1.6 seconds, easing in and out. */
+function glide(el: Element, by: number) {
+  stopGlide();
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    el.scrollTop += by;
+    return;
+  }
+  const from = el.scrollTop;
+  const ms = Math.min(1600, 450 + Math.abs(by) * 1.2);
+  const start = performance.now();
+  const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+  const step = (now: number) => {
+    const t = Math.min(1, (now - start) / ms);
+    el.scrollTop = from + by * ease(t);
+    gliding = t < 1 ? requestAnimationFrame(step) : 0;
+  };
+  gliding = requestAnimationFrame(step);
 }
