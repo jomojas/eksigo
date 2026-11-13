@@ -2,7 +2,7 @@
 
 The contract between the apps (desktop, iPhone) and the server, at `https://api.eksigo.com`. The design reasons are in [DESIGN.md](DESIGN.md). The v1 API (breakdowns, lessons, practice, App Store purchases) is gone; it lives in the v1 repository.
 
-Status: accounts, dictionaries and cover art are implemented in `backend/` (2026-11-10). Sync (DESIGN.md section 7) and Premium AI (section 6) come later.
+Status: accounts, dictionaries and cover art are implemented in `backend/` (2026-11-10), sync on 2026-11-13. Premium AI (DESIGN.md section 6) comes later.
 
 ## Conventions
 - HTTPS and JSON. Interactive docs at `/v1/docs`.
@@ -21,6 +21,7 @@ Every error has the same shape:
 | 401 | `sign_in_required` | No valid session (missing, signed out, expired after 180 idle days, or the account was deleted) |
 | 401 | `invalid_token` | An Apple or Google identity token failed its checks |
 | 404 | `not_found` | Unknown path or item; also Google sign-in when it isn't set up |
+| 413 | `sync_full` | The account has reached the sync limit |
 | 500 | `internal` | A bug on our side |
 
 ## Accounts (DESIGN.md section 8)
@@ -72,6 +73,43 @@ Returns `User`:
 
 ### `DELETE /v1/me`
 Deletes the account and all its sessions. If it signed in with Apple on the desktop and the server has a Sign in with Apple key, it also revokes the sign-in at Apple. Returns `204`. Account IDs are never reused.
+
+## Sync (DESIGN.md section 7)
+
+### `POST /v1/sync`
+Signed in. Sends this device's changes and returns every change made since its last sync by its other devices. One call when the app opens, after a session, and a few seconds after something changes.
+```json
+{
+  "since": 1290,
+  "changes": [
+    {"kind": "word", "key": "follow through", "changedAt": 1794598222000, "data": {"text": "follow through", "…": "…"}},
+    {"kind": "word", "key": "gist", "changedAt": 1794598230000, "deleted": true}
+  ]
+}
+```
+Returns:
+```json
+{"cursor": 1302, "changes": [{"kind": "listen", "key": "https://…/ep12.mp3", "changedAt": 1794590000000, "data": {"…": "…"}}], "more": false}
+```
+- **Records** are JSON objects keyed by `kind` and `key`; the server stores them as they are. `changedAt` is when the record changed on the device, in unix milliseconds.
+- **The latest change wins.** A change older than the one stored is ignored, and the stored one comes back in `changes`, so the device takes it.
+- **Deleting** sends `"deleted": true` without `data`. The deletion is kept and reaches the other devices the same way.
+- **`since`** is the `cursor` from the last answer (0 the first time). The answer leaves out the device's own changes from this request. With `"more": true` there are more: call again with the new cursor and no changes.
+- **`"reset": true`** means the server has less than the device thought (it was restored from a backup). The answer then holds everything from the start; the device should send all its records again.
+- **Limits:** at most 500 changes per request, 16 KB per record, 20 MB per account (`413 sync_full`). Deleting the account deletes all of it.
+
+Kinds. Times inside `data` are unix seconds unless the name ends in `Ms`; an episode is identified by its `audioUrl`, with `feedUrl` and `guid` to find it in its feed.
+
+| `kind` | `key` | Made by | `data` |
+|---|---|---|---|
+| `word` | the text, lowercased | both | `text`, `headword`, `ipa`, `meaning`, `note`, `explanation`, `card` (the FSRS card as a JSON string, or null), `dueAt`, `level` (`new`, `learning`, `familiar`, `known`), `addedAt`, and `contexts`: each sentence it was saved from, `{audioUrl, title, source, idx, sentence, typed, startMs, endMs, sentenceStartMs, sentenceEndMs, addedAt, practisedAt}` |
+| `review` | `<word key>\|<at>\|<mode>` | both | `word`, `at`, `mode` (`type`, `recall`, `pick`, `known`), `grade` (1–4), `correct` (bool or null), `typed`, `seconds` |
+| `missed` | `<audioUrl>\|<idx>` | desktop | a sentence missed in the latest dictation of a podcast episode, the phone's playlist: `audioUrl`, `feedUrl`, `guid`, `episode`, `show`, `artworkUrl`, `bytes` (the file's size, to check it's the same file), `idx`, `startMs`, `endMs`, `text`, `typed`, `at`, `flagged` |
+| `practice` | `<audioUrl>\|<startedAt>` | desktop | one dictation attempt: the episode fields as in `missed`, `startedAt`, `updatedAt`, `finishedAt`, `seconds`, `answered`, `sentences`, `accuracy` (correct words in thousandths) |
+| `day` | `<day>\|<kind>\|<device>` | both | time practised on a day by one device, so the devices' days add up: `day` ("2026-11-13"), `kind` (`dictation`, `words`, `listening`), `seconds`, `device` |
+| `listen` | `<audioUrl>` | phone | the latest listen to an episode: `audioUrl`, `feedUrl`, `guid`, `episode`, `show`, `artworkUrl`, `durationS`, `positionS`, `finished`, `listenedAt` (unix ms) |
+
+A device keeps records of kinds it doesn't know and doesn't send them back.
 
 ## Free resources (no account needed)
 

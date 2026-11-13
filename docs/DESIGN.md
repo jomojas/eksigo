@@ -260,6 +260,12 @@ The VPS is small (2 vCPU, 4 GB RAM, 40 GB SSD), so **the server stores only smal
 
   A heavy learner with 3,000 words and 5,000 missed sentences needs about 3 MB.
 - **Only changes are sent.** Each device keeps a "last synced" marker and asks for what changed since then: one request when the app opens and one after a session. That's a few requests per user per day.
+- **How it works (decided 2026-11-13, design D20, API.md "Sync"):** one call, `POST /v1/sync`, sends a device's changes and brings back the others'. It runs by itself when the app opens, a few seconds after words or practice change, and every ten minutes; Settings › Account shows when it last worked, with *Sync now*.
+  - **The latest change wins**, record by record (a word, a review, a day). Reviews are separate records, so practising on both devices loses none; a word's sentences from both are kept.
+  - **Deleting** a word deletes it on every device.
+  - **First sign-in:** everything already on the computer is added to the account. Nothing is asked; nothing is lost. Signing out keeps everything on the computer.
+  - **Practice days** are kept per device and added up, so the streak counts the phone's listening too.
+  - **The learner's own files** don't sync (the phone can't play them); a saved word's sentence from one still does, as text.
 - **Audio, transcripts and attempts stay on each device.**
 - **Accounts stay optional on both apps.** Listening on the phone and dictating on the desktop need no account. It is asked for only to turn on sync or Premium.
 - **What the server does in total:**

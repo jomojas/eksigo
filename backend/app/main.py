@@ -1,4 +1,4 @@
-"""The API (docs/API.md): accounts, offline dictionaries and cover art. Sync and Premium AI come later
+"""The API (docs/API.md): accounts, sync, offline dictionaries and cover art. Premium AI comes later
 (DESIGN.md section 13)."""
 
 import hashlib
@@ -14,7 +14,7 @@ from fastapi import Depends, FastAPI, Header, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field
 
-from app import artwork, auth, desktop_auth, dictionaries
+from app import artwork, auth, desktop_auth, dictionaries, sync
 from app.config import Config, Settings, get_config, get_settings
 from app.db import connect, open_db
 from app.errors import APIError, install_error_handlers
@@ -37,6 +37,19 @@ class GoogleSignIn(BaseModel):
 class DesktopToken(BaseModel):
     code: str = Field(min_length=20, max_length=200)
     verifier: str = Field(min_length=43, max_length=128)
+
+
+class SyncChange(BaseModel):
+    kind: str = Field(min_length=1, max_length=20)
+    key: str = Field(min_length=1, max_length=500)
+    changedAt: int = Field(ge=0)  # noqa: N815 (the API's JSON is camelCase)
+    deleted: bool = False
+    data: dict[str, Any] | None = None
+
+
+class SyncRequest(BaseModel):
+    since: int = Field(default=0, ge=0)
+    changes: list[SyncChange] = Field(default_factory=list)
 
 
 class DevSignIn(BaseModel):
@@ -172,6 +185,13 @@ def create_app(settings: Settings | None = None, cfg: Config | None = None) -> F
         auth.delete_user(conn, user["id"])
         desktop_auth.revoke_apple(cfg, settings, user)
         return Response(status_code=204)
+
+    # ------------------------------------------------------------ sync (DESIGN.md section 7)
+
+    @app.post("/v1/sync")
+    def sync_changes(conn: DB, body: SyncRequest, authorization: Authorization = None):
+        user = auth.require_user(conn, cfg, authorization)
+        return sync.apply(conn, user["id"], body.since, [c.model_dump() for c in body.changes])
 
     # ------------------------------------------------------------ free resources, no account needed
 

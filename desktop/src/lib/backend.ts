@@ -42,6 +42,31 @@ export type ModelProgress = { id: string; received: number; total: number; state
 
 /** The optional account (account.rs). `provider`: "apple", "google", or "dev" for a development sign-in. */
 export type Account = { id: number; name: string | null; email: string | null; plan: "free" | "premium"; provider: string };
+/** Sync with the account (sync.rs, design D20). `last`: unix ms of the last sync that worked. `first`: never synced
+ * with this account yet. The counts are this computer's. */
+export type SyncStatus = {
+  state: "off" | "syncing" | "synced" | "failed";
+  last: number | null;
+  error: string | null;
+  first: boolean;
+  words: number;
+  days: number;
+  episodes: number;
+};
+/** An episode heard on the phone, for Today. Times: `listenedAt` unix ms, positions in seconds. */
+export type Heard = {
+  audioUrl: string;
+  feedUrl: string | null;
+  guid: string | null;
+  title: string;
+  show: string;
+  artworkUrl: string | null;
+  durationS: number | null;
+  positionS: number | null;
+  finished: boolean;
+  listenedAt: number;
+  practised: boolean;
+};
 export type Provider = "apple" | "google";
 
 /** AI (ai.rs): ChatGPT (Plus or Pro) through the browser, or the learner's own key. `using`: what explanations use. */
@@ -401,6 +426,13 @@ export const backend = {
   signOut: () => call<void>("account_sign_out", {}, () => sample.signOut()),
   deleteAccount: () => call<void>("account_delete", {}, () => sample.signOut()),
 
+  // Sync. It runs by itself; `syncNow` is the button.
+  syncStatus: () => call<SyncStatus>("sync_status", {}, () => sample.syncStatus()),
+  syncNow: () => call<SyncStatus>("sync_now", {}, () => sample.syncNow()),
+  heard: () => call<Heard[]>("sync_heard", {}, () => sample.heard()),
+  /** The Library's episode for something heard on the phone (its show's feed is read if needed). */
+  heardEpisode: (h: Heard) => call<number>("sync_episode", { audioUrl: h.audioUrl, feedUrl: h.feedUrl, guid: h.guid }, () => sample.heardEpisode()),
+
   // AI. `aiConnect` resolves once the browser comes back: null when cancelled. Failures of the requests below
   // are AiProblem objects (see aiProblem).
   aiStatus: () => call<AiStatus>("ai_status", {}, () => sample.aiStatus()),
@@ -528,6 +560,9 @@ type Events = {
   "model-download": ModelProgress;
   account: Account | null;
   ai: AiStatus;
+  sync: SyncStatus;
+  activity: null;
+  heard: null;
 };
 
 /** Listens to an event from the Rust core (sample.ts plays them in a browser). Returns the unlisten function. */

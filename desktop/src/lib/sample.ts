@@ -3,6 +3,8 @@
 
 import type {
   Account,
+  Heard,
+  SyncStatus,
   AiKey,
   AiStatus,
   AiMessage,
@@ -215,6 +217,7 @@ async function pretendWriting(text: string, onText: (t: string) => void): Promis
 }
 let cancelSampleAi: (() => void) | null = null;
 let cancelSampleSignIn: (() => void) | null = null;
+let sampleSync: SyncStatus = { state: "synced", last: Date.now() - 2 * 60_000, error: null, first: false, words: 48, days: 23, episodes: 14 };
 
 function emit(event: string, payload: unknown) {
   listeners.get(event)?.forEach((h) => h(payload));
@@ -668,6 +671,32 @@ export const sample = {
       ],
       next: "用 0.85× 再听这几句，先跟着读一遍再听写。",
     };
+  },
+
+  // Pretend sync: synced two minutes ago while signed in; Sync now takes a second.
+  syncStatus: (): SyncStatus => ({ ...sampleSync, state: sampleAccount ? sampleSync.state : "off", first: false }),
+
+  async syncNow(): Promise<SyncStatus> {
+    if (!sampleAccount) return sample.syncStatus();
+    sampleSync = { ...sampleSync, state: "syncing" };
+    emit("sync", sample.syncStatus());
+    await new Promise((r) => setTimeout(r, 1000));
+    sampleSync = { ...sampleSync, state: "synced", last: Date.now() };
+    emit("sync", sample.syncStatus());
+    return sample.syncStatus();
+  },
+
+  heard: (): Heard[] =>
+    sampleAccount
+      ? [
+          { audioUrl: "https://sample/dawn.mp3", feedUrl: null, guid: null, title: "A market that only opens at dawn", show: "Slow Stories", artworkUrl: null, durationS: 1080, positionS: 1080, finished: true, listenedAt: Date.now() - 3 * 3600_000, practised: false },
+          { audioUrl: "https://sample/octopus.mp3", feedUrl: null, guid: null, title: "How octopuses taste with their arms", show: "City Science", artworkUrl: null, durationS: 1860, positionS: 724, finished: false, listenedAt: Date.now() - 4 * 3600_000, practised: false },
+          { audioUrl: "https://sample/libraries.mp3", feedUrl: null, guid: null, title: "The quiet economics of public libraries", show: "Money Talks", artworkUrl: null, durationS: 1620, positionS: 1620, finished: true, listenedAt: Date.now() - 26 * 3600_000, practised: true },
+        ]
+      : [],
+
+  heardEpisode(): number {
+    throw new Error("Practising a phone episode needs the app: the sample has no feeds to read.");
   },
 
   async signOut() {

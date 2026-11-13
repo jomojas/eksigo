@@ -196,6 +196,29 @@ const MIGRATIONS: &[&str] = &[
         created    INTEGER NOT NULL
     );
     CREATE INDEX ai_messages_by_sentence ON ai_messages (item_id, idx);",
+    // 14: sync (sync.rs, design D20). What each record looked like when last sent or received; what other devices
+    // sent that isn't merged into this computer's own tables (the phone's listening, other devices' practice days);
+    // where a word's sentence came from when its episode isn't in this Library; and practice days from everywhere.
+    "CREATE TABLE sync_sent (
+        kind TEXT NOT NULL,
+        key  TEXT NOT NULL,
+        hash TEXT NOT NULL,
+        PRIMARY KEY (kind, key)
+    );
+    CREATE TABLE synced (
+        kind       TEXT NOT NULL,
+        key        TEXT NOT NULL,
+        data       TEXT NOT NULL,
+        changed_at INTEGER NOT NULL,
+        PRIMARY KEY (kind, key)
+    );
+    ALTER TABLE word_contexts ADD COLUMN audio_url TEXT;
+    ALTER TABLE word_contexts ADD COLUMN title TEXT;
+    ALTER TABLE word_contexts ADD COLUMN source TEXT;
+    CREATE VIEW practice_all AS
+        SELECT day, kind, seconds FROM practice_days
+        UNION ALL
+        SELECT json_extract(data, '$.day'), json_extract(data, '$.kind'), json_extract(data, '$.seconds') FROM synced WHERE kind = 'day';",
 ];
 
 pub struct Db(pub Mutex<Connection>);

@@ -172,7 +172,7 @@ fn save(db: &Db, s: &Stored) -> Result<()> {
 }
 
 fn keychain(user: &str) -> Result<keyring::Entry> {
-    keyring::Entry::new(KEYCHAIN_SERVICE, user).context("opening the keychain")
+    crate::keychain_entry(KEYCHAIN_SERVICE, user).context("opening the keychain")
 }
 
 fn secret(user: &str) -> Option<String> {

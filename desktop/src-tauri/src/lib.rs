@@ -15,6 +15,7 @@ mod practice;
 mod progress;
 pub mod sentences;
 mod storage;
+mod sync;
 pub mod transcribe;
 mod translate;
 pub mod whisper;
@@ -25,13 +26,24 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, Listener, Manager, State};
 
 use db::Db;
 use library::{Downloads, Episode, Item, Show};
 use player::Player;
 use podcasts::Listing;
 use transcribe::Transcriber;
+
+/// An entry in the macOS Keychain or the Windows Credential Manager. Tests get a pretend one: the real one may hold
+/// the developer's own sign-ins, and macOS would stop a new test build to ask for permission to read them.
+pub(crate) fn keychain_entry(service: &str, user: &str) -> keyring::Result<keyring::Entry> {
+    #[cfg(test)]
+    {
+        static MOCK: std::sync::Once = std::sync::Once::new();
+        MOCK.call_once(|| keyring::set_default_credential_builder(keyring::mock::default_credential_builder()));
+    }
+    keyring::Entry::new(service, user)
+}
 
 /// Errors cross to the interface as plain sentences.
 type CmdResult<T> = Result<T, String>;
@@ -99,6 +111,7 @@ async fn account_sign_in(app: AppHandle, db: State<'_, Db>, sign_in: State<'_, a
     match account::sign_in(&db, &sign_in, &provider, open).await {
         Ok(a) => {
             let _ = app.emit("account", Some(&a));
+            app.state::<sync::Syncer>().soon();
             Ok(Some(a))
         }
         Err(account::NotSignedIn::Cancelled) => Ok(None),
@@ -125,6 +138,7 @@ fn account_open_again(app: AppHandle, sign_in: State<account::SignIn>) -> CmdRes
 async fn account_sign_out(app: AppHandle, db: State<'_, Db>) -> CmdResult<()> {
     account::sign_out(&db).await.map_err(err)?;
     let _ = app.emit("account", None::<account::Account>);
+    let _ = app.emit("sync", app.state::<sync::Syncer>().status(&db));
     Ok(())
 }
 
@@ -132,7 +146,62 @@ async fn account_sign_out(app: AppHandle, db: State<'_, Db>) -> CmdResult<()> {
 async fn account_delete(app: AppHandle, db: State<'_, Db>) -> CmdResult<()> {
     account::delete(&db).await.map_err(err)?;
     let _ = app.emit("account", None::<account::Account>);
+    let _ = app.emit("sync", app.state::<sync::Syncer>().status(&db));
     Ok(())
+}
+
+// ---------- sync (sync.rs) ----------
+
+#[tauri::command]
+fn sync_status(db: State<Db>, syncer: State<sync::Syncer>) -> sync::Status {
+    syncer.status(&db)
+}
+
+/// Sync now (Settings › Account and sync). Returns the status it ended in.
+#[tauri::command]
+async fn sync_now(app: AppHandle, db: State<'_, Db>, syncer: State<'_, sync::Syncer>) -> CmdResult<sync::Status> {
+    let a = app.clone();
+    if syncer.now(&db, &move |s| drop(a.emit("sync", s))).await.is_some_and(|n| n > 0) {
+        received(&app);
+    }
+    Ok(syncer.status(&db))
+}
+
+/// Other devices' changes arrived: the pages showing words, practice and listening read again.
+fn received(app: &AppHandle) {
+    for e in ["words", "activity", "heard"] {
+        let _ = app.emit(e, ());
+    }
+}
+
+/// Today's "Heard on your iPhone": the last three days.
+#[tauri::command]
+fn sync_heard(db: State<Db>) -> CmdResult<Vec<sync::Heard>> {
+    sync::heard(&db.conn(), (now() - 3 * 86_400) * 1000).map_err(err)
+}
+
+/// The Library's episode for something heard on the phone, reading its show's feed if it isn't here yet.
+#[tauri::command]
+async fn sync_episode(db: State<'_, Db>, audio_url: String, feed_url: Option<String>, guid: Option<String>) -> CmdResult<i64> {
+    if let Some(id) = sync::episode_for(&db.conn(), &audio_url, guid.as_deref()).map_err(err)? {
+        return Ok(id);
+    }
+    let feed_url = feed_url.ok_or_else(|| err(sync::not_found()))?;
+    let feed = podcasts::fetch_feed(&feed_url).await.map_err(err)?;
+    let listing = Listing {
+        apple_id: None,
+        title: feed.title.clone(),
+        author: feed.author.clone(),
+        feed_url: Some(feed_url),
+        artwork_url: feed.artwork_url.clone(),
+        note: None,
+    };
+    {
+        let mut conn = db.conn();
+        let id = library::save_listing(&conn, &listing).map_err(err)?;
+        library::save_feed(&mut conn, id, &feed).map_err(err)?;
+    }
+    sync::episode_for(&db.conn(), &audio_url, guid.as_deref()).map_err(err)?.ok_or_else(|| err(sync::not_found()))
 }
 
 // ---------- AI (ai.rs) ----------
@@ -982,6 +1051,20 @@ pub fn run() {
                 transcriber.request(item_id, false);
             }
             app.manage(transcriber);
+            // Sync by itself (sync.rs): now, a few seconds after words or practice change, and every ten minutes.
+            app.manage(sync::Syncer::default());
+            for e in ["words", "practice", "activity"] {
+                let handle = app.handle().clone();
+                app.listen_any(e, move |_| handle.state::<sync::Syncer>().soon());
+            }
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let (h1, h2) = (handle.clone(), handle.clone());
+                handle
+                    .state::<sync::Syncer>()
+                    .run_forever(&handle.state::<Db>(), &move |s| drop(h1.emit("sync", s)), &move || received(&h2))
+                    .await;
+            });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -995,6 +1078,10 @@ pub fn run() {
             account_open_again,
             account_sign_out,
             account_delete,
+            sync_status,
+            sync_now,
+            sync_heard,
+            sync_episode,
             ai_status,
             ai_connect,
             ai_cancel,
