@@ -346,7 +346,30 @@ const THINGS: &[&str] = &["it", "this", "that", "these", "those", "something", "
 const POSSESSIVE: &[&str] = &["my", "your", "his", "her", "its", "our", "their"];
 
 impl Dict {
+    /// As written (selections are lower-cased), else as a name ("English", "New York") or an abbreviation
+    /// ("BBC"), which the dictionary keeps capitalised.
     fn get(&self, word: &str) -> Result<Option<Entry>> {
+        if let Some(e) = self.get_exact(word)? {
+            return Ok(Some(e));
+        }
+        if !word.chars().any(char::is_lowercase) {
+            return Ok(None);
+        }
+        let title: String = word
+            .split(' ')
+            .map(|w| {
+                let mut c = w.chars();
+                c.next().map(|f| f.to_uppercase().chain(c).collect::<String>()).unwrap_or_default()
+            })
+            .collect::<Vec<_>>()
+            .join(" ");
+        if let Some(e) = self.get_exact(&title)? {
+            return Ok(Some(e));
+        }
+        self.get_exact(&word.to_uppercase())
+    }
+
+    fn get_exact(&self, word: &str) -> Result<Option<Entry>> {
         let sql = if self.has_definition {
             "SELECT word, ipa, meaning, definition FROM words WHERE word = ?1"
         } else {
@@ -515,6 +538,8 @@ mod tests {
                ('arrives', '', 'arrive的第三人称单数', ''), ('feeling', '', '感觉', ''), ('feel', '', '感到', ''), ('the', '', '那', ''),
                ('before', '', '在…之前', ''), ('put sb off', '', '使某人反感', ''), ('give up', '', '放弃', ''),
                ('make up one''s mind', '', '下定决心', ''), ('go', '', '去', '');
+             INSERT INTO words VALUES ('English', '/ˈɪŋɡlɪʃ/', '英语', ''), ('BBC', '', '英国广播公司', ''), ('New York', '', '纽约', ''), ('book', '', '书', '');
+             INSERT INTO forms VALUES ('books', 'book');
              INSERT INTO forms VALUES ('followed', 'follow'), ('arrives', 'arrive'), ('feeling', 'feel'), ('went', 'go'), ('made', 'make');",
         )
         .unwrap();
@@ -551,6 +576,14 @@ mod tests {
         assert_eq!((l.query.as_str(), l.entry.unwrap().headword.as_str(), l.whole), ("arrives", "arrive", true));
         assert_eq!(d.lookup("went").unwrap().entry.unwrap().headword, "go");
         assert!(d.lookup("zzz").unwrap().entry.is_none());
+    }
+
+    #[test]
+    fn names_and_abbreviations_are_found_whatever_the_case() {
+        let d = dict();
+        for (text, head) in [("English", "English"), ("english.", "English"), ("BBC", "BBC"), ("bbc", "BBC"), ("new york", "New York"), ("Books", "book")] {
+            assert_eq!(d.lookup(text).unwrap().entry.map(|e| e.headword).as_deref(), Some(head), "{text}");
+        }
     }
 
     #[test]
