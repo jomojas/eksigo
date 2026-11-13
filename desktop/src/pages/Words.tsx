@@ -23,7 +23,7 @@ export function Words() {
     const q = query.trim().toLowerCase();
     return words
       .filter((w) => !level || w.level === level)
-      .filter((w) => !q || w.text.toLowerCase().includes(q) || w.meaning.toLowerCase().includes(q) || w.note.toLowerCase().includes(q));
+      .filter((w) => !q || w.text.toLowerCase().includes(q) || w.meaning.toLowerCase().includes(q) || w.note.toLowerCase().includes(q) || w.explanation.toLowerCase().includes(q));
   }, [words, query, level]);
   const toPractise = counts?.total ?? 0;
   const selected = shown.find((w) => w.id === selectedId) ?? shown[0] ?? null;
@@ -147,6 +147,12 @@ function Detail({ word: w }: { word: SavedWord }) {
           </div>
         )}
         {w.meaning && <div style={{ fontSize: 14, lineHeight: 1.6, color: "var(--ink)", whiteSpace: "pre-line" }}>{w.meaning}</div>}
+        {w.explanation && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 4 }}>
+            <span className="eyebrow">In its sentence</span>
+            <div className="ai-text">{w.explanation}</div>
+          </div>
+        )}
       </div>
       <div>
         <div className="prop">

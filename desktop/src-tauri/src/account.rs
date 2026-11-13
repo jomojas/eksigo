@@ -55,8 +55,8 @@ struct SignedIn {
 /// The sign-in waiting for the browser, if any.
 #[derive(Default)]
 pub struct SignIn {
-    cancel: Notify,
-    url: Mutex<Option<String>>,
+    pub(crate) cancel: Notify,
+    pub(crate) url: Mutex<Option<String>>,
 }
 
 impl SignIn {
@@ -185,13 +185,13 @@ pub async fn delete(db: &Db) -> Result<()> {
 
 // ---------------------------------------------------------------- signing in
 
-fn random(bytes: usize) -> String {
+pub(crate) fn random(bytes: usize) -> String {
     let mut buf = vec![0u8; bytes];
     getrandom::fill(&mut buf).expect("the system's random numbers");
     URL_SAFE_NO_PAD.encode(buf)
 }
 
-fn challenge(verifier: &str) -> String {
+pub(crate) fn challenge(verifier: &str) -> String {
     URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()))
 }
 
@@ -233,7 +233,7 @@ pub async fn sign_in(db: &Db, state: &SignIn, provider: &str, open: impl Fn(&str
 async fn wait_for_browser(listener: &TcpListener, app_state: &str, provider: &str, verifier: &str, db: &Db) -> Result<Account, NotSignedIn> {
     loop {
         let Ok((mut stream, _)) = listener.accept().await else { continue };
-        let Ok(Some(query)) = read_callback(&mut stream).await else {
+        let Ok(Some(query)) = read_callback(&mut stream, "/callback").await else {
             let _ = respond(&mut stream, "404 Not Found", None).await;
             continue;
         };
@@ -271,8 +271,8 @@ async fn redeem(db: &Db, code: &str, verifier: &str) -> Result<Account> {
     Ok(signed.user)
 }
 
-/// The query of a `GET /callback?…` request; `None` for anything else (the browser also asks for a favicon).
-async fn read_callback(stream: &mut TcpStream) -> Result<Option<std::collections::HashMap<String, String>>> {
+/// The query of a `GET {path}?…` request; `None` for anything else (the browser also asks for a favicon).
+pub(crate) async fn read_callback(stream: &mut TcpStream, path: &str) -> Result<Option<std::collections::HashMap<String, String>>> {
     let mut buf = Vec::with_capacity(2048);
     let mut chunk = [0u8; 2048];
     while !buf.windows(4).any(|w| w == b"\r\n\r\n") {
@@ -285,10 +285,30 @@ async fn read_callback(stream: &mut TcpStream) -> Result<Option<std::collections
     let head = String::from_utf8_lossy(&buf);
     let target = head.lines().next().and_then(|l| l.strip_prefix("GET ")).and_then(|l| l.split(' ').next()).unwrap_or("");
     let url = url::Url::parse(&format!("http://127.0.0.1{target}"))?;
-    Ok((url.path() == "/callback").then(|| url.query_pairs().into_owned().collect()))
+    Ok((url.path() == path).then(|| url.query_pairs().into_owned().collect()))
 }
 
-async fn respond(stream: &mut TcpStream, status: &str, location: Option<&str>) -> Result<()> {
+/// A small page for the browser tab, styled like the server's (it has no address of its own to go to).
+pub(crate) async fn respond_page(stream: &mut TcpStream, title: &str, text: &str) -> Result<()> {
+    let html = format!(
+        "<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width\"><title>{title}</title>\
+         <style>body{{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;font:15px/1.55 Inter,-apple-system,system-ui,'Segoe UI',sans-serif;\
+         background:#fcfcfd;color:#3a3d44}}@media (prefers-color-scheme:dark){{body{{background:#010102;color:#d0d6e0}}h1{{color:#f7f8f8}}}}\
+         main{{max-width:420px;padding:24px}}h1{{font-size:22px;letter-spacing:-0.4px;color:#121316;margin:0 0 8px}}</style>\
+         <main><h1>{title}</h1><p>{text}</p></main></html>"
+    );
+    let head = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nCache-Control: no-store\r\nReferrer-Policy: no-referrer\r\n\
+         Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'\r\nConnection: close\r\n\r\n",
+        html.len()
+    );
+    stream.write_all(head.as_bytes()).await?;
+    stream.write_all(html.as_bytes()).await?;
+    stream.shutdown().await?;
+    Ok(())
+}
+
+pub(crate) async fn respond(stream: &mut TcpStream, status: &str, location: Option<&str>) -> Result<()> {
     let location = location.map(|l| format!("Location: {l}\r\n")).unwrap_or_default();
     let head = format!("HTTP/1.1 {status}\r\n{location}Content-Length: 0\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n");
     stream.write_all(head.as_bytes()).await?;

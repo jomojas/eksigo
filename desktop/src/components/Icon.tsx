@@ -12,6 +12,11 @@ const PATHS = {
   plus: '<path d="M12 5v14M5 12h14"/>',
   file: '<path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z"/><path d="M14 3v5h5"/>',
   play: '<path d="M7 4l13 8-13 8z"/>',
+  book: '<path d="M5 4h11a3 3 0 013 3v13H8a3 3 0 01-3-3z"/>',
+  ear: '<path d="M6 9a6 6 0 1112 0c0 3-3 4-3 7a3 3 0 01-6 0"/>',
+  pencil: '<path d="M4 20l4-1 11-11-3-3L5 16z"/>',
+  guess: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 014.5 1.5c0 1.5-2 2-2 3.5M12 17.5v.01"/>',
+  send: '<path d="M5 12h14M13 6l6 6-6 6"/>',
   pause: '<path d="M8 5v14M16 5v14"/>',
   check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
   chevron: '<path d="M6 9l6 6 6-6"/>',
@@ -30,6 +35,11 @@ const PATHS = {
   lock: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/>',
   mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
   headphones: '<path d="M3 14v-2a9 9 0 0118 0v2"/><rect x="3" y="14" width="4" height="6" rx="1.5"/><rect x="17" y="14" width="4" height="6" rx="1.5"/>',
+  chat: '<path d="M21 12a8 8 0 01-11.6 7.1L4 20l1-4.6A8 8 0 1121 12z"/>',
+  external: '<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5"/>',
+  alert: '<circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16.5v.5"/>',
+  "chevron-right": '<path d="M9 6l6 6-6 6"/>',
+  "chevron-up": '<path d="M6 15l6-6 6 6"/>',
 } as const;
 
 export type IconName = keyof typeof PATHS;

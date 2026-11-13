@@ -1,4 +1,5 @@
 mod account;
+mod ai;
 pub mod activity;
 pub mod audio;
 pub mod compare;
@@ -132,6 +133,149 @@ async fn account_delete(app: AppHandle, db: State<'_, Db>) -> CmdResult<()> {
     account::delete(&db).await.map_err(err)?;
     let _ = app.emit("account", None::<account::Account>);
     Ok(())
+}
+
+// ---------- AI (ai.rs) ----------
+
+#[tauri::command]
+fn ai_status(db: State<Db>) -> ai::Status {
+    ai::status(&db)
+}
+
+fn ai_changed(app: &AppHandle, db: &Db) {
+    let _ = app.emit("ai", ai::status(db));
+}
+
+/// Opens OpenAI's page in the browser and waits for it to come back. `None`: cancelled.
+#[tauri::command]
+async fn ai_connect(app: AppHandle, db: State<'_, Db>, connect: State<'_, ai::Connect>) -> CmdResult<Option<ai::Status>> {
+    use tauri_plugin_opener::OpenerExt;
+    let open = |url: &str| app.opener().open_url(url, None::<&str>).map_err(|e| anyhow::anyhow!("Couldn't open the browser: {e}"));
+    match ai::connect(&db, &connect, open).await {
+        Ok(s) => {
+            ai_changed(&app, &db);
+            Ok(Some(s))
+        }
+        Err(account::NotSignedIn::Cancelled) => Ok(None),
+        Err(account::NotSignedIn::Failed(e)) => Err(e),
+    }
+}
+
+#[tauri::command]
+fn ai_cancel(connect: State<ai::Connect>) {
+    connect.0.cancel();
+}
+
+#[tauri::command]
+fn ai_open_again(app: AppHandle, connect: State<ai::Connect>) -> CmdResult<()> {
+    use tauri_plugin_opener::OpenerExt;
+    match connect.0.url() {
+        Some(url) => app.opener().open_url(url, None::<&str>).map_err(err),
+        None => Ok(()),
+    }
+}
+
+#[tauri::command]
+async fn ai_disconnect(app: AppHandle, db: State<'_, Db>) -> CmdResult<ai::Status> {
+    ai::disconnect(&db).await.map_err(err)?;
+    ai_changed(&app, &db);
+    Ok(ai::status(&db))
+}
+
+/// Tries the key and keeps it when it works.
+#[tauri::command]
+async fn ai_set_key(app: AppHandle, db: State<'_, Db>, key: ai::Key, secret: String) -> Result<ai::Status, ai::AiError> {
+    let s = ai::set_key(&db, key, &secret).await?;
+    ai_changed(&app, &db);
+    Ok(s)
+}
+
+#[tauri::command]
+fn ai_remove_key(app: AppHandle, db: State<Db>) -> CmdResult<ai::Status> {
+    ai::remove_key(&db).map_err(err)?;
+    ai_changed(&app, &db);
+    Ok(ai::status(&db))
+}
+
+/// A limit reached or a sign-in ended changes what Settings shows.
+fn ai_result<T>(app: &AppHandle, db: &Db, r: Result<T, ai::AiError>) -> Result<T, ai::AiError> {
+    if matches!(r, Err(ai::AiError::Limit | ai::AiError::Reconnect)) {
+        ai_changed(app, db);
+    }
+    r
+}
+
+/// The models the ChatGPT plan offers, for choosing one in Settings › AI.
+#[tauri::command]
+async fn ai_models(app: AppHandle, db: State<'_, Db>) -> Result<Vec<ai::ModelInfo>, ai::AiError> {
+    let r = ai::models(&db).await;
+    ai_result(&app, &db, r)
+}
+
+/// None: Eksigo picks a small model.
+#[tauri::command]
+fn ai_set_model(app: AppHandle, db: State<Db>, model: Option<String>) -> CmdResult<ai::Status> {
+    let s = ai::set_model(&db, model).map_err(err)?;
+    ai_changed(&app, &db);
+    Ok(s)
+}
+
+/// What words mean in their sentence, or a question about them; the answer arrives in pieces on `on_text`.
+#[tauri::command]
+async fn ai_explain(
+    app: AppHandle,
+    db: State<'_, Db>,
+    lang: String,
+    text: String,
+    sentence: String,
+    history: Vec<ai::Exchange>,
+    question: Option<String>,
+    on_text: tauri::ipc::Channel<String>,
+) -> Result<String, ai::AiError> {
+    let send = move |t: &str| {
+        let _ = on_text.send(t.to_string());
+    };
+    let r = ai::explain(&db, &lang, &text, &sentence, &history, question.as_deref(), &send).await;
+    ai_result(&app, &db, r)
+}
+
+/// The conversation about one sentence (`attempt_id` None: on Listen).
+#[tauri::command]
+fn ai_thread(db: State<Db>, item_id: i64, attempt_id: Option<i64>, idx: i64) -> CmdResult<Vec<ai::Message>> {
+    ai::thread(&db.conn(), item_id, attempt_id, idx).map_err(err)
+}
+
+/// The sentences that have a conversation.
+#[tauri::command]
+fn ai_asked(db: State<Db>, item_id: i64, attempt_id: Option<i64>) -> CmdResult<Vec<i64>> {
+    ai::asked(&db.conn(), item_id, attempt_id).map_err(err)
+}
+
+/// Asks about one sentence and keeps it; the answer arrives in pieces on `on_text` (not for `why`).
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+async fn ai_ask(
+    app: AppHandle,
+    db: State<'_, Db>,
+    lang: String,
+    item_id: i64,
+    attempt_id: Option<i64>,
+    idx: i64,
+    question: String,
+    why: bool,
+    on_text: tauri::ipc::Channel<String>,
+) -> Result<ai::Message, ai::AiError> {
+    let send = move |t: &str| {
+        let _ = on_text.send(t.to_string());
+    };
+    let r = ai::ask_sentence(&db, &lang, item_id, attempt_id, idx, &question, why, &send).await;
+    ai_result(&app, &db, r)
+}
+
+#[tauri::command]
+async fn ai_review(app: AppHandle, db: State<'_, Db>, lang: String, attempt_id: i64) -> Result<Option<ai::Review>, ai::AiError> {
+    let r = ai::review(&db, &lang, attempt_id).await;
+    ai_result(&app, &db, r)
 }
 
 // ---------- speech models and transcripts ----------
@@ -823,6 +967,7 @@ pub fn run() {
             }));
             app.manage(ModelCancel::default());
             app.manage(account::SignIn::default());
+            app.manage(ai::Connect::default());
             app.manage(dictionary::Dictionaries::default());
             app.manage(TranslationDownload::default());
             app.manage(translate::Translator::default());
@@ -850,6 +995,20 @@ pub fn run() {
             account_open_again,
             account_sign_out,
             account_delete,
+            ai_status,
+            ai_connect,
+            ai_cancel,
+            ai_open_again,
+            ai_disconnect,
+            ai_set_key,
+            ai_remove_key,
+            ai_models,
+            ai_set_model,
+            ai_explain,
+            ai_thread,
+            ai_asked,
+            ai_ask,
+            ai_review,
             models_list,
             model_download,
             model_cancel,

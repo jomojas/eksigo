@@ -9,6 +9,7 @@ import { Icon, type IconName } from "./Icon";
 import { restartToUpdate, useUpdate } from "../lib/updates";
 import { Welcome, WELCOMED } from "../pages/Welcome";
 import { displayName, useAccount } from "../lib/account";
+import { useAi } from "../lib/ai";
 
 const NAV: { to: string; label: string; icon: IconName }[] = [
   { to: "/today", label: "Today", icon: "today" },
@@ -191,6 +192,7 @@ function AppShell() {
           {downloads.size > 0 && <DownloadStatus />}
           <TranscriptActivity />
           <UpdateStatus />
+          <AiStatusLine />
           {status && <span>{status}</span>}
           <span style={{ flexGrow: 1 }} />
           {keys.map(([k, label]) => (
@@ -235,6 +237,19 @@ function AccountChip() {
 }
 
 /** A new version downloaded in the background, ready once the app restarts. */
+/** What AI requests use now (design D16): nothing when AI isn't set up. */
+function AiStatusLine() {
+  const { status } = useAi();
+  if (!status?.using) return null;
+  const limited = status.using === "chatgpt" && status.chatgpt?.limited;
+  return (
+    <span>
+      <span className={limited ? "dot dot-bad" : "dot dot-ok"} aria-hidden="true" />
+      {status.using === "chatgpt" ? (limited ? "ChatGPT limit reached" : "Using ChatGPT plan") : `AI · ${status.key?.name ?? "your key"}`}
+    </span>
+  );
+}
+
 function UpdateStatus() {
   const u = useUpdate();
   if (u.state !== "ready") return null;

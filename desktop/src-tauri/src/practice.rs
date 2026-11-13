@@ -340,6 +340,7 @@ mod tests {
                         ipa: String::new(),
                         meaning: format!("meaning {i}\nmore"),
                         note: String::new(),
+                        explanation: String::new(),
                         item_id: 1,
                         idx: 0,
                         from: 3,

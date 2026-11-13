@@ -1,7 +1,7 @@
 // The one place the interface talks to the Rust core. In a plain browser (the preview pane, `npm run dev`)
 // there is no Rust side, so each call falls back to sample data (sample.ts) and the screens still work.
 
-import { invoke, isTauri } from "@tauri-apps/api/core";
+import { Channel, invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -43,6 +43,38 @@ export type ModelProgress = { id: string; received: number; total: number; state
 /** The optional account (account.rs). `provider`: "apple", "google", or "dev" for a development sign-in. */
 export type Account = { id: number; name: string | null; email: string | null; plan: "free" | "premium"; provider: string };
 export type Provider = "apple" | "google";
+
+/** AI (ai.rs): ChatGPT (Plus or Pro) through the browser, or the learner's own key. `using`: what explanations use. */
+export type AiStatus = {
+  using: "chatgpt" | "key" | null;
+  /** `model`: in use, once known; `chosen`: picked by the learner rather than by Eksigo. */
+  chatgpt: { email: string | null; plan: string | null; limited: boolean; reconnect: boolean; model: string | null; chosen: boolean } | null;
+  key: { provider: string; name: string; model: string; baseUrl: string } | null;
+};
+/** `baseUrl` only for "other"; an empty `model` is the provider's usual one. */
+export type AiKey = { provider: string; baseUrl: string; model: string };
+/** Why an AI request gave no answer. `notSetUp`: neither ChatGPT nor a key; `limit`: ChatGPT's weekly limit for Eksigo. */
+export type AiProblem = { kind: "notSetUp" | "limit" | "reconnect" | "failed"; message?: string };
+/** Why a mistake happened (ai.rs REASONS): the same five for a sentence and for the episode review. */
+export type Reason = "newWord" | "soundsDifferent" | "didntCatch" | "spelling" | "guessed";
+/** `meaning`: for a new word only. */
+export type WhyItem = { reason: Reason; original: string; typed: string; said: string; meaning: string; why: string };
+export type Why = { items: WhyItem[] };
+/** One question about a sentence: `why` answers *Why did I miss this?*, `answer` the rest. */
+export type AiMessage = { id: number; question: string; why: Why | null; answer: string };
+/** An earlier question about selected words and its answer (the first explanation has no question). */
+export type Exchange = { question: string; answer: string };
+export type AiModel = { slug: string; name: string; small: boolean };
+/** `sentences`: numbers as shown, from 1. `words`: a few of the missed words; for new words, the ones to learn. */
+export type ReviewPattern = { reason: Reason; title?: string; count: number; words: string[]; explanation: string; sentences: number[] };
+export type EpisodeReview = { summary: string; patterns: ReviewPattern[]; next: string };
+export const MANAGE_USAGE = "https://chatgpt.com/settings/usage";
+
+/** An AI command's failure as a problem to show (Rust sends `{kind, message}`; anything else is a plain failure). */
+export function aiProblem(e: unknown): AiProblem {
+  if (e && typeof e === "object" && "kind" in e) return e as AiProblem;
+  return { kind: "failed", message: String(e) };
+}
 
 /** A show in search results, charts or recommendations. */
 export type Listing = {
@@ -211,6 +243,8 @@ export type SavedWord = {
   ipa: string;
   meaning: string;
   note: string;
+  /** What it meant in its sentence, from the AI; empty without. */
+  explanation: string;
   addedAt: number;
   level: Level;
   /** When it next comes up for practice; null while new. */
@@ -269,6 +303,8 @@ export type NewWord = {
   ipa: string;
   meaning: string;
   note: string;
+  /** What it means in this sentence, from the AI; empty without. */
+  explanation?: string;
   itemId: number;
   idx: number;
   /** The selected written words of the sentence, from..=to. */
@@ -331,6 +367,14 @@ function localSet(key: string, value: string) {
 }
 
 /** Calls the Rust command in the app, or the sample stand-in in a browser. */
+/** Pieces of an answer as it's written: a channel in the app (the preview pretends without one). */
+function pieces(onText: (t: string) => void): Channel<string> | null {
+  if (!inApp) return null;
+  const c = new Channel<string>();
+  c.onmessage = onText;
+  return c;
+}
+
 function call<T>(command: string, args: Record<string, unknown>, fallback: () => T | Promise<T>): Promise<T> {
   if (inApp) return invoke<T>(command, args);
   return Promise.resolve().then(fallback);
@@ -356,6 +400,30 @@ export const backend = {
   openSignInAgain: () => call<void>("account_open_again", {}, () => undefined),
   signOut: () => call<void>("account_sign_out", {}, () => sample.signOut()),
   deleteAccount: () => call<void>("account_delete", {}, () => sample.signOut()),
+
+  // AI. `aiConnect` resolves once the browser comes back: null when cancelled. Failures of the requests below
+  // are AiProblem objects (see aiProblem).
+  aiStatus: () => call<AiStatus>("ai_status", {}, () => sample.aiStatus()),
+  aiConnect: () => call<AiStatus | null>("ai_connect", {}, () => sample.aiConnect()),
+  aiCancel: () => call<void>("ai_cancel", {}, () => sample.aiCancel()),
+  aiOpenAgain: () => call<void>("ai_open_again", {}, () => undefined),
+  aiDisconnect: () => call<AiStatus>("ai_disconnect", {}, () => sample.aiDisconnect()),
+  aiSetKey: (key: AiKey, secret: string) => call<AiStatus>("ai_set_key", { key, secret }, () => sample.aiSetKey(key, secret)),
+  aiRemoveKey: () => call<AiStatus>("ai_remove_key", {}, () => sample.aiRemoveKey()),
+  aiModels: () => call<AiModel[]>("ai_models", {}, () => sample.aiModels()),
+  /** null: Eksigo picks a small model. */
+  aiSetModel: (model: string | null) => call<AiStatus>("ai_set_model", { model }, () => sample.aiSetModel(model)),
+  /** What words mean in their sentence, or (`question`) a question about them, after `history`. */
+  aiExplain: (lang: string, text: string, sentence: string, history: Exchange[], question: string | null, onText: (t: string) => void) =>
+    call<string>("ai_explain", { lang, text, sentence, history, question, onText: pieces(onText) }, () => sample.aiExplain(text, question, onText)),
+  /** The conversation about one sentence; `attemptId` null on Listen. */
+  aiThread: (itemId: number, attemptId: number | null, idx: number) => call<AiMessage[]>("ai_thread", { itemId, attemptId, idx }, () => sample.aiThread(itemId, attemptId, idx)),
+  aiAsked: (itemId: number, attemptId: number | null) => call<number[]>("ai_asked", { itemId, attemptId }, () => sample.aiAsked(itemId, attemptId)),
+  /** `why`: the *Why did I miss this?* chip, answered by reason (not in pieces). */
+  aiAsk: (lang: string, itemId: number, attemptId: number | null, idx: number, question: string, why: boolean, onText: (t: string) => void) =>
+    call<AiMessage>("ai_ask", { lang, itemId, attemptId, idx, question, why, onText: pieces(onText) }, () => sample.aiAsk(itemId, attemptId, idx, question, why, onText)),
+  aiReview: (lang: string, attemptId: number) => call<EpisodeReview | null>("ai_review", { lang, attemptId }, () => sample.aiReview()),
+  manageUsage: () => (inApp ? openUrl(MANAGE_USAGE) : Promise.resolve(void window.open(MANAGE_USAGE, "_blank"))),
 
   translationModel: () => call<TranslationModel>("translation_model", {}, () => sample.translationModel()),
   downloadTranslation: () => call<void>("translation_download", {}, () => sample.downloadTranslation()),
@@ -459,6 +527,7 @@ type Events = {
   transcript: TranscriptStatus;
   "model-download": ModelProgress;
   account: Account | null;
+  ai: AiStatus;
 };
 
 /** Listens to an event from the Rust core (sample.ts plays them in a browser). Returns the unlisten function. */

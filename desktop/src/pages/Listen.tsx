@@ -4,10 +4,12 @@
 
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
+import { AskPanel } from "../components/Ask";
 import { Icon } from "../components/Icon";
 import { LookupCard, type Selection } from "../components/LookupCard";
 import { IndexedText, selectedWords } from "../components/Marks";
 import { Kbd, Page } from "../components/Shell";
+import { useAi } from "../lib/ai";
 import { backend, type Item, type Sentence, type Show, type TranscriptStatus } from "../lib/backend";
 import { dictationPath } from "../lib/dictation";
 import { useLibraryChanged } from "../lib/downloads";
@@ -23,6 +25,7 @@ const KEYS: [string, string][] = [
   ["S", "Show this one"],
   ["Shift S", "Show all"],
   ["R", "Replay"],
+  ["?", "Ask about it"],
 ];
 
 /** Within this long of a sentence's start, Replay and ↑ go to the sentence before. */
@@ -172,6 +175,7 @@ export function ListenScreen() {
         resume.current = true;
         player.stop();
       }
+      setAsking(null);
       setLookup({
         itemId,
         idx: sentences[i].idx,
@@ -179,9 +183,30 @@ export function ListenScreen() {
         to: range[1],
         text: words.slice(range[0], range[1] + 1).join(" "),
         typed: "",
+        sentence: sentences[i].text,
         rect: r.getBoundingClientRect(),
       });
     }, 0);
+  };
+  // Asking the AI about a sentence (design D17) also pauses playback, in the same side panel.
+  const [asking, setAsking] = useState<number | null>(null);
+  const { status: ai } = useAi();
+  const openAsk = (i: number) => {
+    if (i < 0 || !sentences[i]) return;
+    if (!isShown(i)) toggleShown(i);
+    if (player.playing) {
+      resume.current = true;
+      player.stop();
+    }
+    setLookup(null);
+    setAsking(i);
+  };
+  const closeAsk = () => {
+    setAsking(null);
+    if (resume.current) {
+      resume.current = false;
+      playFrom(at);
+    }
   };
   const closeLookup = useCallback(() => {
     setLookup(null);
@@ -269,6 +294,7 @@ export function ListenScreen() {
     else if (k.toLowerCase() === "r") replay();
     else if (k.toLowerCase() === "s" && e.shiftKey) setAllShown((a) => !a);
     else if (k.toLowerCase() === "s") toggleShown(current);
+    else if (k === "?" || (e.shiftKey && e.code === "Slash")) openAsk(Math.max(0, current));
     else return;
     e.preventDefault();
   };
@@ -432,6 +458,12 @@ export function ListenScreen() {
                       )}
                     </div>
                     <div className="lrow-end">
+                      {on && open && ai?.using && (
+                        <button type="button" className="btn btn-sm btn-ghost peek" onClick={() => openAsk(i)} aria-label={`Ask about sentence ${i + 1}`} title="Ask the AI about this sentence (?)">
+                          <Icon name="chat" size={13} />
+                          Ask
+                        </button>
+                      )}
                       {!allShown && (
                         <button
                           type="button"
@@ -453,7 +485,20 @@ export function ListenScreen() {
         </section>
 
         <aside className="insp" aria-label="Words">
-          {lookup ? (
+          {asking !== null && sentences[asking] ? (
+            <AskPanel
+              key={sentences[asking].idx}
+              itemId={itemId}
+              attemptId={null}
+              idx={sentences[asking].idx}
+              sentence={sentences[asking].text}
+              typed=""
+              mistakes={false}
+              onPlaySlowly={null}
+              onClose={closeAsk}
+              docked
+            />
+          ) : lookup ? (
             <LookupCard key={`${lookup.idx}-${lookup.from}-${lookup.to}`} sel={lookup} path={item?.path ?? null} docked onClose={closeLookup} onSaved={(t) => setSaved((s) => (s.includes(t) ? s : [...s, t]))} />
           ) : (
             <p style={{ fontSize: 13, lineHeight: 1.5 }}>

@@ -172,6 +172,30 @@ const MIGRATIONS: &[&str] = &[
         seconds INTEGER NOT NULL DEFAULT 0
     );
     CREATE INDEX word_reviews_by_word ON word_reviews (word_id, at);",
+    // 12: AI (ai.rs). What a saved word means in its sentence; and, per attempt, why a sentence was misheard
+    // (`idx`) and the episode review (`idx` -1), in the language they were written in, so each is asked once.
+    "ALTER TABLE saved_words ADD COLUMN explanation TEXT NOT NULL DEFAULT '';
+    CREATE TABLE ai_notes (
+        attempt_id INTEGER NOT NULL REFERENCES attempts(id) ON DELETE CASCADE,
+        idx        INTEGER NOT NULL,
+        lang       TEXT NOT NULL,
+        json       TEXT NOT NULL,
+        created    INTEGER NOT NULL,
+        PRIMARY KEY (attempt_id, idx, lang)
+    );",
+    // 13: AI conversations about one sentence (ai.rs, design D17): per attempt on Results, per episode on Listen
+    // (no attempt). `why` holds the answer to *Why did I miss this?*, by reason; `answer` the rest.
+    "CREATE TABLE ai_messages (
+        id         INTEGER PRIMARY KEY,
+        item_id    INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+        attempt_id INTEGER REFERENCES attempts(id) ON DELETE CASCADE,
+        idx        INTEGER NOT NULL,
+        question   TEXT NOT NULL,
+        why        TEXT,
+        answer     TEXT NOT NULL DEFAULT '',
+        created    INTEGER NOT NULL
+    );
+    CREATE INDEX ai_messages_by_sentence ON ai_messages (item_id, idx);",
 ];
 
 pub struct Db(pub Mutex<Connection>);

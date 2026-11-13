@@ -59,7 +59,7 @@ The riskiest parts come first: Whisper building on both systems, then the dictat
 
 Rough times; the order can change with feedback from the first users.
 
-**Order decided 2026-11-13:** accounts and sync, then the iPhone app (listen and review on the phone, practise on the computer), then the website and finding the first users. AI, Premium and the rest follow. Speaking is postponed (under *Later*). Video and YouTube are not planned (DESIGN.md, *Listen*).
+**Order decided 2026-11-13:** accounts and sync, then the iPhone app (listen and review on the phone, practise on the computer), then the website and finding the first users. AI, Premium and the rest follow. **Changed the same day:** AI came right after accounts (sync follows), since ChatGPT Plus can be used without OpenAI's approval. Speaking is postponed (under *Later*). Video and YouTube are not planned (DESIGN.md, *Listen*).
 
 ## Website v2 (1–2 days)
 
@@ -71,10 +71,13 @@ Rough times; the order can change with feedback from the first users.
 
 ## AI (about 1 week)
 
-- **Before this step:** apply to OpenAI for *Sign in with ChatGPT* (approval can take a while), and check its terms and per-app limits in OpenAI's own documentation.
-- Settings → AI, in the order of DESIGN.md section 6: *Sign in with ChatGPT* (once approved), *Eksigo Premium* (comes with the Premium step), and under *Advanced* the learner's own key (OpenAI, DeepSeek, Anthropic, Groq, OpenRouter or any OpenAI-compatible URL), stored in the Keychain or the Credential Manager, with *Test key*. No Claude subscription login (not allowed by Anthropic).
-- One OpenAI-compatible client in the Rust core.
-- Episode review, word or phrase in context, sentence explanation, all in the learner's language. Only the aligned mistakes are sent.
+- Done 2026-11-13: no approval was needed (open-source apps on the user's computer may use ChatGPT plans; DESIGN.md section 6).
+- Settings → AI, in the order of DESIGN.md section 6: *Sign in with ChatGPT*, *Eksigo Premium* (comes with the Premium step), and under *Advanced* the learner's own key (OpenAI, DeepSeek, Anthropic, Groq, OpenRouter or any OpenAI-compatible URL), stored in the Keychain or the Credential Manager, with *Test key*. No Claude subscription login (not allowed by Anthropic).
+- One AI module in the Rust core (`ai.rs`): the Responses API for ChatGPT, chat completions for OpenAI-compatible keys, Messages for Anthropic.
+- Explain a word or phrase in its sentence when asked (`E`), and by itself only when the dictionary and the translator found nothing; *Ask about this sentence* (`?`) with *Why did I miss this?* by reason (new word, sounds different, didn't catch it, spelling, guessed) and the learner's own questions, answers shown as they're written; the episode review by the same reasons. All in the learner's language (redesigned 2026-11-13 after the first try: an AI call on every lookup was slow and unasked for).
+- The model is *Automatic* (a small one), with a *Model* choice in Settings › AI.
+- Still to do: fill in OpenAI's interest form for Premium.
+- Later: *Practise these sentences* from the episode review (needs practising only some sentences of an episode).
 
 **Done when:** with a DeepSeek key, the AI review on the review screen and *Explain* on a word both work, and the key never appears in any file or log.
 

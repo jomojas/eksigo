@@ -3,6 +3,11 @@
 
 import type {
   Account,
+  AiKey,
+  AiStatus,
+  AiMessage,
+  AiModel,
+  EpisodeReview,
   Provider,
   GradeArgs,
   Graded,
@@ -196,6 +201,19 @@ function makeSentences(durationMs: number, upToMs: number): Sentence[] {
 
 const listeners = new Map<string, Set<(p: unknown) => void>>();
 let sampleAccount: Account | null = null;
+let sampleAi: AiStatus = { using: null, chatgpt: null, key: null };
+const sampleThreads = new Map<string, AiMessage[]>();
+
+/** Hands an answer over a few characters at a time, as ChatGPT does. */
+async function pretendWriting(text: string, onText: (t: string) => void): Promise<string> {
+  await new Promise((r) => setTimeout(r, 600));
+  for (let i = 0; i < text.length; i += 4) {
+    onText(text.slice(i, i + 4));
+    await new Promise((r) => setTimeout(r, 40));
+  }
+  return text;
+}
+let cancelSampleAi: (() => void) | null = null;
 let cancelSampleSignIn: (() => void) | null = null;
 
 function emit(event: string, payload: unknown) {
@@ -233,6 +251,7 @@ const savedWords: SavedWord[] = SEED_WORDS.map(([text, meaning, idx], i) => {
     ipa: "",
     meaning,
     note: "",
+    explanation: "",
     addedAt: Math.floor(Date.now() / 1000) - (8 - i) * 86_400,
     level: (i < 2 ? "learning" : "new") as Level,
     dueAt: i < 2 ? Math.floor(Date.now() / 1000) - 3600 : null,
@@ -531,6 +550,126 @@ export const sample = {
     cancelSampleSignIn = null;
   },
 
+  // Pretend AI: connecting ChatGPT "opens the browser" and comes back after two seconds; any key works.
+  aiStatus: (): AiStatus => sampleAi,
+
+  aiConnect(): Promise<AiStatus | null> {
+    return new Promise((resolve) => {
+      const t = window.setTimeout(() => {
+        cancelSampleAi = null;
+        sampleAi = { ...sampleAi, using: "chatgpt", chatgpt: { email: "alex.lin@gmail.com", plan: "plus", limited: false, reconnect: false, model: "gpt-5-mini", chosen: false } };
+        emit("ai", sampleAi);
+        resolve(sampleAi);
+      }, 2000);
+      cancelSampleAi = () => {
+        window.clearTimeout(t);
+        resolve(null);
+      };
+    });
+  },
+
+  aiCancel() {
+    cancelSampleAi?.();
+    cancelSampleAi = null;
+  },
+
+  async aiDisconnect(): Promise<AiStatus> {
+    await new Promise((r) => setTimeout(r, 300));
+    sampleAi = { ...sampleAi, chatgpt: null, using: sampleAi.key ? "key" : null };
+    emit("ai", sampleAi);
+    return sampleAi;
+  },
+
+  async aiSetKey(key: AiKey, secret: string): Promise<AiStatus> {
+    await new Promise((r) => setTimeout(r, 800));
+    if (!secret.trim()) throw { kind: "failed", message: "Paste the key first." };
+    const names: Record<string, [string, string]> = { openai: ["OpenAI", "gpt-5-mini"], deepseek: ["DeepSeek", "deepseek-chat"], anthropic: ["Anthropic", "claude-haiku-5-5"], groq: ["Groq", "openai/gpt-oss-120b"], openrouter: ["OpenRouter", "openai/gpt-5-mini"], other: ["your provider", ""] };
+    const [name, model] = names[key.provider] ?? ["your provider", ""];
+    sampleAi = { ...sampleAi, key: { provider: key.provider, name, model: key.model || model, baseUrl: key.baseUrl }, using: sampleAi.chatgpt && !sampleAi.chatgpt.reconnect ? "chatgpt" : "key" };
+    emit("ai", sampleAi);
+    return sampleAi;
+  },
+
+  async aiRemoveKey(): Promise<AiStatus> {
+    sampleAi = { ...sampleAi, key: null, using: sampleAi.chatgpt ? "chatgpt" : null };
+    emit("ai", sampleAi);
+    return sampleAi;
+  },
+
+  async aiModels(): Promise<AiModel[]> {
+    await new Promise((r) => setTimeout(r, 500));
+    return [
+      { slug: "gpt-5-mini", name: "GPT-5 mini", small: true },
+      { slug: "gpt-5-nano", name: "GPT-5 nano", small: true },
+      { slug: "gpt-5", name: "GPT-5", small: false },
+      { slug: "gpt-5-pro", name: "GPT-5 pro", small: false },
+    ];
+  },
+
+  async aiSetModel(model: string | null): Promise<AiStatus> {
+    if (sampleAi.chatgpt) sampleAi = { ...sampleAi, chatgpt: { ...sampleAi.chatgpt, model: model ?? "gpt-5-mini", chosen: model !== null } };
+    emit("ai", sampleAi);
+    return sampleAi;
+  },
+
+  async aiExplain(text: string, question: string | null, onText: (t: string) => void): Promise<string> {
+    if (!sampleAi.using) throw { kind: "notSetUp" };
+    const answer = question
+      ? `可以这样理解：“${text}” 强调的是把事情做完的过程。比如 She always follows through on her promises（她答应的事总会做到）。`
+      : `这里的 “${text}” 指把已经开始或答应的事真正做完，而不是半途而废。常见搭配：follow through on a plan / a promise。`;
+    return pretendWriting(answer, onText);
+  },
+
+  async aiThread(itemId: number, attemptId: number | null, idx: number): Promise<AiMessage[]> {
+    return sampleThreads.get(`${itemId}|${attemptId}|${idx}`) ?? [];
+  },
+
+  async aiAsked(itemId: number, attemptId: number | null): Promise<number[]> {
+    const prefix = `${itemId}|${attemptId}|`;
+    return [...sampleThreads.keys()].filter((k) => k.startsWith(prefix)).map((k) => Number(k.slice(prefix.length)));
+  },
+
+  async aiAsk(itemId: number, attemptId: number | null, idx: number, question: string, why: boolean, onText: (t: string) => void): Promise<AiMessage> {
+    if (!sampleAi.using) throw { kind: "notSetUp" };
+    let m: AiMessage;
+    if (why) {
+      await new Promise((r) => setTimeout(r, 1500));
+      m = {
+        id: Date.now(),
+        question: "Why did I miss this?",
+        answer: "",
+        why: {
+          items: [
+            { reason: "newWord", original: "follow through", typed: "follow true", said: "/ˌfɒləʊ ˈθruː/", meaning: "坚持做完", why: "两个词你都听到了，但 follow through 是一个短语动词，不认识它就容易把 through 听成 true。" },
+            { reason: "soundsDifferent", original: "don't have to", typed: "_", said: "/ˈdəʊn ˈhæftə/", why: "三个词连成一口气：don't 的 t 不发音，have to 读成 “haf-ta”，听起来只有两个音节。", meaning: "" },
+          ],
+        },
+      };
+    } else {
+      const answer = /grammar|语法/i.test(question)
+        ? "这是一个比较句：were about twice as likely to do something，“做某事的可能性大约是两倍”。主语是 People who wrote down their plans，who 引导定语从句修饰 People。"
+        : "delay 只是“推迟”，可能有正当理由，比如 The flight was delayed。procrastinate 是明知该做却一拖再拖，带一点自责的意味。";
+      m = { id: Date.now(), question, why: null, answer: await pretendWriting(answer, onText) };
+    }
+    const key = `${itemId}|${attemptId}|${idx}`;
+    sampleThreads.set(key, [...(sampleThreads.get(key) ?? []), m]);
+    return m;
+  },
+
+  async aiReview(): Promise<EpisodeReview | null> {
+    if (!sampleAi.using) throw { kind: "notSetUp" };
+    await new Promise((r) => setTimeout(r, 2500));
+    return {
+      summary: "听得不错。漏听的地方几乎都不是生词，而是快语速下的连读、弱读和吞音。",
+      patterns: [
+        { reason: "soundsDifferent", count: 3, words: ["have to", "going to"], explanation: "这些词你都认识，连读后才没听出来：have to 读成 haf-ta，going to 读成 gonna。", sentences: [1, 2] },
+        { reason: "newWord", count: 2, words: ["procrastinate", "follow through"], explanation: "音节都听到了，只是还不认识这些词。", sentences: [1, 3] },
+        { reason: "didntCatch", count: 1, words: ["sixty-six"], explanation: "数字说得快，又只出现一次。", sentences: [2] },
+      ],
+      next: "用 0.85× 再听这几句，先跟着读一遍再听写。",
+    };
+  },
+
   async signOut() {
     await new Promise((r) => setTimeout(r, 300));
     sampleAccount = null;
@@ -782,6 +921,7 @@ export const sample = {
         ipa: w.ipa,
         meaning: w.meaning,
         note: w.note.trim(),
+        explanation: w.explanation?.trim() ?? "",
         addedAt: now(),
         level: "new",
         dueAt: null,
