@@ -48,6 +48,15 @@ const router = createHashRouter([
   },
 ]);
 
+// The Mac's web view goes back a page on Backspace outside a text field: easy to hit while editing a question
+// whose field has just lost focus. Pages that use Backspace themselves (Library: remove) still get the key.
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Backspace") return;
+  const t = e.target as HTMLElement | null;
+  if (t?.closest?.("input, textarea, select, [contenteditable]")) return;
+  e.preventDefault();
+});
+
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <ThemeProvider>
