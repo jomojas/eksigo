@@ -96,6 +96,8 @@ Rough times; the order can change with feedback from the first users.
 - New screens from the canvas, with tabs Listen, Discover, Review and Me.
 - Missed-sentence playlist (exact file match first), spaced-repetition word review (FSRS), My words, history and progress, all view only.
 - Free, with no AI and no in-app purchase. TestFlight, then the App Store as an update to `com.eksigo.app`.
+- The app, all 22 screens, with sync, missed sentences, word review (FSRS tested against the desktop's) and iOS CI (built 2026-11-13, `ios/`). Tried end to end against a local server: words and missed sentences from a pretend desktop arrive, play and are reviewed, and the reviews go back in the desktop's format.
+- Next: a real sync between the desktop and the phone with one account, then TestFlight.
 
 **Done when:** last night's missed sentences play on the phone the next morning, and the update passes App Store review.
 

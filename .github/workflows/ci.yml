@@ -1,7 +1,6 @@
 # Pull request checks (DESIGN.md section 12, "Development workflow"). Runs on every pull request; each part runs only
 # when its folder changed, and `passed` sums them up. `passed` is the one check main requires before a merge (a
 # required check that never ran would block the merge, so the path filters live here instead of on the workflow).
-# The iOS job is added when the iOS app moves into this repo.
 name: ci
 
 on:
@@ -20,6 +19,7 @@ jobs:
     outputs:
       backend: ${{ steps.filter.outputs.backend }}
       desktop: ${{ steps.filter.outputs.desktop }}
+      ios: ${{ steps.filter.outputs.ios }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -28,6 +28,7 @@ jobs:
           filters: |
             backend: ["backend/**", ".github/workflows/ci.yml", ".github/workflows/backend.yml", ".github/workflows/backend-test.yml"]
             desktop: ["desktop/**", ".github/workflows/ci.yml", ".github/workflows/desktop-test.yml"]
+            ios: ["ios/**", ".github/workflows/ci.yml", ".github/workflows/ios.yml"]
 
   backend:
     needs: changes
@@ -39,14 +40,20 @@ jobs:
     if: needs.changes.outputs.desktop == 'true'
     uses: ./.github/workflows/desktop-test.yml
 
+  ios:
+    needs: changes
+    if: needs.changes.outputs.ios == 'true'
+    uses: ./.github/workflows/ios.yml
+
   passed:
-    needs: [changes, backend, desktop]
+    needs: [changes, backend, desktop, ios]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Every part that ran passed
         run: |
-          echo "backend: ${{ needs.backend.result }}, desktop: ${{ needs.desktop.result }}"
+          echo "backend: ${{ needs.backend.result }}, desktop: ${{ needs.desktop.result }}, ios: ${{ needs.ios.result }}"
           [[ "${{ needs.changes.result }}" == success ]]
           [[ "${{ needs.backend.result }}" =~ ^(success|skipped)$ ]]
           [[ "${{ needs.desktop.result }}" =~ ^(success|skipped)$ ]]
+          [[ "${{ needs.ios.result }}" =~ ^(success|skipped)$ ]]
