@@ -390,6 +390,8 @@ export const backend = {
   removeWord: (id: number) => call<void>("words_remove", { id }, () => sample.removeWord(id)),
   practiceCounts: () => call<PracticeCounts>("practice_counts", {}, () => sample.practiceCounts()),
   week: () => call<Week>("activity_week", {}, () => sample.week()),
+  /** Adds seconds listened (the Listen page) to today; returns today's listening so far. */
+  listened: (seconds: number) => call<number>("activity_listened", { seconds: Math.round(seconds) }, () => sample.listened(seconds)),
   progress: () => call<Progress>("progress_get", {}, () => sample.progress()),
   practiceQueue: () => call<PracticeItem[]>("practice_queue", {}, () => sample.practiceQueue()),
   practiceCheck: (expected: string, typed: string) => call<boolean>("practice_check", { expected, typed }, () => sample.practiceCheck(expected, typed)),

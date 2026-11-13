@@ -555,6 +555,19 @@ const SHORTCUTS: [string, [string, string][]][] = [
     ],
   ],
   [
+    "Listen",
+    [
+      ["L", "Listen (on the episode's page)"],
+      ["Space", "Play or pause"],
+      ["↑ ↓", "Previous or next sentence"],
+      ["S", "Show or hide the sentence being heard"],
+      ["Shift S", "Show or hide all sentences"],
+      ["R", "Replay the sentence"],
+      ["← →", "5 seconds"],
+      ["Select", "Look the words up (in a shown sentence)"],
+    ],
+  ],
+  [
     "Review and looking up",
     [
       ["Select, then click", "Look the words up"],

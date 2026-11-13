@@ -21,7 +21,20 @@ export type Selection = {
 
 const WIDTH = 360;
 
-export function LookupCard({ sel, path, onClose }: { sel: Selection; path: string | null; onClose: () => void }) {
+/** `docked`: in a side panel (Listen) rather than floating by the selection. `onSaved`: told the text saved. */
+export function LookupCard({
+  sel,
+  path,
+  onClose,
+  docked = false,
+  onSaved,
+}: {
+  sel: Selection;
+  path: string | null;
+  onClose: () => void;
+  docked?: boolean;
+  onSaved?: (text: string) => void;
+}) {
   const [lang] = useMeaningLanguage();
   const [result, setResult] = useState<Lookup | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -49,12 +62,13 @@ export function LookupCard({ sel, path, onClose }: { sel: Selection; path: strin
 
   // Below the selection, or above it when there's no room; always inside the window.
   useLayoutEffect(() => {
+    if (docked) return;
     const h = card.current?.offsetHeight ?? 300;
     const below = sel.rect.bottom + 8;
     const top = below + h > window.innerHeight - 12 ? Math.max(12, sel.rect.top - h - 8) : below;
     const left = Math.min(Math.max(12, sel.rect.left), window.innerWidth - WIDTH - 12);
     setPos({ top, left });
-  }, [sel.rect, result, error]);
+  }, [sel.rect, result, error, docked]);
 
   const save = async () => {
     if (!result || savedId) return;
@@ -76,6 +90,7 @@ export function LookupCard({ sel, path, onClose }: { sel: Selection; path: strin
         typed: sel.typed,
       });
       setSavedId(w.id);
+      onSaved?.(w.text);
     } catch (e) {
       setError(String(e));
     }
@@ -119,7 +134,7 @@ export function LookupCard({ sel, path, onClose }: { sel: Selection; path: strin
   const title = result?.whole && entry ? entry.headword : sel.text.replace(/^[^\p{L}\p{N}']+|[^\p{L}\p{N}']+$/gu, "");
 
   return (
-    <div ref={card} className="lookup" role="dialog" aria-label={title} style={{ top: pos.top, left: pos.left, width: WIDTH }}>
+    <div ref={card} className={docked ? "lookup lookup-docked" : "lookup"} role="dialog" aria-label={title} style={docked ? undefined : { top: pos.top, left: pos.left, width: WIDTH }}>
       <div>
         <div className="h2" style={{ fontSize: 18 }}>
           {title}
@@ -128,7 +143,7 @@ export function LookupCard({ sel, path, onClose }: { sel: Selection; path: strin
         {result?.whole && entry?.ipa && <div className="lookup-sub mono">{entry.ipa}</div>}
         {result && !result.whole && !single && <div className="lookup-sub">Not in the dictionary as a phrase · each word</div>}
       </div>
-      <div style={{ display: "flex", gap: 6 }}>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
         <button type="button" className="btn btn-sm" onClick={asSaid} disabled={!path || times.length === 0}>
           <Icon name="play" size={11} />
           As said in the episode

@@ -567,6 +567,19 @@ fn activity_week(db: State<Db>) -> CmdResult<WeekSummary> {
     Ok(WeekSummary { week, words_started })
 }
 
+/// Listening (the Listen page): adds `seconds` heard to today and returns today's listening so far. Counts
+/// towards the streak and the time practised, like dictation.
+#[tauri::command]
+fn activity_listened(app: AppHandle, db: State<Db>, seconds: i64) -> CmdResult<i64> {
+    let c = db.conn();
+    let today = activity::today();
+    activity::add(&c, &today, "listening", seconds.clamp(0, 3600)).map_err(err)?;
+    if seconds > 0 {
+        let _ = app.emit("activity", ());
+    }
+    activity::seconds_on(&c, &today, "listening").map_err(err)
+}
+
 /// Everything on the Progress page.
 #[tauri::command]
 fn progress_get(db: State<Db>) -> CmdResult<progress::Progress> {
@@ -718,6 +731,7 @@ pub fn run() {
             practice_counts,
             shows_new_episodes,
             activity_week,
+            activity_listened,
             progress_get,
             practice_queue,
             practice_check,

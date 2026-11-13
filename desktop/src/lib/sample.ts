@@ -172,6 +172,7 @@ const SAMPLE_TEXT = [
 
 const transcripts = new Map<number, { state: TranscriptStatus["state"]; sentences: Sentence[]; doneMs: number }>();
 let modelInstalled = false;
+let listenedToday = 14 * 60;
 
 function makeSentences(durationMs: number, upToMs: number): Sentence[] {
   const out: Sentence[] = [];
@@ -595,6 +596,10 @@ export const sample = {
       days,
       weeks,
     };
+  },
+  listened(seconds: number): number {
+    listenedToday += Math.max(0, Math.round(seconds));
+    return listenedToday;
   },
   week(): Week {
     const minutes = [20, 40, 0, 50, 30, 15, 25];
