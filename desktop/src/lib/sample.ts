@@ -29,6 +29,8 @@ import type {
   Listing,
   Marked,
   ModelInfo,
+  Translation,
+  TranslationModel,
   PlaybackEvent,
   Practice,
   Sentence,
@@ -172,6 +174,8 @@ const SAMPLE_TEXT = [
 
 const transcripts = new Map<number, { state: TranscriptStatus["state"]; sentences: Sentence[]; doneMs: number }>();
 let modelInstalled = false;
+let translationInstalled = false;
+const SAMPLE_TRANSLATIONS: Record<string, string> = { "at the end of the day": "归根结底", "doubling down on": "加倍投入", "squash you": "压垮你" };
 let listenedToday = 14 * 60;
 
 function makeSentences(durationMs: number, upToMs: number): Sentence[] {
@@ -497,6 +501,31 @@ export const sample = {
 
   deleteModel() {
     modelInstalled = false;
+  },
+
+  translationModel: (): TranslationModel => ({ id: "hy-mt-1.5", name: "HY-MT 1.5", bytes: 1_133_080_512, installed: translationInstalled, downloading: false }),
+
+  downloadTranslation(): Promise<void> {
+    return new Promise((resolve) => {
+      let received = 0;
+      const total = 1_133_080_512;
+      const t = window.setInterval(() => {
+        received = Math.min(total, received + total / 20);
+        const done = received >= total;
+        emit("model-download", { id: "hy-mt-1.5", received, total, state: done ? "done" : "downloading", error: null });
+        if (done) {
+          window.clearInterval(t);
+          translationInstalled = true;
+          resolve();
+        }
+      }, 200);
+    });
+  },
+
+  async translate(text: string): Promise<Translation> {
+    if (!translationInstalled) return { text: null, missing: true };
+    await new Promise((r) => setTimeout(r, 400));
+    return { text: SAMPLE_TRANSLATIONS[text.toLowerCase().trim()] ?? "（机器翻译）", missing: false };
   },
 
   transcriptStatus(itemId: number): TranscriptStatus {

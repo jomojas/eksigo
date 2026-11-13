@@ -1,9 +1,11 @@
 // The dictionary card for words selected in a review (DESIGN.md, "Results"): the phrase if the dictionary
-// has it, else each word; the words as said in the episode or read slowly; and Add to My words.
+// has it, else a machine translation of the whole selection and each word; the words as said in the episode
+// or read slowly; and Add to My words.
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { backend, type Entry, type Lookup } from "../lib/backend";
+import { backend, isTranslationModel, on, type Entry, type Lookup } from "../lib/backend";
 import { usePlayer } from "../lib/playback";
+import { useActivity } from "../lib/transcripts";
 import { firstLine, speak, useMeaningLanguage } from "../lib/words";
 import { Icon } from "./Icon";
 import { Kbd } from "./Shell";
@@ -20,6 +22,12 @@ export type Selection = {
 };
 
 const WIDTH = 360;
+
+/** The machine translation of a selection the dictionary doesn't have as a phrase. */
+type Machine = { state: "loading" } | { state: "done"; text: string } | { state: "missing" } | { state: "failed" };
+
+/** Ready to show: the first translation also loads the model, which takes a few seconds. */
+let translatorWarm = false;
 
 /** `docked`: in a side panel (Listen) rather than floating by the selection. `onSaved`: told the text saved. */
 export function LookupCard({
@@ -44,6 +52,9 @@ export function LookupCard({
   const player = usePlayer(path);
   const card = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ top: sel.rect.bottom + 8, left: sel.rect.left });
+  const [machine, setMachine] = useState<Machine | null>(null);
+  const [translatorReady, setTranslatorReady] = useState(0);
+  const { translation: translatorProgress } = useActivity();
 
   useEffect(() => {
     let live = true;
@@ -60,6 +71,34 @@ export function LookupCard({
     };
   }, [lang, sel.text, sel.itemId, sel.idx]);
 
+  // A phrase the dictionary doesn't have gets a machine translation, read in its sentence. If the translator
+  // isn't here yet it starts downloading (normally it came when the app first opened), and the translation
+  // follows once it has.
+  const entry0 = result?.entry ?? null;
+  const wantsMachine = !!result && result.words.length > 0 && !(result.whole && entry0) && lang !== "en";
+  useEffect(() => on("model-download", (p) => isTranslationModel(p.id) && p.state === "done" && setTranslatorReady((n) => n + 1)), []);
+  useEffect(() => {
+    if (!wantsMachine) return setMachine(null);
+    let live = true;
+    setMachine({ state: "loading" });
+    backend.translate(lang, sel.itemId, sel.idx, sel.text).then(
+      (t) => {
+        if (!live) return;
+        if (t.missing) {
+          setMachine({ state: "missing" });
+          backend.downloadTranslation().catch(() => {});
+        } else if (t.text) {
+          translatorWarm = true;
+          setMachine({ state: "done", text: t.text });
+        } else setMachine(null);
+      },
+      () => live && setMachine({ state: "failed" }),
+    );
+    return () => {
+      live = false;
+    };
+  }, [wantsMachine, lang, sel.text, sel.itemId, sel.idx, translatorReady]);
+
   // Below the selection, or above it when there's no room; always inside the window.
   useLayoutEffect(() => {
     if (docked) return;
@@ -68,14 +107,17 @@ export function LookupCard({
     const top = below + h > window.innerHeight - 12 ? Math.max(12, sel.rect.top - h - 8) : below;
     const left = Math.min(Math.max(12, sel.rect.left), window.innerWidth - WIDTH - 12);
     setPos({ top, left });
-  }, [sel.rect, result, error, docked]);
+  }, [sel.rect, result, error, docked, machine]);
 
   const save = async () => {
     if (!result || savedId) return;
     const entry = result.entry;
     const words = result.words.map((w) => `${w.text}${w.entry && w.entry.headword !== w.text ? ` (${w.entry.headword})` : ""}: ${w.entry ? firstLine(w.entry.meaning) : "—"}`);
+    const translated = machine?.state === "done" ? `${machine.text} (machine translation)` : null;
     const meaning =
-      entry && result.whole ? entry.meaning : [entry ? `${entry.headword}: ${firstLine(entry.meaning)}` : null, ...words].filter(Boolean).join("\n");
+      entry && result.whole
+        ? entry.meaning
+        : [translated, entry ? `${entry.headword}: ${firstLine(entry.meaning)}` : null, ...words].filter(Boolean).join("\n");
     try {
       const w = await backend.addWord({
         text: result.query || sel.text,
@@ -162,6 +204,23 @@ export function LookupCard({
       {!result && !error && <div className="lookup-sub">Looking it up… (the dictionary downloads once, about 5 MB)</div>}
 
       {result && result.whole && entry && <Meaning entry={entry} />}
+      {machine && (
+        <div className="lookup-found" aria-live="polite">
+          <div className="lookup-sub">Machine translation</div>
+          {machine.state === "done" ? (
+            <span className="lookup-machine">{machine.text}</span>
+          ) : machine.state === "loading" ? (
+            <span className="lookup-sub">{translatorWarm ? "Translating…" : "Translating… the first one takes a few seconds"}</span>
+          ) : machine.state === "missing" ? (
+            <span className="lookup-sub">
+              The translator is downloading{translatorProgress ? ` · ${Math.round((translatorProgress.received / translatorProgress.total) * 100)}%` : ""}. The
+              translation shows here when it's ready.
+            </span>
+          ) : (
+            <span className="lookup-sub">Couldn't translate this one.</span>
+          )}
+        </div>
+      )}
       {result && !result.whole && entry && (
         <div className="lookup-found">
           <div className="lookup-sub">Phrase inside</div>

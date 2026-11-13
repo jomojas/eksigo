@@ -14,6 +14,7 @@ mod progress;
 pub mod sentences;
 mod storage;
 pub mod transcribe;
+mod translate;
 pub mod whisper;
 
 use std::{
@@ -111,6 +112,93 @@ fn model_delete(app: AppHandle, id: String) -> CmdResult<()> {
         std::fs::remove_file(path).map_err(err)?;
     }
     Ok(())
+}
+
+// ---------- phrase translation ----------
+
+/// One translation model download at a time, from the welcome, the app opening or a lookup.
+#[derive(Default)]
+struct TranslationDownload {
+    busy: AtomicBool,
+    cancel: AtomicBool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TranslationModel {
+    id: &'static str,
+    name: &'static str,
+    bytes: u64,
+    installed: bool,
+    downloading: bool,
+}
+
+/// The translation model for this computer, and whether it's here yet.
+#[tauri::command]
+fn translation_model(app: AppHandle, dl: State<TranslationDownload>) -> CmdResult<TranslationModel> {
+    let m = translate::model();
+    let installed = models::installed(&transcribe::model_dir(&app).map_err(err)?, m).is_some();
+    Ok(TranslationModel { id: m.id, name: m.name, bytes: m.bytes, installed, downloading: dl.busy.load(Ordering::Relaxed) })
+}
+
+/// Downloads the translation model, unless it's here or already coming; progress arrives as
+/// `model-download` events with the model's id.
+#[tauri::command]
+async fn translation_download(app: AppHandle, dl: State<'_, TranslationDownload>) -> CmdResult<()> {
+    if dl.busy.swap(true, Ordering::Relaxed) {
+        return Ok(());
+    }
+    dl.cancel.store(false, Ordering::Relaxed);
+    let m = translate::model();
+    let result = async {
+        let dir = transcribe::model_dir(&app)?;
+        let a = app.clone();
+        models::download(&dir, m, &dl.cancel, &move |p| {
+            let _ = a.emit("model-download", p);
+        })
+        .await
+    }
+    .await;
+    dl.busy.store(false, Ordering::Relaxed);
+    if let Err(e) = &result {
+        let _ = app.emit("model-download", models::ModelProgress { id: m.id, received: 0, total: m.bytes, state: "failed", error: Some(format!("{e:#}")) });
+    }
+    result.map(|_| ()).map_err(err)
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Translation {
+    /// None when there's nothing to translate into (meanings in English).
+    text: Option<String>,
+    /// The model isn't on this computer yet.
+    missing: bool,
+}
+
+/// Translates a selection into the learner's language `lang`, reading the sentence `idx` of `item_id`
+/// around it.
+#[tauri::command]
+async fn phrase_translate(app: AppHandle, lang: String, item_id: i64, idx: i64, text: String) -> CmdResult<Translation> {
+    let phrase = text.trim_matches(|c: char| !c.is_alphanumeric() && c != '\'').to_string();
+    if lang == "en" || phrase.is_empty() {
+        return Ok(Translation { text: None, missing: false });
+    }
+    let Some(model) = models::installed(&transcribe::model_dir(&app).map_err(err)?, translate::model()) else {
+        return Ok(Translation { text: None, missing: true });
+    };
+    let sentence: String = {
+        use rusqlite::OptionalExtension;
+        let db = app.state::<Db>();
+        let c = db.conn();
+        c.query_row("SELECT text FROM sentences WHERE item_id = ?1 AND idx = ?2", (item_id, idx), |r| r.get(0)).optional().map_err(err)?.unwrap_or_default()
+    };
+    let exe = translate::helper_path().map_err(err)?;
+    let a = app.clone();
+    let text = tauri::async_runtime::spawn_blocking(move || a.state::<translate::Translator>().translate(&exe, &model, &phrase, &sentence, &lang))
+        .await
+        .map_err(err)?
+        .map_err(err)?;
+    Ok(Translation { text: Some(text), missing: false })
 }
 
 /// Transcribes a Library item in the background, ahead of anything else waiting.
@@ -671,6 +759,13 @@ pub fn run() {
             }));
             app.manage(ModelCancel::default());
             app.manage(dictionary::Dictionaries::default());
+            app.manage(TranslationDownload::default());
+            app.manage(translate::Translator::default());
+            let handle = app.handle().clone();
+            std::thread::spawn(move || loop {
+                std::thread::sleep(std::time::Duration::from_secs(30));
+                handle.state::<translate::Translator>().close_if_idle();
+            });
             let transcriber = Transcriber::start(app.handle().clone());
             // Transcripts interrupted by quitting carry on where they stopped.
             for item_id in transcribe::unfinished(&app.state::<Db>().conn())? {
@@ -687,6 +782,9 @@ pub fn run() {
             model_download,
             model_cancel,
             model_delete,
+            translation_model,
+            translation_download,
+            phrase_translate,
             transcribe,
             transcribe_cancel,
             transcript_status,

@@ -1,0 +1,24 @@
+# The phrase translator, a helper program the app starts when it needs it (src-tauri/src/translate.rs).
+# A separate program because llama.cpp and whisper.cpp each bring their own copy of the ggml engine, and the
+# two copies can't be linked into one: Windows refuses, and on a Mac one would silently replace the other.
+[package]
+name = "eksigo-translate"
+version = "0.1.0"
+license = "AGPL-3.0-only"
+edition = "2024"
+
+[dependencies]
+llama-cpp-2 = "=0.1.161"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+
+# The model runs on the GPU through Metal on Mac; Windows uses the CPU.
+[target.'cfg(target_os = "macos")'.dependencies]
+llama-cpp-2 = { version = "=0.1.161", features = ["metal"] }
+
+[profile.release]
+opt-level = 3
+codegen-units = 1
+lto = true
+strip = true

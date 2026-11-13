@@ -1,5 +1,6 @@
 # Desktop checks on macOS and Windows: the interface type-checks and builds, the Rust tests pass, the app compiles,
-# and Whisper transcribes a sample on each system (the timing goes in the job summary). Called from ci.yml.
+# and Whisper transcribes a sample on each system (the timing goes in the job summary). The phrase translator
+# (desktop/translate) is built first: the app bundles it, so the app's own build needs it. Called from ci.yml.
 name: desktop-test
 
 on:
@@ -29,12 +30,19 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: desktop/src-tauri
+          workspaces: |
+            desktop/src-tauri
+            desktop/translate
 
       - name: Interface (type-check and build)
         run: |
           npm ci
           npm run build
+
+      - name: Build the phrase translator, and its tests
+        run: |
+          node scripts/translator.mjs
+          cargo test --release --locked --manifest-path translate/Cargo.toml
 
       - name: Rust tests
         working-directory: desktop/src-tauri

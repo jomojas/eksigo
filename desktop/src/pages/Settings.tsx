@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
-import { backend, inApp, on, type DictionaryList, type ModelInfo, type StorageUsage } from "../lib/backend";
+import { backend, inApp, isTranslationModel, on, type DictionaryList, type ModelInfo, type StorageUsage, type TranslationModel } from "../lib/backend";
 import { useTheme, type ThemeChoice } from "../lib/theme";
 import { Kbd, Page, useAppInfo } from "../components/Shell";
 import { Icon } from "../components/Icon";
@@ -20,7 +20,7 @@ type SectionId = "general" | "dictation" | "speech" | "dictionaries" | "ai" | "a
 const SECTIONS: { id: SectionId; label: string; later?: boolean; words: string }[] = [
   { id: "general", label: "General", words: "theme light dark appearance" },
   { id: "dictation", label: "Dictation", words: "playback speed plays mode auto manual pause slow" },
-  { id: "speech", label: "Speech model", words: "whisper transcription model download" },
+  { id: "speech", label: "Speech model", words: "whisper transcription model download phrase translator machine translation" },
   { id: "dictionaries", label: "Dictionaries", words: "meanings language translation chinese japanese korean spanish french english" },
   { id: "ai", label: "AI", later: true, words: "key openai deepseek explain" },
   { id: "account", label: "Account and sync", later: true, words: "sign in apple google iphone sync" },
@@ -277,6 +277,7 @@ function Speech() {
             )}
           </Row>
         ))}
+        <Translator />
       </div>
       {error && (
         <p role="alert" style={{ marginTop: 16, color: "var(--semantic-error)" }}>
@@ -289,6 +290,51 @@ function Speech() {
         </p>
       )}
     </section>
+  );
+}
+
+/** The phrase translator: downloaded by itself when the app first opens, so there's normally nothing to do. */
+function Translator() {
+  const { translation: progress } = useActivity();
+  const [t, setT] = useState<TranslationModel | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const load = useCallback(() => {
+    backend.translationModel().then(setT);
+  }, []);
+  useEffect(load, [load]);
+  useEffect(
+    () =>
+      on("model-download", (p) => {
+        if (!isTranslationModel(p.id) || p.state === "downloading") return;
+        setError(p.state === "failed" ? p.error : null);
+        load();
+      }),
+    [load],
+  );
+  if (!t) return null;
+  const pct = progress ? Math.round((progress.received / progress.total) * 100) : null;
+  return (
+    <Row label="Phrase translator" hint={`${t.name} · ${bytes(t.bytes)} · translates phrases the dictionary doesn't have, on this computer${error ? ` · ${error}` : ""}`}>
+      {pct !== null ? (
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span className="track" style={{ width: 120 }}>
+            <span className="fill" style={{ display: "block", width: `${pct}%` }} />
+          </span>
+          <span className="mono" style={{ fontSize: 12 }}>
+            {pct}%
+          </span>
+        </div>
+      ) : t.installed ? (
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <span className="dot dot-ok" />
+          Downloaded
+        </span>
+      ) : (
+        <button type="button" className="btn" onClick={() => backend.downloadTranslation().catch(() => {})}>
+          Download
+        </button>
+      )}
+    </Row>
   );
 }
 
@@ -440,7 +486,7 @@ function Storage({ onOpen }: { onOpen: (s: SectionId) => void }) {
           tone: "var(--ink-muted)",
           action: ["Library", () => navigate("/library")],
         },
-        { key: "models", label: "Speech model", hint: "Whisper, for transcribing on this computer.", n: u.modelsBytes, tone: "var(--ink-subtle)", action: ["Speech model", () => onOpen("speech")] },
+        { key: "models", label: "Speech and translation models", hint: "For transcribing, and translating phrases, on this computer.", n: u.modelsBytes, tone: "var(--ink-subtle)", action: ["Speech model", () => onOpen("speech")] },
         { key: "dicts", label: "Dictionaries", hint: "Word meanings for looking up.", n: u.dictionariesBytes, tone: "var(--ink-tertiary)", action: ["Dictionaries", () => onOpen("dictionaries")] },
         { key: "db", label: "Your practice", hint: "Transcripts, dictations, My words and settings.", n: u.databaseBytes, tone: "var(--hairline-tertiary)" },
       ]
@@ -645,6 +691,13 @@ function Shortcuts() {
 const CREDITS: [string, string, string][] = [
   ["whisper.cpp", "MIT", "https://github.com/ggml-org/whisper.cpp"],
   ["Whisper speech models, by OpenAI", "MIT", "https://github.com/openai/whisper"],
+  ["llama.cpp", "MIT", "https://github.com/ggml-org/llama.cpp"],
+  [
+    "Tencent HY-MT 1.5 translation model. Tencent HY is licensed under the Tencent HY Community License Agreement, Copyright © 2025 Tencent. All Rights Reserved. The trademark rights of “Tencent HY” are owned by Tencent or its affiliate.",
+    "Tencent HY Community License",
+    "https://huggingface.co/tencent/HY-MT1.5-1.8B/blob/main/License.txt",
+  ],
+  ["Qwen 2.5 language model, by Alibaba Cloud (used in the EU, the UK and South Korea)", "Apache 2.0", "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct"],
   ["ECDICT", "MIT", "https://github.com/skywind3000/ECDICT"],
   ["EJDict", "Public domain", "https://github.com/kujirahand/EJDict"],
   ["Wiktionary", "CC BY-SA", "https://www.wiktionary.org/"],

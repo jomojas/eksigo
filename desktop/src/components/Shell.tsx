@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router";
-import { AUDIO_EXTENSIONS, backend, type Added, type AppInfo } from "../lib/backend";
+import { AUDIO_EXTENSIONS, backend, on, type Added, type AppInfo } from "../lib/backend";
 import { fraction, useDownloads } from "../lib/downloads";
 import { isBusy, transcribed, useActivity } from "../lib/transcripts";
 import { dictationPath, progressLabel, useInProgress } from "../lib/dictation";
@@ -62,7 +62,45 @@ export function Shell() {
   return <AppShell />;
 }
 
+/** The phrase translator (DESIGN.md, "Results") downloads by itself when the app opens, after the speech
+ * model if that is still coming, so the two don't share the connection. Nothing to decide. */
+function useTranslatorDownload() {
+  useEffect(() => {
+    let off = () => {};
+    let live = true;
+    (async () => {
+      const t = await backend.translationModel();
+      if (!live || t.installed || t.downloading) return;
+      const start = () => backend.downloadTranslation().catch(() => {});
+      const speech = (await backend.models()).find((m) => m.available);
+      if (!live) return;
+      if (speech && !speech.installed) {
+        // Started by the welcome, or by the first transcription; if neither comes within a minute, go anyway.
+        const timer = window.setTimeout(() => {
+          off();
+          start();
+        }, 60_000);
+        const stop = on("model-download", (p) => {
+          if (p.id === speech.id && p.state !== "downloading") {
+            off();
+            start();
+          }
+        });
+        off = () => {
+          window.clearTimeout(timer);
+          stop();
+        };
+      } else start();
+    })();
+    return () => {
+      live = false;
+      off();
+    };
+  }, []);
+}
+
 function AppShell() {
+  useTranslatorDownload();
   const [info, setInfo] = useState<AppInfo | null>(null);
   const [keys, setKeys] = useState<Keys>([]);
   const [status, setStatus] = useState("");
@@ -198,7 +236,7 @@ function DownloadStatus() {
 }
 
 function TranscriptActivity() {
-  const { transcripts, model } = useActivity();
+  const { transcripts, model, translation } = useActivity();
   if (model) {
     return (
       <span>
@@ -209,7 +247,16 @@ function TranscriptActivity() {
   }
   const busy = [...transcripts.values()].filter((t) => isBusy(t.state));
   const running = busy.find((t) => t.state === "running");
-  if (!running) return null;
+  if (!running) {
+    // Below a transcription: it's the thing the learner is waiting for.
+    if (!translation) return null;
+    return (
+      <span>
+        <Bar fraction={translation.received / translation.total} />
+        Downloading the phrase translator · {Math.round((translation.received / translation.total) * 100)}%
+      </span>
+    );
+  }
   const f = transcribed(running);
   return (
     <span title={running.title}>
