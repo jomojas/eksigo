@@ -27,6 +27,8 @@ The riskiest parts come first: Whisper building on both systems, then the dictat
 
 - **First after v0.1.0 (decided 2026-11-12): a human-like voice for looking words up.** A neural voice (Kokoro, Apache 2.0) on api.eksigo.com, `GET /v1/speak?text=` returning audio for a selected word or phrase, each made once and kept; it replaces *Slow voice*, which uses the computer's own voice until then.
 
+- **Then: machine translation for phrases (decided 2026-11-13).** When a selection isn't in the dictionary as a phrase, the card also shows a translation of the whole selection from a small model on the computer, downloaded once, free and offline. First, candidate models are tested on real episode phrases for quality, size and speed.
+
 - Publisher transcripts (`podcast:transcript`) and their alignment
 - The *Accurate* speech model
 - Mistakes grouped by type (weak forms, numbers, names, similar sounds, endings)
@@ -64,9 +66,10 @@ Rough times; the order can change with feedback from the first users.
 
 **Done when:** eksigo.com serves the new page and both download buttons work.
 
-## AI with your own key (about 1 week)
+## AI (about 1 week)
 
-- Settings → AI: provider (OpenAI, DeepSeek, Anthropic, Groq or any OpenAI-compatible URL), key stored in the Keychain or the Credential Manager, *Test key*, estimated cost per episode.
+- **Before this step:** apply to OpenAI for *Sign in with ChatGPT* (approval can take a while), and check its terms and per-app limits in OpenAI's own documentation.
+- Settings → AI, in the order of DESIGN.md section 6: *Sign in with ChatGPT* (once approved), *Eksigo Premium* (comes with the Premium step), and under *Advanced* the learner's own key (OpenAI, DeepSeek, Anthropic, Groq, OpenRouter or any OpenAI-compatible URL), stored in the Keychain or the Credential Manager, with *Test key*. No Claude subscription login (not allowed by Anthropic).
 - One OpenAI-compatible client in the Rust core.
 - Episode review, word or phrase in context, sentence explanation, all in the learner's language. Only the aligned mistakes are sent.
 

@@ -97,6 +97,7 @@ The **review** (after stopping or finishing, and from each attempt on the Episod
 - **Selecting a word or phrase** in the original opens a dictionary card (decided 2026-11-12). Any selection works, whether or not the dictionary has it:
   1. **The whole phrase**, made flexible: case and punctuation ignored, words in their base form (*followed through* finds *follow through*), people and things matched to the dictionary's *sb* / *sth* / *one's* or left out (*give it up* finds *give up*).
   2. Otherwise **the longest phrase inside** the selection, and **every word on its own** with its meaning; the card says plainly "Not in the dictionary as a phrase".
+     - **A machine translation of the whole selection** (decided 2026-11-13), for phrases the dictionary lacks: a small translation model on the computer, downloaded once like the speech model, free and offline. Meant for short phrases (2–6 words) and shown as *Machine translation*, so it isn't mistaken for a dictionary meaning. Slang, idioms and long stretches are what *Explain in this sentence* (AI) is for. The model is chosen by testing candidates on real episode phrases first.
   3. **Pronunciation for anything selected:** ▶ *As said in the episode* plays exactly those words, from the word timings transcription keeps; *Slow voice* reads them with the computer's own voice. The dictionary's IPA where it has it.
   4. **Add to My words** (`A`) for any selection, with the sentence, what was typed, the words' place in the audio, the meaning (or each word's), and the learner's own note.
   5. *Explain in this sentence* needs an AI key (later).
@@ -176,6 +177,7 @@ Checking a typed translation needs an LLM, so it can only come later, as an AI f
 | Word-by-word comparison and accuracy | A word alignment (diff) in the app |
 | Mistakes grouped by type | Rules plus a pronunciation dictionary |
 | Basic word meanings | An offline dictionary in the app (ECDICT for Chinese is free; dictionaries for the other languages still to be found) |
+| Phrase translation | A small translation model on the computer, for phrases the dictionary lacks |
 | My words, history, progress, streaks | Local |
 | Shadowing with the speech check | Local Whisper |
 | Ad skipping, library management | Local |
@@ -201,13 +203,18 @@ Only the aligned mistakes go to the AI, never the whole transcript. That keeps i
 
 ## 6. AI access and Premium
 
-- **One rule: every AI feature works for free with the learner's own key. Premium only means no key is needed**, plus server transcription. Nothing is locked behind payment that a key wouldn't unlock.
-- **Bring your own key:**
+- **One rule: every AI feature works with whatever AI the learner already pays for. Premium only means they need none**, plus server transcription. Nothing is locked behind payment that their own AI wouldn't unlock.
+- **How a learner connects AI (decided 2026-11-13).** Learners shouldn't have to create API keys. In Settings › AI and the welcome, in this order:
+  1. **Sign in with ChatGPT**, for ChatGPT Plus and Pro subscribers: OpenAI's official programme lets *approved* apps use the subscriber's plan, with a limit per app the subscriber sets. Eksigo applies to OpenAI when the AI work starts; until it is approved, this option isn't shown.
+  2. **Eksigo Premium**, for everyone else: sign in and subscribe on the web, nothing to set up. For many Chinese learners, who can't easily subscribe to ChatGPT or Claude, this is the main way.
+  3. **Use my own key** (OpenAI, DeepSeek, Anthropic, Groq, OpenRouter or any OpenAI-compatible URL), under *Advanced*.
+- **Not offered: Claude subscriptions.** Anthropic's terms allow Claude Free, Pro and Max logins only in Claude.ai and Claude Code, and it has blocked third-party apps that used them (2026). Using a subscriber's Claude login would break and could get their account suspended. Nor does Eksigo borrow the Codex CLI's ChatGPT login unofficially. Either is reconsidered only if the provider offers an official programme.
+- **Own key, details:**
   - Supported providers: OpenAI, DeepSeek, Anthropic, Groq, or any OpenAI-compatible endpoint.
   - The app calls the provider directly, and the key never reaches our server.
   - Keys are stored in the macOS Keychain or the Windows Credential Manager, never in a plain file.
   - A *Test key* button checks the key, and the app shows the estimated cost per episode.
-- **One AI client:** our server acts as one more OpenAI-compatible provider, *Eksigo (Premium)*. Choosing it changes only the URL and uses the login token instead of a key, so there is one code path to test.
+- **One AI client:** our server acts as one more OpenAI-compatible provider, *Eksigo (Premium)*. Choosing it changes only the URL and uses the login token instead of a key; *Sign in with ChatGPT* likewise supplies a token for OpenAI. One code path to test.
 - **Premium is sold only on the web**, through a merchant of record (Paddle or Lemon Squeezy) that handles VAT and sales tax. Not in the iPhone app:
   - All AI is on the desktop now, and one payment channel means one webhook and one refund flow.
   - A free iPhone app doesn't need the Paid Apps Agreement, which also removes the W-8BEN and bank-detail blocker.
@@ -408,7 +415,7 @@ The detailed milestones are in [ROADMAP.md](ROADMAP.md).
    - My words with the offline dictionary
    - the library
    - signed Mac and unsigned Windows builds on GitHub Releases
-4. **AI with the learner's own key:** episode review, words in context, sentence explanation.
+4. **AI:** episode review, words in context, sentence explanation; connected with *Sign in with ChatGPT* (once OpenAI approves Eksigo), Premium, or the learner's own key (section 6).
 5. **Accounts and sync:** desktop sign-in, sync endpoints, *Today* from the phone's listening history.
 6. **iPhone v2:** new screens on the reused engine (tabs: Listen, Discover, Review, Me); missed-sentence playlist (hash match first), spaced-repetition review, My words and history.
 7. **Premium:** web checkout, *Eksigo (Premium)* as a provider, Groq transcription.
