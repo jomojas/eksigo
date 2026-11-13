@@ -570,7 +570,7 @@ const SHORTCUTS: [string, [string, string][]][] = [
   [
     "Review and looking up",
     [
-      ["Select, then click", "Look the words up"],
+      ["Select", "Look the words up (double-click a word, or drag over a phrase)"],
       ["A", "Add to My words"],
       ["Esc", "Close the card"],
     ],
