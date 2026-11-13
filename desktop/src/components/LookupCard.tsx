@@ -1,15 +1,17 @@
 // The card for words selected in a review or on Listen (DESIGN.md, "Results"): one word's meaning from the
-// dictionary, or for several words one translation of them from the translator on this computer; with AI set
-// up, what they mean in this sentence (design D17); the words as said in the episode or read slowly; and Add
-// to My words, which keeps the explanation too.
+// dictionary, or for several words one translation of them from the translator on this computer; the words as
+// said in the episode or read slowly; and Add to My words. With AI set up (design D19), Explain (E) says what they
+// mean in this sentence, and questions about them follow; the AI is asked by itself only when neither the
+// dictionary nor the translator found anything. The explanation is kept with the word when it's added.
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
-import { aiProblem, backend, isTranslationModel, on, type AiProblem, type Entry, type Lookup } from "../lib/backend";
-import { problemText, SETTINGS_AI, useAi } from "../lib/ai";
+import { aiProblem, backend, isTranslationModel, on, type AiProblem, type Entry, type Exchange, type Lookup } from "../lib/backend";
+import { SETTINGS_AI, useAi } from "../lib/ai";
 import { usePlayer } from "../lib/playback";
 import { useActivity } from "../lib/transcripts";
 import { firstLine, speak, useMeaningLanguage } from "../lib/words";
+import { AiProblemLine, AiSource } from "./Ask";
 import { Icon } from "./Icon";
 import { Kbd } from "./Shell";
 
@@ -32,6 +34,7 @@ const WIDTH = 360;
 type Machine = { state: "loading" } | { state: "done"; text: string } | { state: "missing" } | { state: "failed" };
 
 /** What the AI said a selection means in its sentence, by language, sentence and words: asked once per run. */
+type AskingWords = { question: string; text: string; problem: AiProblem | null };
 const explained = new Map<string, string>();
 
 /** Ready to show: the first translation also loads the model, which takes a few seconds. */
@@ -65,29 +68,46 @@ export function LookupCard({
   const { translation: translatorProgress } = useActivity();
   const { status: ai } = useAi();
   const navigate = useNavigate();
-  const [explanation, setExplanation] = useState<{ state: "loading" } | { state: "done"; text: string } | { state: "problem"; problem: AiProblem } | null>(null);
-  const [retry, setRetry] = useState(0);
-  const usingAi = !!ai?.using;
-
-  // With AI set up, what the words mean in this sentence is asked for at once: no button to press.
-  useEffect(() => {
-    if (!usingAi) return setExplanation(null);
-    const key = `${lang}|${sel.sentence}|${sel.text}`;
+  // The conversation about these words: the explanation first (no question), then the learner's questions.
+  const key = `${lang}|${sel.sentence}|${sel.text}`;
+  const [talk, setTalk] = useState<Exchange[]>(() => {
     const known = explained.get(key);
-    if (known) return setExplanation({ state: "done", text: known });
-    let live = true;
-    setExplanation({ state: "loading" });
-    backend.aiExplain(lang, sel.text, sel.sentence).then(
-      (text) => {
-        explained.set(key, text);
-        if (live) setExplanation({ state: "done", text });
+    return known ? [{ question: "", answer: known }] : [];
+  });
+  const [asking, setAsking] = useState<AskingWords | null>(null);
+  const [question, setQuestion] = useState("");
+  const usingAi = !!ai?.using;
+  const busy = !!asking && !asking.problem;
+  // Another selection starts its own conversation; answers still coming for the last one are dropped.
+  const generation = useRef(0);
+  const shownKey = useRef(key);
+  if (shownKey.current !== key) {
+    shownKey.current = key;
+    generation.current++;
+  }
+  useEffect(() => {
+    const known = explained.get(key);
+    setTalk(known ? [{ question: "", answer: known }] : []);
+    setAsking(null);
+    setQuestion("");
+  }, [key]);
+
+  const ask = (q: string | null, again = false) => {
+    if (!usingAi || (busy && !again) || (q === null && talk.length > 0)) return;
+    const mine = generation.current;
+    const mineToo = () => mine === generation.current;
+    setQuestion("");
+    setAsking({ question: q ?? "", text: "", problem: null });
+    backend.aiExplain(lang, sel.text, sel.sentence, talk, q, (t) => mineToo() && setAsking((a) => (a ? { ...a, text: a.text + t } : a))).then(
+      (answer) => {
+        if (talk.length === 0) explained.set(key, answer);
+        if (!mineToo()) return;
+        setTalk((t) => [...t, { question: q ?? "", answer }]);
+        setAsking(null);
       },
-      (e) => live && setExplanation({ state: "problem", problem: aiProblem(e) }),
+      (e) => mineToo() && setAsking((a) => (a ? { ...a, problem: aiProblem(e) } : a)),
     );
-    return () => {
-      live = false;
-    };
-  }, [usingAi, lang, sel.text, sel.sentence, retry]);
+  };
 
   useEffect(() => {
     let live = true;
@@ -141,7 +161,7 @@ export function LookupCard({
     const top = below + h > window.innerHeight - 12 ? Math.max(12, sel.rect.top - h - 8) : below;
     const left = Math.min(Math.max(12, sel.rect.left), window.innerWidth - WIDTH - 12);
     setPos({ top, left });
-  }, [sel.rect, result, error, docked, machine, explanation]);
+  }, [sel.rect, result, error, docked, machine, talk.length, !!asking]);
 
   const save = async () => {
     if (!result || savedId) return;
@@ -159,7 +179,7 @@ export function LookupCard({
         ipa: fromDictionary ? entry.ipa : "",
         meaning,
         note,
-        explanation: explanation?.state === "done" ? explanation.text : "",
+        explanation: talk[0]?.answer ?? "",
         itemId: sel.itemId,
         idx: sel.idx,
         from: sel.from,
@@ -180,7 +200,7 @@ export function LookupCard({
     if (a && b) player.play(Math.max(0, a[0] - 100), b[1] + 120, 1);
   };
 
-  // A adds, Esc closes; typing in the note is left alone.
+  // A adds, E explains, Esc closes; typing in the note is left alone.
   const keys = useRef<(e: KeyboardEvent) => void>(() => {});
   keys.current = (e) => {
     const typing = (e.target as HTMLElement | null)?.closest?.("input, textarea");
@@ -191,6 +211,9 @@ export function LookupCard({
     } else if (!typing && !e.metaKey && !e.ctrlKey && !e.altKey && e.key.toLowerCase() === "a") {
       e.preventDefault();
       save();
+    } else if (!typing && !e.metaKey && !e.ctrlKey && !e.altKey && e.key.toLowerCase() === "e" && result) {
+      e.preventDefault();
+      ask(null);
     }
   };
   useEffect(() => {
@@ -212,6 +235,15 @@ export function LookupCard({
   const dictionary = !!result && (single || !wantsMachine || machine?.state === "failed");
   const translated = machine?.state === "done";
   const title = dictionary && result?.whole && entry ? entry.headword : sel.text.replace(/^[^\p{L}\p{N}']+|[^\p{L}\p{N}']+$/gu, "");
+  // Neither the dictionary nor the translator has anything: the AI is asked by itself.
+  const nothingFound = !!result && !result.entry && result.words.every((w) => !w.entry) && (machine === null || machine.state === "failed");
+  useEffect(() => {
+    if (nothingFound && usingAi && talk.length === 0 && !asking) ask(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nothingFound, usingAi]);
+  const explaining = talk.length > 0 || !!asking;
+  // Nothing found and the AI explains it instead: no need for the learner's own note.
+  const aiExplains = nothingFound && usingAi && explaining && !asking?.problem;
 
   return (
     <div ref={card} className={docked ? "lookup lookup-docked" : "lookup"} role="dialog" aria-label={title} style={docked ? undefined : { top: pos.top, left: pos.left, width: WIDTH }}>
@@ -263,7 +295,9 @@ export function LookupCard({
           <span>{firstLine(entry.meaning)}</span>
         </div>
       )}
-      {dictionary && single && !entry && <div className="lookup-sub">Not in the dictionary. Add it with your own note.</div>}
+      {dictionary && single && !entry && (
+        <div className="lookup-sub">{aiExplains ? "Not in the dictionary · explained by AI" : "Not in the dictionary. Add it with your own note."}</div>
+      )}
       {dictionary && result.words.length > 0 && (
         <div>
           {result.words.map((w, i) => (
@@ -287,7 +321,7 @@ export function LookupCard({
         </div>
       )}
 
-      {result && !translated && (!dictionary || !result.whole || !entry) && !savedId && (
+      {result && !translated && (!dictionary || !result.whole || !entry) && !savedId && !aiExplains && (
         <label className="lookup-note">
           Your note
           <span className="input">
@@ -296,64 +330,47 @@ export function LookupCard({
         </label>
       )}
 
-      {result && (
+      {result && usingAi && explaining && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingTop: 12, borderTop: "1px solid var(--hairline)" }} aria-live="polite">
-          {!usingAi ? (
-            <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12 }} className="muted">
-              <span style={{ flexGrow: 1 }}>What it means in this sentence needs AI.</span>
-              <button
-                type="button"
-                className="btn btn-sm btn-ghost"
-                style={{ color: "var(--ink)" }}
-                onClick={() => {
-                  onClose();
-                  navigate(SETTINGS_AI);
-                }}
-              >
-                Set up AI
-              </button>
+          <div style={{ display: "flex", alignItems: "center" }}>
+            <span className="eyebrow">In this sentence</span>
+            <span style={{ flexGrow: 1 }} />
+            <AiSource ai={ai} />
+          </div>
+          {talk.map((t, i) => (
+            <div key={i} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {t.question && <div className="ask-me">{t.question}</div>}
+              <div className="ai-text">{t.answer}</div>
             </div>
-          ) : (
-            <>
-              <div style={{ display: "flex", alignItems: "center" }}>
-                <span className="eyebrow">In this sentence</span>
-                <span style={{ flexGrow: 1 }} />
-                <span className="ai-source">
-                  <span className="dot dot-ok" aria-hidden="true" />
-                  {ai?.using === "chatgpt" ? "ChatGPT plan" : ai?.key?.name}
-                </span>
-              </div>
-              {explanation?.state === "done" && <div className="ai-text">{explanation.text}</div>}
-              {explanation?.state === "loading" && <div className="lookup-sub">Explaining…</div>}
-              {explanation?.state === "problem" && (
-                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                  <span className="lookup-sub" style={{ flexGrow: 1, minWidth: 180 }}>
-                    {problemText(explanation.problem)}
-                  </span>
-                  {explanation.problem.kind === "limit" ? (
-                    <button type="button" className="btn btn-sm" onClick={() => backend.manageUsage()}>
-                      Manage usage
-                      <Icon name="external" size={12} />
-                    </button>
-                  ) : explanation.problem.kind === "failed" ? (
-                    <button type="button" className="btn btn-sm btn-ghost" onClick={() => setRetry((n) => n + 1)}>
-                      Try again
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-ghost"
-                      onClick={() => {
-                        onClose();
-                        navigate(SETTINGS_AI);
-                      }}
-                    >
-                      Settings › AI
-                    </button>
-                  )}
+          ))}
+          {asking && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {asking.question && <div className="ask-me">{asking.question}</div>}
+              {asking.problem ? (
+                <AiProblemLine problem={asking.problem} onRetry={() => ask(asking.question || null, true)} onLeave={onClose} />
+              ) : asking.text ? (
+                <div className="ai-text">
+                  {asking.text}
+                  <span className="caret" aria-hidden="true" />
                 </div>
+              ) : (
+                <div className="lookup-sub">Explaining…</div>
               )}
-            </>
+            </div>
+          )}
+          {talk.length > 0 && (
+            <form
+              className="ask-field lookup-ask"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (question.trim()) ask(question.trim());
+              }}
+            >
+              <input type="text" value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="Ask about these words…" aria-label="Ask about these words" disabled={busy} />
+              <button type="submit" className="btn btn-sm btn-ghost" style={{ height: 24, padding: "0 6px" }} aria-label="Send" disabled={!question.trim() || busy}>
+                <Icon name="send" size={12} stroke={2} />
+              </button>
+            </form>
           )}
         </div>
       )}
@@ -370,7 +387,25 @@ export function LookupCard({
             Add to My words <Kbd keys="A" />
           </button>
         )}
-        {!savedId && explanation?.state === "done" && <span className="lookup-sub">The explanation is saved with it.</span>}
+        {result && usingAi && !explaining && (
+          <button type="button" className="btn btn-sm btn-ghost" style={{ color: "var(--ink)" }} onClick={() => ask(null)}>
+            Explain in this sentence <Kbd keys="E" />
+          </button>
+        )}
+        {result && ai && !usingAi && (
+          <button
+            type="button"
+            className="btn btn-sm btn-ghost"
+            title="Explaining words in their sentence needs AI"
+            onClick={() => {
+              onClose();
+              navigate(SETTINGS_AI);
+            }}
+          >
+            Set up AI to explain
+          </button>
+        )}
+        {!savedId && talk.length > 0 && <span className="lookup-sub">The explanation is saved with it.</span>}
       </div>
       {dictionary && result?.source && <div className="lookup-credit">Meanings: {result.source}</div>}
     </div>

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
-import { backend, inApp, isTranslationModel, on, type Account, type DictionaryList, type ModelInfo, type StorageUsage, type TranslationModel } from "../lib/backend";
+import { backend, inApp, isTranslationModel, on, type Account, type AiModel, type AiStatus, type DictionaryList, type ModelInfo, type StorageUsage, type TranslationModel } from "../lib/backend";
 import { useTheme, type ThemeChoice } from "../lib/theme";
 import { Kbd, Page, useAppInfo } from "../components/Shell";
 import { Icon } from "../components/Icon";
@@ -12,7 +12,7 @@ import { useDictationSettings } from "../lib/dictation";
 import { MEANING_LANGUAGES, useMeaningLanguage } from "../lib/words";
 import { checkForUpdate, restartToUpdate, useUpdate } from "../lib/updates";
 import { cancelSignIn, deleteAccount, displayName, providerName, signIn, signOut, useAccount } from "../lib/account";
-import { cancelConnect, connectChatGpt, disconnectChatGpt, removeKey, saveKey, useAi } from "../lib/ai";
+import { cancelConnect, connectChatGpt, disconnectChatGpt, removeKey, saveKey, setModel, useAi } from "../lib/ai";
 
 // Settings (design D12): every section, with AI (D16). The open
 // section is in the address (#/settings?s=storage), so other screens can link straight to one.
@@ -129,6 +129,52 @@ function Row({ label, hint, children }: { label: string; hint?: string; children
 }
 
 /** AI (design D16): ChatGPT first, Premium later, and the learner's own key under Advanced. */
+/** Which of the plan's models answers: Eksigo picks a small one unless the learner picks another. */
+function ModelRow({ chatgpt }: { chatgpt: NonNullable<AiStatus["chatgpt"]> }) {
+  const [models, setModels] = useState<AiModel[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    backend.aiModels().then(
+      (m) => live && setModels(m),
+      () => live && setModels([]),
+    );
+    return () => {
+      live = false;
+    };
+  }, []);
+  const current = chatgpt.model;
+  const name = (slug: string | null) => models?.find((m) => m.slug === slug)?.name ?? slug;
+  const value = chatgpt.chosen && current ? current : "";
+  // The one in use stays listed even when the list couldn't be read.
+  const listed = models && current && chatgpt.chosen && !models.some((m) => m.slug === current) ? [...models, { slug: current, name: current, small: false }] : (models ?? []);
+  return (
+    <div className="ai-kv">
+      <span>Model</span>
+      <span style={{ marginLeft: "auto", fontSize: 12 }}>{error ?? "Small ones are faster and use less of your limit"}</span>
+      <select
+        className="select"
+        style={{ margin: "4px 0", maxWidth: 240 }}
+        value={value}
+        disabled={models === null}
+        onChange={(e) => {
+          setError(null);
+          setModel(e.target.value || null).catch((err) => setError(String(err)));
+        }}
+        aria-label="Model"
+      >
+        <option value="">Automatic{!chatgpt.chosen && current ? ` · ${name(current)}` : " (recommended)"}</option>
+        {listed.map((m) => (
+          <option key={m.slug} value={m.slug}>
+            {m.name}
+            {m.small ? " · faster, uses less" : ""}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 function AiSection() {
   const { status, waiting, error } = useAi();
   const [lang] = useMeaningLanguage();
@@ -144,7 +190,7 @@ function AiSection() {
         AI
       </h1>
       <p className="muted" style={{ fontSize: 14, lineHeight: 1.55, marginTop: 8, maxWidth: 620 }}>
-        AI explains a word in its sentence, tells you why you misheard a sentence, and reviews each episode you finish. It uses an AI you already have.
+        AI explains words in their sentence when you ask, answers your questions about a sentence (like why you missed it), and reviews each episode you finish. It uses an AI you already have.
         Only the sentence and what you typed are sent, never the audio.
       </p>
 
@@ -226,6 +272,7 @@ function AiSection() {
               <span>Account</span>
               <b>{[chatgpt.email, chatgpt.plan && chatgpt.plan[0].toUpperCase() + chatgpt.plan.slice(1)].filter(Boolean).join(" · ") || "Connected"}</b>
             </div>
+            {!chatgpt.reconnect && <ModelRow chatgpt={chatgpt} />}
             <div className="ai-kv">
               <span>Using ChatGPT plan</span>
               <b style={{ fontWeight: 400, color: "var(--ink-subtle)" }}>for explanations and reviews, up to the weekly limit you set in ChatGPT</b>

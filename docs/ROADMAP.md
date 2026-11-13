@@ -74,8 +74,10 @@ Rough times; the order can change with feedback from the first users.
 - Done 2026-11-13: no approval was needed (open-source apps on the user's computer may use ChatGPT plans; DESIGN.md section 6).
 - Settings → AI, in the order of DESIGN.md section 6: *Sign in with ChatGPT*, *Eksigo Premium* (comes with the Premium step), and under *Advanced* the learner's own key (OpenAI, DeepSeek, Anthropic, Groq, OpenRouter or any OpenAI-compatible URL), stored in the Keychain or the Credential Manager, with *Test key*. No Claude subscription login (not allowed by Anthropic).
 - One AI module in the Rust core (`ai.rs`): the Responses API for ChatGPT, chat completions for OpenAI-compatible keys, Messages for Anthropic.
-- Episode review, word or phrase in context, why a sentence was misheard, all in the learner's language. Only the aligned mistakes are sent.
+- Explain a word or phrase in its sentence when asked (`E`), and by itself only when the dictionary and the translator found nothing; *Ask about this sentence* (`?`) with *Why did I miss this?* by reason (new word, sounds different, didn't catch it, spelling, guessed) and the learner's own questions, answers shown as they're written; the episode review by the same reasons. All in the learner's language (redesigned 2026-11-13 after the first try: an AI call on every lookup was slow and unasked for).
+- The model is *Automatic* (a small one), with a *Model* choice in Settings › AI.
 - Still to do: fill in OpenAI's interest form for Premium.
+- Later: *Practise these sentences* from the episode review (needs practising only some sentences of an episode).
 
 **Done when:** with a DeepSeek key, the AI review on the review screen and *Explain* on a word both work, and the key never appears in any file or log.
 

@@ -1,5 +1,6 @@
-//! AI (DESIGN.md section 6, designs D16–D18): explaining words in their sentence, why a sentence was misheard,
-//! and a review of each finished episode, using an AI the learner already has.
+//! AI (DESIGN.md section 6, designs D16–D19): explaining words in their sentence when asked, a conversation about
+//! one sentence (why it was misheard, by reason, and the learner's own questions), and a review of each finished
+//! episode by reason, using an AI the learner already has.
 //!
 //! Two ways in, tried in this order:
 //! - **ChatGPT** (Plus or Pro): OpenAI's *Sign in with ChatGPT* with plan usage, open to open-source apps that run
@@ -12,9 +13,9 @@
 //! provider) in the settings. Only the sentence and what was typed are sent, never the audio.
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fmt,
-    sync::LazyLock,
+    sync::{LazyLock, Mutex},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
@@ -30,7 +31,7 @@ use crate::{
     account::{self, NotSignedIn, SignIn},
     compare::{Mark, Marked},
     db::Db,
-    dictation,
+    dictation, transcribe,
 };
 
 const ISSUER: &str = "https://auth.openai.com";
@@ -109,6 +110,10 @@ pub struct ChatGptStatus {
     pub limited: bool,
     /// The sign-in ended; the account is remembered so connecting again is one click.
     pub reconnect: bool,
+    /// The model in use, once known.
+    pub model: Option<String>,
+    /// The learner picked the model; otherwise Eksigo picks a small one.
+    pub chosen: bool,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -138,8 +143,11 @@ struct ChatGpt {
     subject: String,
     email: Option<String>,
     plan: Option<String>,
-    /// The model chosen from the plan's list, until it goes away.
+    /// The model Eksigo picked from the plan's list, until it goes away.
     model: Option<String>,
+    /// The model the learner picked in Settings › AI; None: Eksigo picks.
+    #[serde(default)]
+    chosen: Option<String>,
     limited_at: Option<i64>,
 }
 
@@ -232,6 +240,8 @@ pub fn status(db: &Db) -> Status {
             plan: c.plan,
             limited: c.limited_at.is_some_and(|t| now() - t < LIMIT_SHOWN_FOR),
             reconnect: !connected,
+            chosen: c.chosen.is_some(),
+            model: c.chosen.or(c.model),
         }),
         key,
     }
@@ -485,8 +495,9 @@ async fn exchange(db: &Db, client_id: &str, code: &str, verifier: &str, redirect
     let t = tokens_from(&data, None)?;
     set_secret(CHATGPT_SECRET, &serde_json::to_string(&t)?)?;
     let mut s = load(db);
-    let model = s.chatgpt.as_ref().filter(|c| c.subject == id.subject).and_then(|c| c.model.clone());
-    s.chatgpt = Some(ChatGpt { subject: id.subject, email: id.email, plan: id.plan, model, limited_at: None });
+    let same = s.chatgpt.as_ref().filter(|c| c.subject == id.subject);
+    let (model, chosen) = (same.and_then(|c| c.model.clone()), same.and_then(|c| c.chosen.clone()));
+    s.chatgpt = Some(ChatGpt { subject: id.subject, email: id.email, plan: id.plan, model, chosen, limited_at: None });
     save(db, &s)?;
     Ok(status(db))
 }
@@ -552,26 +563,79 @@ async fn access_token(db: &Db, force: bool) -> Result<String, AiError> {
 
 // ---------------------------------------------------------------- asking ChatGPT
 
-/// The model to use: from the plan's list, a small fast one ("mini") when there is one. No choice to make.
-fn pick_model(slugs: &[String]) -> Option<String> {
-    slugs.iter().find(|s| s.contains("mini")).or_else(|| slugs.first()).cloned()
+/// A model the plan offers to apps, for Settings › AI.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelInfo {
+    pub slug: String,
+    pub name: String,
+    /// Small and fast: answers sooner and uses less of the plan's limit.
+    pub small: bool,
 }
 
-async fn chatgpt_model(db: &Db, token: &str) -> Result<String, AiError> {
-    if let Some(m) = load(db).chatgpt.and_then(|c| c.model) {
-        return Ok(m);
-    }
+fn is_small(slug: &str) -> bool {
+    slug.contains("mini") || slug.contains("nano")
+}
+
+/// The model Eksigo picks: a small fast one ("mini") when there is one.
+fn pick_model(models: &[ModelInfo]) -> Option<String> {
+    models
+        .iter()
+        .find(|m| m.slug.contains("mini"))
+        .or_else(|| models.iter().find(|m| m.small))
+        .or_else(|| models.first())
+        .map(|m| m.slug.clone())
+}
+
+async fn plan_models(token: &str) -> Result<Vec<ModelInfo>, AiError> {
     let r = http().get(format!("{RESOURCE}/models")).bearer_auth(token).timeout(Duration::from_secs(20)).send().await.map_err(|_| offline())?;
     let status = r.status().as_u16();
     let body: Value = r.json().await.unwrap_or(Value::Null);
     if !(200..300).contains(&status) {
         return Err(problem(status, &error_code(&body)));
     }
-    let slugs: Vec<String> = body["models"]
+    Ok(models_in(&body))
+}
+
+fn models_in(body: &Value) -> Vec<ModelInfo> {
+    body["models"]
         .as_array()
-        .map(|a| a.iter().filter(|m| m["visibility"] == "list").filter_map(|m| m["slug"].as_str().map(String::from)).collect())
-        .unwrap_or_default();
-    let model = pick_model(&slugs).ok_or_else(|| AiError::Failed("Your ChatGPT plan has no models for apps right now.".into()))?;
+        .map(|a| {
+            a.iter()
+                .filter(|m| m["visibility"] == "list")
+                .filter_map(|m| {
+                    let slug = m["slug"].as_str()?.to_string();
+                    let name = m["display_name"].as_str().filter(|n| !n.is_empty()).unwrap_or(&slug).to_string();
+                    Some(ModelInfo { small: is_small(&slug), slug, name })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// The models the plan offers, for choosing one in Settings › AI.
+pub async fn models(db: &Db) -> Result<Vec<ModelInfo>, AiError> {
+    let token = access_token(db, false).await?;
+    plan_models(&token).await
+}
+
+/// None: Eksigo picks (a small model).
+pub fn set_model(db: &Db, model: Option<String>) -> Result<Status> {
+    let mut s = load(db);
+    if let Some(c) = s.chatgpt.as_mut() {
+        c.chosen = model.filter(|m| !m.trim().is_empty());
+    }
+    save(db, &s)?;
+    Ok(status(db))
+}
+
+async fn chatgpt_model(db: &Db, token: &str) -> Result<String, AiError> {
+    if let Some(c) = load(db).chatgpt {
+        if let Some(m) = c.chosen.or(c.model) {
+            return Ok(m);
+        }
+    }
+    let model = pick_model(&plan_models(token).await?).ok_or_else(|| AiError::Failed("Your ChatGPT plan has no models for apps right now.".into()))?;
     let mut s = load(db);
     if let Some(c) = s.chatgpt.as_mut() {
         c.model = Some(model.clone());
@@ -633,23 +697,42 @@ impl Events {
     }
 }
 
-async fn chatgpt_ask(db: &Db, instructions: &str, input: &str) -> Result<String, AiError> {
+/// One turn of a conversation with the AI.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Turn {
+    /// "user" or "assistant".
+    pub role: &'static str,
+    pub text: String,
+}
+
+fn user(text: impl Into<String>) -> Turn {
+    Turn { role: "user", text: text.into() }
+}
+
+/// Told each piece of an answer as it arrives, to show it being written.
+pub type OnText<'a> = &'a (dyn Fn(&str) + Send + Sync);
+
+/// Models that refused the reasoning setting: asked again without it, and from then on.
+static NO_REASONING: LazyLock<Mutex<HashSet<String>>> = LazyLock::new(Default::default);
+
+async fn chatgpt_ask(db: &Db, instructions: &str, turns: &[Turn], on_text: OnText<'_>) -> Result<String, AiError> {
     let mut force = false;
     let mut fresh_model = false;
+    let input: Vec<Value> = turns.iter().map(|t| json!({ "role": t.role, "content": t.text })).collect();
     loop {
         let token = access_token(db, force).await?;
         let model = chatgpt_model(db, &token).await?;
+        // These are short answers about one sentence: little thinking keeps them quick and light on the limit.
+        let reasoning = !NO_REASONING.lock().unwrap().contains(&model);
+        let mut body = json!({ "model": model, "instructions": instructions, "input": input, "store": false, "stream": true });
+        if reasoning {
+            body["reasoning"] = json!({ "effort": "low" });
+        }
         let r = http()
             .post(format!("{RESOURCE}/responses"))
             .bearer_auth(&token)
             .header("accept", "text/event-stream")
-            .json(&json!({
-                "model": model,
-                "instructions": instructions,
-                "input": [{ "role": "user", "content": input }],
-                "store": false,
-                "stream": true,
-            }))
+            .json(&body)
             .timeout(Duration::from_secs(120))
             .send()
             .await
@@ -659,6 +742,10 @@ async fn chatgpt_ask(db: &Db, instructions: &str, input: &str) -> Result<String,
             let code = error_code(&r.json::<Value>().await.unwrap_or(Value::Null));
             if status == 401 && !force && !ENDED.contains(&code.as_str()) {
                 force = true;
+                continue;
+            }
+            if status == 400 && reasoning {
+                NO_REASONING.lock().unwrap().insert(model);
                 continue;
             }
             if code == "model_not_found" && !fresh_model {
@@ -673,20 +760,33 @@ async fn chatgpt_ask(db: &Db, instructions: &str, input: &str) -> Result<String,
             return Err(e);
         }
         let mut events = Events::default();
-        let mut body = r.bytes_stream();
-        while let Some(chunk) = body.next().await {
+        let mut stream = r.bytes_stream();
+        // Whole lines only: a chunk can end in the middle of a character (Chinese, Japanese …).
+        let mut raw: Vec<u8> = Vec::new();
+        while let Some(chunk) = stream.next().await {
             let chunk = chunk.map_err(|_| AiError::Failed("The connection to ChatGPT broke. Try again.".into()))?;
-            if let Err(e) = events.feed(&String::from_utf8_lossy(&chunk)) {
+            raw.extend_from_slice(&chunk);
+            let Some(end) = raw.iter().rposition(|b| *b == b'\n') else { continue };
+            let lines: Vec<u8> = raw.drain(..=end).collect();
+            let before = events.text.len();
+            if let Err(e) = events.feed(&String::from_utf8_lossy(&lines)) {
                 if e == AiError::Limit {
                     set_limit_and_model(db, Some(now()), false)?;
                 }
                 return Err(e);
             }
+            if events.text.len() > before {
+                on_text(&events.text[before..]);
+            }
             if events.done {
                 break;
             }
         }
-        events.feed("\n")?;
+        let before = events.text.len();
+        events.feed(&format!("{}\n", String::from_utf8_lossy(&raw)))?;
+        if events.text.len() > before {
+            on_text(&events.text[before..]);
+        }
         if !events.done {
             return Err(AiError::Failed("ChatGPT's answer was cut off. Try again.".into()));
         }
@@ -697,13 +797,15 @@ async fn chatgpt_ask(db: &Db, instructions: &str, input: &str) -> Result<String,
     }
 }
 
-/// Records the limit (or that requests work again), and forgets the model when it went away.
+/// Records the limit (or that requests work again), and forgets the model when it went away (the learner's
+/// choice too: Eksigo picks again).
 fn set_limit_and_model(db: &Db, limited_at: Option<i64>, forget_model: bool) -> Result<()> {
     let mut s = load(db);
     if let Some(c) = s.chatgpt.as_mut() {
         c.limited_at = limited_at;
         if forget_model {
             c.model = None;
+            c.chosen = None;
         }
     }
     save(db, &s)
@@ -732,22 +834,22 @@ fn provider(id: &str) -> Option<&'static Provider> {
     PROVIDERS.iter().find(|p| p.id == id)
 }
 
-async fn key_ask(key: &Key, secret: &str, instructions: &str, input: &str) -> Result<String, AiError> {
+async fn key_ask(key: &Key, secret: &str, instructions: &str, turns: &[Turn]) -> Result<String, AiError> {
     let p = provider(&key.provider).ok_or_else(|| AiError::Failed(format!("Unknown provider {}", key.provider)))?;
     let base = if p.id == "other" { key.base_url.trim_end_matches('/') } else { p.base };
     let model = if key.model.is_empty() { p.model } else { key.model.as_str() };
     let anthropic = p.id == "anthropic";
+    let messages: Vec<Value> = turns.iter().map(|t| json!({ "role": t.role, "content": t.text })).collect();
     let req = if anthropic {
         http()
             .post(format!("{base}/messages"))
             .header("x-api-key", secret)
             .header("anthropic-version", "2023-06-01")
-            .json(&json!({ "model": model, "max_tokens": 2000, "system": instructions, "messages": [{ "role": "user", "content": input }] }))
+            .json(&json!({ "model": model, "max_tokens": 2000, "system": instructions, "messages": messages }))
     } else {
-        http().post(format!("{base}/chat/completions")).bearer_auth(secret).json(&json!({
-            "model": model,
-            "messages": [{ "role": "system", "content": instructions }, { "role": "user", "content": input }],
-        }))
+        let mut all = vec![json!({ "role": "system", "content": instructions })];
+        all.extend(messages);
+        http().post(format!("{base}/chat/completions")).bearer_auth(secret).json(&json!({ "model": model, "messages": all }))
     };
     let r = req.timeout(Duration::from_secs(120)).send().await.map_err(|_| offline())?;
     let status = r.status().as_u16();
@@ -786,7 +888,7 @@ pub async fn set_key(db: &Db, key: Key, secret: &str) -> Result<Status, AiError>
         return Err(AiError::Failed("Name the model to use.".into()));
     }
     let key = Key { provider: p.id.into(), base_url: if p.id == "other" { key.base_url.trim().into() } else { String::new() }, model: key.model.trim().into() };
-    key_ask(&key, secret, "Answer with the single word OK.", "Are you there?").await?;
+    key_ask(&key, secret, "Answer with the single word OK.", &[user("Are you there?")]).await?;
     set_secret(KEY_SECRET, secret)?;
     let mut s = load(db);
     s.key = Some(key);
@@ -801,14 +903,19 @@ pub fn remove_key(db: &Db) -> Result<()> {
     save(db, &s)
 }
 
-/// Asks whichever AI is set up: ChatGPT first, then the key.
-async fn ask(db: &Db, instructions: &str, input: &str) -> Result<String, AiError> {
+/// Asks whichever AI is set up: ChatGPT first, then the key. ChatGPT's answer arrives piece by piece; a key's
+/// all at once.
+async fn ask(db: &Db, instructions: &str, turns: &[Turn], on_text: OnText<'_>) -> Result<String, AiError> {
     let s = load(db);
     if s.chatgpt.is_some() && tokens().is_some() {
-        return chatgpt_ask(db, instructions, input).await;
+        return chatgpt_ask(db, instructions, turns, on_text).await;
     }
     match (s.key, secret(KEY_SECRET)) {
-        (Some(k), Some(secret)) => key_ask(&k, &secret, instructions, input).await,
+        (Some(k), Some(secret)) => {
+            let text = key_ask(&k, &secret, instructions, turns).await?;
+            on_text(&text);
+            Ok(text)
+        }
         _ if s.chatgpt.is_some() => Err(AiError::Reconnect),
         _ => Err(AiError::NotSetUp),
     }
@@ -836,15 +943,41 @@ fn learner(lang: &str) -> String {
     }
 }
 
-/// What a word or phrase means in this sentence: two or three short sentences, kept with the word when saved.
-pub async fn explain(db: &Db, lang: &str, text: &str, sentence: &str) -> Result<String, AiError> {
+const FOLLOW_UP: &str = "If they write in another language, answer in that language. Plain text in short paragraphs: no Markdown \
+                         headings, tables or bold.";
+
+/// A question asked before and its answer, sent again so a follow-up makes sense.
+#[derive(Debug, Clone, Deserialize)]
+pub struct Exchange {
+    /// Empty for the first explanation, which wasn't a question.
+    #[serde(default)]
+    pub question: String,
+    pub answer: String,
+}
+
+/// What a word or phrase means in this sentence (pressing Explain, or by itself when neither the dictionary nor
+/// the translator had anything), or, with `question`, the learner's own question about these words.
+pub async fn explain(db: &Db, lang: &str, text: &str, sentence: &str, history: &[Exchange], question: Option<&str>, on_text: OnText<'_>) -> Result<String, AiError> {
     let instructions = format!(
         "{} Explain what the selected words mean in this sentence: the sense they have here, and anything that makes \
-         them tricky (an idiom, a phrasal verb, a usual pattern). Two or three short sentences, under 70 words. \
-         Plain text: no Markdown, no heading, don't repeat the sentence.",
+         them tricky (an idiom, a phrasal verb, a usual pattern). Two or three short sentences, under 70 words, without \
+         repeating the sentence. When they then ask about these words, answer directly, under 100 words. {FOLLOW_UP}",
         learner(lang)
     );
-    let answer = ask(db, &instructions, &format!("Sentence: {sentence}\nSelected: {text}")).await?;
+    let mut turns = vec![user(format!("Sentence: {sentence}\nSelected: {text}"))];
+    for (i, e) in history.iter().enumerate() {
+        if i > 0 || !e.question.is_empty() {
+            turns.push(user(e.question.clone()));
+        }
+        turns.push(Turn { role: "assistant", text: e.answer.clone() });
+    }
+    match question.map(str::trim).filter(|q| !q.is_empty()) {
+        Some(q) if history.is_empty() => turns[0].text.push_str(&format!("\n\n{q}")),
+        Some(q) => turns.push(user(q)),
+        None if history.is_empty() => {}
+        None => return Err(AiError::Failed("Ask a question first.".into())),
+    }
+    let answer = ask(db, &instructions, &turns, on_text).await?;
     Ok(answer.trim().to_string())
 }
 
@@ -873,6 +1006,22 @@ fn marked(words: &[Marked]) -> String {
     out
 }
 
+/// Why a mistake happened. The same five everywhere: a sentence's answer, and the episode review.
+const REASONS: &str = "- newWord: they don't know the word or phrase: they typed its sounds as other words or syllables, or \
+                       left a gap at an uncommon word. Not for a word already in their saved words.\n\
+                       - soundsDifferent: they know the words, but fast speech changes how they sound (weak forms, \
+                       linking, sounds dropped at the end of a word, similar vowels).\n\
+                       - didntCatch: it went by too fast or too quietly, or it's a name or a number, and nothing \
+                       suggests they don't know it.\n\
+                       - spelling: they heard it right and spelled it wrong.\n\
+                       - guessed: they typed other real words that fit the meaning or the grammar but aren't what was said.";
+
+const REASON_KEYS: &[&str] = &["newWord", "soundsDifferent", "didntCatch", "spelling", "guessed"];
+
+fn reason_or_other(r: &str) -> String {
+    if REASON_KEYS.contains(&r) { r.into() } else { "didntCatch".into() }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Why {
     pub items: Vec<WhyItem>,
@@ -880,13 +1029,179 @@ pub struct Why {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct WhyItem {
+    /// One of `REASON_KEYS`.
+    #[serde(default)]
+    pub reason: String,
     pub original: String,
     #[serde(default)]
     pub typed: String,
     /// How it sounds, in IPA.
     #[serde(default)]
     pub said: String,
+    /// For a new word: a short meaning in the learner's language.
+    #[serde(default)]
+    pub meaning: String,
     pub why: String,
+}
+
+/// One question about a sentence and its answer: `why` for *Why did I miss this?*, `answer` for the rest.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Message {
+    pub id: i64,
+    pub question: String,
+    pub why: Option<Why>,
+    pub answer: String,
+}
+
+/// The conversation about one sentence: per attempt on Results, per episode on Listen (no attempt).
+pub fn thread(conn: &Connection, item_id: i64, attempt_id: Option<i64>, idx: i64) -> Result<Vec<Message>> {
+    let mut st = conn.prepare("SELECT id, question, why, answer FROM ai_messages WHERE item_id = ?1 AND attempt_id IS ?2 AND idx = ?3 ORDER BY id")?;
+    let rows = st
+        .query_map(params![item_id, attempt_id, idx], |r| {
+            let why: Option<String> = r.get(2)?;
+            Ok(Message { id: r.get(0)?, question: r.get(1)?, why: why.and_then(|w| serde_json::from_str(&w).ok()), answer: r.get(3)? })
+        })?
+        .collect::<rusqlite::Result<_>>()?;
+    Ok(rows)
+}
+
+/// The sentences with a conversation, to mark them on the page.
+pub fn asked(conn: &Connection, item_id: i64, attempt_id: Option<i64>) -> Result<Vec<i64>> {
+    let mut st = conn.prepare("SELECT DISTINCT idx FROM ai_messages WHERE item_id = ?1 AND attempt_id IS ?2 ORDER BY idx")?;
+    let rows = st.query_map(params![item_id, attempt_id], |r| r.get(0))?.collect::<rusqlite::Result<_>>()?;
+    Ok(rows)
+}
+
+fn why_as_text(w: &Why) -> String {
+    w.items.iter().map(|i| format!("{} — {} (typed: {}): {}", i.reason, i.original, i.typed, i.why)).collect::<Vec<_>>().join("\n")
+}
+
+/// The learner's saved words that appear in `text`, so the AI doesn't call them new.
+fn saved_in(conn: &Connection, text: &str) -> Result<Vec<String>> {
+    let plain = |s: &str| format!(" {} ", crate::dictionary::tokens(s).join(" "));
+    let hay = plain(text);
+    let mut st = conn.prepare("SELECT text FROM saved_words")?;
+    let all: Vec<String> = st.query_map([], |r| r.get(0))?.collect::<rusqlite::Result<_>>()?;
+    Ok(all.into_iter().filter(|w| hay.contains(&plain(w))).collect())
+}
+
+/// What the AI is told about a sentence: the sentence (with the mistakes marked), what was typed, the sentences
+/// around it, and hints for the reasons. Also whether there were mistakes to explain.
+fn sentence_context(conn: &Connection, item_id: i64, attempt_id: Option<i64>, idx: i64) -> Result<(String, bool), AiError> {
+    let sentences = transcribe::sentences(conn, item_id)?;
+    let text = |i: i64| sentences.iter().find(|s| s.idx == i).map(|s| s.text.clone());
+    let title: String = conn.query_row("SELECT title FROM items WHERE id = ?1", [item_id], |r| r.get(0)).unwrap_or_default();
+    let answer = match attempt_id {
+        Some(a) => dictation::answers(conn, a)?.into_iter().find(|a| a.idx == idx && a.kind == "typed"),
+        None => None,
+    };
+    let plain = answer.as_ref().map(|a| a.original.clone()).or_else(|| text(idx)).ok_or_else(|| AiError::Failed("That sentence isn't in the transcript.".into()))?;
+    let mut out = format!("Episode: {title}\n");
+    let mut mistakes = false;
+    match &answer {
+        Some(a) => {
+            let (o, t) = match &a.comparison {
+                Some(c) => (marked(&c.original), marked(&c.typed)),
+                None => (a.original.clone(), a.typed.clone()),
+            };
+            mistakes = a.credit < a.total as f64;
+            out.push_str(&format!("Sentence {}: {o}\nWhat they typed: {}\n", idx + 1, if t.trim().is_empty() { "(nothing)".into() } else { t }));
+            if let Some(c) = &a.comparison {
+                let spelled: Vec<_> = c.original.iter().filter(|w| w.mark == Mark::Spelling).map(|w| w.text.as_str()).collect();
+                if !spelled.is_empty() {
+                    out.push_str(&format!("Marked by the app as spelling only: {}\n", spelled.join(", ")));
+                }
+            }
+        }
+        None => out.push_str(&format!("Sentence {}: {plain}\n", idx + 1)),
+    }
+    if let Some(b) = text(idx - 1) {
+        out.push_str(&format!("The sentence before: {b}\n"));
+    }
+    if let Some(n) = text(idx + 1) {
+        out.push_str(&format!("The sentence after: {n}\n"));
+    }
+    let saved = saved_in(conn, &plain)?;
+    if !saved.is_empty() {
+        out.push_str(&format!("Already in their saved words: {}\n", saved.join(", ")));
+    }
+    Ok((out, mistakes))
+}
+
+/// The question the *Why did I miss this?* chip asks: answered by reason, as cards.
+pub const WHY_QUESTION: &str = "Why did I miss this?";
+
+/// Asks about one sentence and keeps the question and answer with it. `why`: the *Why did I miss this?* chip,
+/// answered by reason; otherwise the learner's own question (or another chip), answered as it's written.
+pub async fn ask_sentence(
+    db: &Db,
+    lang: &str,
+    item_id: i64,
+    attempt_id: Option<i64>,
+    idx: i64,
+    question: &str,
+    why: bool,
+    on_text: OnText<'_>,
+) -> Result<Message, AiError> {
+    let question = question.trim();
+    if question.is_empty() && !why {
+        return Err(AiError::Failed("Type a question first.".into()));
+    }
+    let (context, earlier) = {
+        let conn = db.conn();
+        (sentence_context(&conn, item_id, attempt_id, idx)?, thread(&conn, item_id, attempt_id, idx)?)
+    };
+    let (context, mistakes) = context;
+    let message = if why {
+        if !mistakes {
+            return Err(AiError::Failed("This sentence has no mistakes to explain.".into()));
+        }
+        let instructions = format!(
+            "{} They typed what they heard in one sentence of an episode. Mistakes are in ⟦ ⟧: in the sentence, the words \
+             they missed or got wrong; in what they typed, their wrong words (_ is a gap they left). Work out why each \
+             mistake happened, choosing one reason:\n{REASONS}\nAnswer only with JSON: {{\"items\": [{{\"reason\": \"one of \
+             the five\", \"original\": \"the words in the sentence\", \"typed\": \"what they typed instead, or _ when \
+             nothing\", \"said\": \"how it sounds here, in IPA between slashes\", \"meaning\": \"for newWord only: a short \
+             meaning, else empty\", \"why\": \"one or two short sentences\"}}]}}. Words next to each other are one \
+             mistake. At most four items, most useful first.",
+            learner(lang)
+        );
+        let mut w: Why = json_in(&ask(db, &instructions, &[user(context)], &|_| {}).await?)?;
+        if w.items.is_empty() {
+            return Err(AiError::Failed("The AI found nothing to explain in this sentence.".into()));
+        }
+        for i in &mut w.items {
+            i.reason = reason_or_other(&i.reason);
+        }
+        (WHY_QUESTION.to_string(), Some(w), String::new())
+    } else {
+        let instructions = format!(
+            "{} They're working on one sentence from an episode they listen to, and ask about it. Answer their question \
+             directly and briefly: under 120 words unless they ask for more. Use the sentences around it only to \
+             understand this one. {FOLLOW_UP}",
+            learner(lang)
+        );
+        // The last few questions, so a follow-up makes sense; the sentence goes with the first.
+        let recent = &earlier[earlier.len().saturating_sub(6)..];
+        let mut turns: Vec<Turn> = Vec::new();
+        for m in recent {
+            turns.push(user(m.question.clone()));
+            turns.push(Turn { role: "assistant", text: m.why.as_ref().map(why_as_text).unwrap_or_else(|| m.answer.clone()) });
+        }
+        turns.push(user(question));
+        turns[0].text = format!("{context}\n{}", turns[0].text);
+        let answer = ask(db, &instructions, &turns, on_text).await?;
+        (question.to_string(), None, answer.trim().to_string())
+    };
+    let (question, why, answer) = message;
+    let conn = db.conn();
+    conn.execute(
+        "INSERT INTO ai_messages (item_id, attempt_id, idx, question, why, answer, created) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        params![item_id, attempt_id, idx, question, why.as_ref().map(serde_json::to_string).transpose().map_err(anyhow::Error::from)?, answer, now()],
+    )
+    .map_err(anyhow::Error::from)?;
+    Ok(Message { id: conn.last_insert_rowid(), question, why, answer })
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -899,8 +1214,13 @@ pub struct Review {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Pattern {
-    pub title: String,
+    /// One of `REASON_KEYS`.
+    #[serde(default)]
+    pub reason: String,
     pub count: i64,
+    /// A few of the words or phrases, as in the original: for new words, the ones to add to My words.
+    #[serde(default)]
+    pub words: Vec<String>,
     pub explanation: String,
     /// Sentence numbers as shown (from 1).
     #[serde(default)]
@@ -931,45 +1251,15 @@ fn keep<T: Serialize>(conn: &Connection, attempt_id: i64, idx: i64, lang: &str, 
     Ok(())
 }
 
-/// Why sentence `idx` of an attempt was misheard, worked out once and kept.
-pub async fn why(db: &Db, lang: &str, attempt_id: i64, idx: i64) -> Result<Why, AiError> {
-    let (original, typed) = {
-        let conn = db.conn();
-        if let Some(w) = cached(&conn, attempt_id, idx, lang) {
-            return Ok(w);
-        }
-        let a = dictation::answers(&conn, attempt_id)?.into_iter().find(|a| a.idx == idx).ok_or_else(|| AiError::Failed("That sentence has no answer yet.".into()))?;
-        match a.comparison {
-            Some(c) => (marked(&c.original), marked(&c.typed)),
-            None => (a.original, a.typed),
-        }
-    };
-    let instructions = format!(
-        "{} They typed what they heard in one sentence. Mistakes are in ⟦ ⟧: in the original, the words they missed or \
-         got wrong; in what they typed, their wrong words. For each mistake, explain why it is easy to mishear: what the \
-         speaker actually says and how it sounds in fast speech (weak forms, linking, sounds dropped at the end of a word, \
-         similar vowels, names, numbers). Answer only with JSON: {{\"items\": [{{\"original\": \"the words in the sentence\", \
-         \"typed\": \"what they typed instead, or _ when nothing\", \"said\": \"how it sounds, in IPA between slashes\", \
-         \"why\": \"one or two short sentences\"}}]}}. One item per mistake, at most four, most useful first.",
-        learner(lang)
-    );
-    let w: Why = json_in(&ask(db, &instructions, &format!("Original: {original}\nTyped: {typed}")).await?)?;
-    if w.items.is_empty() {
-        return Err(AiError::Failed("The AI found nothing to explain in this sentence.".into()));
-    }
-    keep(&db.conn(), attempt_id, idx, lang, &w)?;
-    Ok(w)
-}
-
 /// At most this many sentences go into a review: enough to see the patterns.
 const REVIEW_SENTENCES: usize = 60;
 
-/// The review of a finished attempt: what the mistakes have in common and what to practise. None when there were
-/// no mistakes. Worked out once and kept.
+/// The review of a finished attempt: its mistakes grouped by reason. None when there were no mistakes. Worked out
+/// once and kept.
 pub async fn review(db: &Db, lang: &str, attempt_id: i64) -> Result<Option<Review>, AiError> {
     let input = {
         let conn = db.conn();
-        if let Some(r) = cached(&conn, attempt_id, -1, lang) {
+        if let Some(r) = cached::<Review>(&conn, attempt_id, -1, lang).filter(|r| r.patterns.iter().all(|p| !p.reason.is_empty())) {
             return Ok(Some(r));
         }
         let attempt = dictation::attempt(&conn, attempt_id)?;
@@ -985,26 +1275,37 @@ pub async fn review(db: &Db, lang: &str, attempt_id: i64) -> Result<Option<Revie
         }
         let (credit, total) = typed.iter().fold((0.0, 0i64), |(c, t), a| (c + a.credit, t + a.total));
         let mut input = format!("Episode: {title}\nWords right: {}%\nSentences with mistakes: {}\n\n", (100.0 * credit / total.max(1) as f64).round(), wrong.len());
+        let mut saved = Vec::new();
         for a in wrong.iter().take(REVIEW_SENTENCES) {
             let (o, t) = match &a.comparison {
                 Some(c) => (marked(&c.original), marked(&c.typed)),
                 None => (a.original.clone(), a.typed.clone()),
             };
             input.push_str(&format!("{}. Original: {o}\n   Typed: {t}\n", a.idx + 1));
+            saved.extend(saved_in(&conn, &a.original)?);
+        }
+        saved.sort();
+        saved.dedup();
+        if !saved.is_empty() {
+            input.push_str(&format!("\nAlready in their saved words: {}\n", saved.join(", ")));
         }
         input
     };
     let instructions = format!(
         "{} They just finished dictating an episode, sentence by sentence. Below are the sentences they got wrong, \
-         numbered; mistakes are in ⟦ ⟧. Group the mistakes by why they happened (weak forms and linking, sounds dropped \
-         at the end of words, similar sounds, names and numbers, unknown words …), biggest group first. Answer only with \
-         JSON: {{\"summary\": \"one or two sentences on how it went and the main reason for the mistakes\", \"patterns\": \
-         [{{\"title\": \"a short name for the group\", \"count\": number of mistakes in it, \"explanation\": \"one or two \
-         sentences, quoting a few of their mistakes\", \"sentences\": [the sentence numbers]}}], \"next\": \"one concrete \
-         thing to practise next time\"}}. At most four patterns.",
+         numbered; mistakes are in ⟦ ⟧. Give each mistake one reason:\n{REASONS}\nThen group the mistakes by reason, \
+         biggest group first. Answer only with JSON: {{\"summary\": \"one or two sentences on how it went and the main \
+         reason for the mistakes\", \"patterns\": [{{\"reason\": \"one of the five\", \"count\": number of mistakes, \
+         \"words\": [up to five of the missed words or phrases, as in the original; for newWord, the words worth \
+         learning], \"explanation\": \"one or two sentences about this group\", \"sentences\": [the sentence \
+         numbers]}}], \"next\": \"one concrete thing to do next time, in a sentence or two\"}}. One pattern per reason \
+         that occurs.",
         learner(lang)
     );
-    let r: Review = json_in(&ask(db, &instructions, &input).await?)?;
+    let mut r: Review = json_in(&ask(db, &instructions, &[user(input)], &|_| {}).await?)?;
+    for p in &mut r.patterns {
+        p.reason = reason_or_other(&p.reason);
+    }
     keep(&db.conn(), attempt_id, -1, lang, &r)?;
     Ok(Some(r))
 }
@@ -1067,10 +1368,60 @@ mod tests {
 
     #[test]
     fn a_small_model_is_chosen() {
-        let s = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
-        assert_eq!(pick_model(&s(&["gpt-5", "gpt-5-mini"])).as_deref(), Some("gpt-5-mini"));
-        assert_eq!(pick_model(&s(&["gpt-5"])).as_deref(), Some("gpt-5"));
+        let list = models_in(&json!({ "models": [
+            { "slug": "gpt-5", "display_name": "GPT-5", "visibility": "list" },
+            { "slug": "gpt-5-nano", "visibility": "list" },
+            { "slug": "gpt-5-mini", "display_name": "GPT-5 mini", "visibility": "list" },
+            { "slug": "internal", "visibility": "hide" },
+        ] }));
+        assert_eq!(list.iter().map(|m| (m.name.as_str(), m.small)).collect::<Vec<_>>(), [("GPT-5", false), ("gpt-5-nano", true), ("GPT-5 mini", true)]);
+        assert_eq!(pick_model(&list).as_deref(), Some("gpt-5-mini"));
+        assert_eq!(pick_model(&list[..2]).as_deref(), Some("gpt-5-nano"));
+        assert_eq!(pick_model(&list[..1]).as_deref(), Some("gpt-5"));
         assert_eq!(pick_model(&[]), None);
+    }
+
+    #[test]
+    fn the_chosen_model_wins_and_is_forgotten_when_it_goes_away() {
+        let db = Db::open_in_memory().unwrap();
+        let mut s = Stored::default();
+        s.chatgpt = Some(ChatGpt { subject: "u".into(), email: None, plan: None, model: Some("gpt-5-mini".into()), chosen: None, limited_at: None });
+        save(&db, &s).unwrap();
+        let st = set_model(&db, Some("gpt-5".into())).unwrap();
+        assert_eq!((st.chatgpt.as_ref().unwrap().model.as_deref(), st.chatgpt.as_ref().unwrap().chosen), (Some("gpt-5"), true));
+        set_limit_and_model(&db, None, true).unwrap();
+        let c = load(&db).chatgpt.unwrap();
+        assert_eq!((c.model, c.chosen), (None, None));
+    }
+
+    #[test]
+    fn a_conversation_is_kept_with_its_sentence() {
+        let db = Db::open_in_memory().unwrap();
+        let conn = db.conn();
+        conn.execute("INSERT INTO items (id, title, source, state, added_at) VALUES (1, 'x', 'My files', 'ready', 0)", []).unwrap();
+        conn.execute("INSERT INTO attempts (id, item_id, started_at, updated_at) VALUES (7, 1, 0, 0)", []).unwrap();
+        let add = |attempt: Option<i64>, idx: i64, q: &str| {
+            conn.execute("INSERT INTO ai_messages (item_id, attempt_id, idx, question, why, answer, created) VALUES (1, ?1, ?2, ?3, NULL, 'a', 0)", params![attempt, idx, q]).unwrap();
+        };
+        add(Some(7), 3, "one");
+        add(Some(7), 3, "two");
+        add(None, 3, "on listen");
+        add(Some(7), 5, "other");
+        assert_eq!(thread(&conn, 1, Some(7), 3).unwrap().iter().map(|m| m.question.as_str()).collect::<Vec<_>>(), ["one", "two"]);
+        assert_eq!(thread(&conn, 1, None, 3).unwrap().len(), 1);
+        assert_eq!(asked(&conn, 1, Some(7)).unwrap(), [3, 5]);
+        conn.execute("DELETE FROM attempts WHERE id = 7", []).unwrap();
+        assert!(thread(&conn, 1, Some(7), 3).unwrap().is_empty(), "kept no longer than the attempt");
+    }
+
+    #[test]
+    fn saved_words_are_found_in_a_sentence() {
+        let db = Db::open_in_memory().unwrap();
+        let conn = db.conn();
+        for w in ["follow through", "plan", "ugh"] {
+            conn.execute("INSERT INTO saved_words (text, added_at, updated_at) VALUES (?1, 0, 0)", [w]).unwrap();
+        }
+        assert_eq!(saved_in(&conn, "People who wrote plans were likely to Follow through.").unwrap(), ["follow through"]);
     }
 
     #[test]
@@ -1101,7 +1452,7 @@ mod tests {
         let conn = db.conn();
         conn.execute("INSERT INTO items (id, title, source, state, added_at) VALUES (1, 'x', 'My files', 'ready', 0)", []).unwrap();
         conn.execute("INSERT INTO attempts (id, item_id, started_at, updated_at) VALUES (7, 1, 0, 0)", []).unwrap();
-        let w = Why { items: vec![WhyItem { original: "a".into(), typed: "_".into(), said: "/ə/".into(), why: "weak".into() }] };
+        let w = Why { items: vec![WhyItem { reason: "soundsDifferent".into(), original: "a".into(), typed: "_".into(), said: "/ə/".into(), meaning: String::new(), why: "weak".into() }] };
         keep(&conn, 7, 3, "zh", &w).unwrap();
         assert_eq!(cached::<Why>(&conn, 7, 3, "zh"), Some(w));
         assert_eq!(cached::<Why>(&conn, 7, 3, "ja"), None);

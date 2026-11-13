@@ -1,17 +1,19 @@
 // The review of one attempt: the original and what was typed, side by side, with mistakes marked and the
-// sentences flagged during dictation. With AI set up (designs D17, D18): why a sentence was misheard, and a
-// review of the whole episode once it's finished. Shown when stopping or finishing, and from the Episode page
+// sentences flagged during dictation. With AI set up (designs D17, D18): questions about a sentence (why it was
+// misheard, by reason, or the learner's own; ? opens it), and a review of the whole episode by reason once it's
+// finished. Shown when stopping or finishing, and from the Episode page
 // (`/library/:itemId/review/:attemptId`). Selecting words in the original opens the dictionary card.
 
-import { useCallback, useEffect, useMemo, useState, type MouseEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { useNavigate, useParams } from "react-router";
-import { problemText, SETTINGS_AI, useAi } from "../lib/ai";
+import { saveWordFrom, SETTINGS_AI, useAi } from "../lib/ai";
+import { AiProblemLine, AiSource, AskPanel, ReasonTag } from "../components/Ask";
 import { useMeaningLanguage } from "../lib/words";
 import { Icon } from "../components/Icon";
 import { LookupCard, type Selection } from "../components/LookupCard";
 import { IndexedText, MarkedText, selectedWords } from "../components/Marks";
-import { Page } from "../components/Shell";
-import { aiProblem, backend, on, type AiProblem, type AiStatus, type Answer, type EpisodeReview, type Item, type Sentence, type Session, type Summary, type Why } from "../lib/backend";
+import { Kbd, Page } from "../components/Shell";
+import { aiProblem, backend, on, type AiProblem, type AiStatus, type Answer, type EpisodeReview, type Item, type ReviewPattern, type Sentence, type Session, type Summary } from "../lib/backend";
 import { dictationPath, percent, useDictationSettings } from "../lib/dictation";
 import { clock, plural } from "../lib/format";
 import { usePlayer } from "../lib/playback";
@@ -66,25 +68,44 @@ export function Review({
   const [lookup, setLookup] = useState<Selection | null>(null);
   const { status: ai } = useAi();
   const [lang] = useMeaningLanguage();
-  const navigate = useNavigate();
-  // Why each opened sentence was misheard: asked when first opened, then kept (also on the computer, per attempt).
-  const [whys, setWhys] = useState<Map<number, WhyState>>(new Map());
-  const toggleWhy = (i: number, again = false) => {
-    if (whys.has(i) && !again) {
-      setWhys((m) => {
-        const n = new Map(m);
-        n.delete(i);
-        return n;
-      });
-      return;
+  // The sentences whose questions are open, the ones asked about before, and the one ? opens: the last row
+  // touched, or the first with mistakes.
+  const [open, setOpen] = useState<Set<number>>(new Set());
+  const [asked, setAsked] = useState<Set<number>>(new Set());
+  const [touched, setTouched] = useState<number | null>(null);
+  useEffect(() => {
+    backend.aiAsked(item.id, s.attempt.id).then((a) => setAsked(new Set(a)), () => {});
+  }, [item.id, s.attempt.id]);
+  const toggleAsk = (i: number) => {
+    setTouched(i);
+    setOpen((o) => {
+      const n = new Set(o);
+      if (n.has(i)) n.delete(i);
+      else n.add(i);
+      return n;
+    });
+  };
+  const keys = useRef<(e: KeyboardEvent) => void>(() => {});
+  keys.current = (e) => {
+    if (!(e.key === "?" || (e.shiftKey && e.code === "Slash")) || e.metaKey || e.ctrlKey || e.altKey || lookup) return;
+    if ((e.target as HTMLElement | null)?.closest?.("input, textarea")) return;
+    const i = touched !== null && shown.includes(touched) ? touched : (shown.find(mistaken) ?? shown[0]);
+    if (i === undefined) return;
+    e.preventDefault();
+    toggleAsk(i);
+    window.requestAnimationFrame(() => document.getElementById(`review-row-${i}`)?.scrollIntoView({ behavior: "smooth", block: "nearest" }));
+  };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => keys.current(e);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+  const playSlowly = (i: number) => {
+    const sen = sentences[i];
+    if (sen && item.path) {
+      setPlaying(i);
+      player.play(sen.startMs, sen.endMs, 0.7);
     }
-    const put = (st: WhyState) => setWhys((m) => new Map(m).set(i, st));
-    if (!ai?.using) return put({ state: "problem", problem: { kind: "notSetUp" } });
-    put({ state: "loading" });
-    backend.aiWhy(lang, s.attempt.id, i).then(
-      (why) => put({ state: "done", why }),
-      (e) => put({ state: "problem", problem: aiProblem(e) }),
-    );
   };
   // From the episode review: show a sentence among those with mistakes.
   const showSentence = (n: number) => {
@@ -100,6 +121,7 @@ export function Review({
       if (!range || !r) return;
       const text = answers.get(i)?.original ?? sentences[i]?.text ?? "";
       const words = text.split(/\s+/).filter(Boolean);
+      setTouched(i);
       setLookup({ itemId: item.id, idx: i, from: range[0], to: range[1], text: words.slice(range[0], range[1] + 1).join(" "), typed: answers.get(i)?.typed ?? "", sentence: text, rect: r.getBoundingClientRect() });
     }, 0);
   };
@@ -124,7 +146,7 @@ export function Review({
           Back to the episode
         </button>
       </div>
-      {finished && counts.mistakes > 0 && <EpisodeReviewPanel attemptId={s.attempt.id} mistakes={counts.mistakes} ai={ai} lang={lang} onShow={showSentence} />}
+      {finished && counts.mistakes > 0 && <EpisodeReviewPanel itemId={item.id} attemptId={s.attempt.id} answers={answers} mistakes={counts.mistakes} ai={ai} lang={lang} onShow={showSentence} />}
       <div className="cells" style={{ gridTemplateColumns: "repeat(5, minmax(0, 1fr))" }}>
         <Cell big={percent(s.accuracy)} small="Accuracy" />
         <Cell big={`${s.done}${s.transcriptDone ? ` / ${s.sentences - s.ads}` : ""}`} small="Sentences done" />
@@ -151,7 +173,7 @@ export function Review({
           ))}
         </span>
         <span style={{ fontSize: 12 }}>
-          Select words in the original to look them up. <span className="w w-missing">Boxed</span> words were missed, <span className="w w-wrong">red</span> ones wrong,{" "}
+          Select words in the original to look them up{ai?.using ? <> · <Kbd keys="?" /> asks about a sentence</> : ""}. <span className="w w-missing">Boxed</span> words were missed, <span className="w w-wrong">red</span> ones wrong,{" "}
           <span className="w w-spelling">underlined</span> ones misspelled (half a word).
           {s.ads > 0 && ` ${plural(s.ads, "sentence")} skipped as ads.`}
         </span>
@@ -177,7 +199,7 @@ export function Review({
                   className="btn flag-btn"
                   style={{ borderRadius: 9999, color: "var(--ink-muted)" }}
                   aria-label={`Play sentence ${i + 1}`}
-                  onClick={() => (player.playing && playing === i ? player.stop() : playRow(i))}
+                  onClick={() => (setTouched(i), player.playing && playing === i ? player.stop() : playRow(i))}
                   disabled={!item.path || !sentences[i]}
                 >
                   <Icon name={player.playing && playing === i ? "pause" : "play"} size={11} />
@@ -206,11 +228,11 @@ export function Review({
                 ) : (
                   <span style={{ color: "var(--ink-tertiary)" }}>(nothing typed)</span>
                 )}
-                {mistaken(i) && (
+                {a && (mistaken(i) || asked.has(i) || open.has(i)) && (
                   <span style={{ display: "block", marginTop: 4 }}>
-                    <button type="button" className={whys.has(i) ? "btn btn-xs" : "btn btn-xs btn-ghost"} style={whys.has(i) ? undefined : { paddingLeft: 0 }} aria-expanded={whys.has(i)} onClick={() => toggleWhy(i)}>
-                      Why did I miss this?
-                      {whys.has(i) && <Icon name="chevron-up" size={11} />}
+                    <button type="button" className={open.has(i) ? "btn btn-xs" : "btn btn-xs btn-ghost"} style={open.has(i) ? undefined : { paddingLeft: 0 }} aria-expanded={open.has(i)} onClick={() => toggleAsk(i)}>
+                      <Icon name="chat" size={12} />
+                      {asked.has(i) && !open.has(i) ? "Your questions about this sentence" : "Ask about this sentence"}
                     </button>
                   </span>
                 )}
@@ -228,19 +250,18 @@ export function Review({
                   </span>
                 )}
               </span>
-              {whys.has(i) && (
-                <WhyBox
+              {open.has(i) && (
+                <AskPanel
+                  itemId={item.id}
+                  attemptId={s.attempt.id}
                   idx={i}
-                  st={whys.get(i)!}
-                  ai={ai}
-                  onAgain={() => toggleWhy(i, true)}
-                  onSetUp={() => navigate(SETTINGS_AI)}
-                  onPlaySlowly={() => {
-                    const sen = sentences[i];
-                    if (sen && item.path) {
-                      setPlaying(i);
-                      player.play(sen.startMs, sen.endMs, 0.7);
-                    }
+                  sentence={a?.original ?? sentences[i]?.text ?? ""}
+                  typed={a?.typed ?? ""}
+                  mistakes={mistaken(i)}
+                  onPlaySlowly={item.path && sentences[i] ? () => playSlowly(i) : null}
+                  onClose={() => {
+                    toggleAsk(i);
+                    backend.aiAsked(item.id, s.attempt.id).then((x) => setAsked(new Set(x)), () => {});
                   }}
                 />
               )}
@@ -267,86 +288,25 @@ export function Review({
   );
 }
 
-type WhyState = { state: "loading" } | { state: "done"; why: Why } | { state: "problem"; problem: AiProblem };
-
-const sourceName = (ai: AiStatus | undefined) => (ai?.using === "chatgpt" ? "ChatGPT plan" : (ai?.key?.name ?? ""));
-
-/** Why a sentence was misheard (design D17), under its row. */
-function WhyBox({ idx, st, ai, onAgain, onSetUp, onPlaySlowly }: { idx: number; st: WhyState; ai: AiStatus | undefined; onAgain: () => void; onSetUp: () => void; onPlaySlowly: () => void }) {
-  if (st.state === "problem" && (st.problem.kind === "notSetUp" || st.problem.kind === "reconnect"))
-    return (
-      <div className="why-box" role="region" aria-label="AI not set up" style={{ gridColumn: "2 / 4", flexDirection: "row", alignItems: "center", gap: 14 }}>
-        <div style={{ flexGrow: 1 }}>
-          <div className="account-row-t">{st.problem.kind === "reconnect" ? "ChatGPT needs connecting again" : "AI can explain why you misheard this"}</div>
-          <div className="account-row-h">Connect ChatGPT Plus or your own API key once, in Settings › AI.</div>
-        </div>
-        <button type="button" className="btn btn-sm" onClick={onSetUp}>
-          Set up AI
-        </button>
-      </div>
-    );
-  return (
-    <div className="why-box" role="region" aria-label={`Why you misheard sentence ${idx + 1}`} aria-live="polite" style={{ gridColumn: "2 / 4" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span className="h2" style={{ fontSize: 14 }}>
-          Why you misheard this
-        </span>
-        <span style={{ flexGrow: 1 }} />
-        {st.state === "done" && (
-          <span className="ai-source">
-            <span className="dot dot-ok" aria-hidden="true" />
-            {sourceName(ai)}
-          </span>
-        )}
-      </div>
-      {st.state === "loading" && <div className="lookup-sub">Listening to it again…</div>}
-      {st.state === "problem" && (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <span className="lookup-sub" style={{ flexGrow: 1 }}>
-            {problemText(st.problem)}
-          </span>
-          {st.problem.kind === "limit" ? (
-            <button type="button" className="btn btn-sm" onClick={() => backend.manageUsage()}>
-              Manage usage
-              <Icon name="external" size={12} />
-            </button>
-          ) : (
-            <button type="button" className="btn btn-sm btn-ghost" onClick={onAgain}>
-              Try again
-            </button>
-          )}
-        </div>
-      )}
-      {st.state === "done" &&
-        st.why.items.map((w, k) => (
-          <div key={k} className="why-item">
-            <div>
-              <span className="w w-missing">{w.original}</span>
-              {w.typed && w.typed !== "_" && (
-                <>
-                  {" "}
-                  <span className="muted">→</span> <span className="w w-wrong">{w.typed}</span>
-                </>
-              )}
-              {w.said && <div className="why-said">said {w.said}</div>}
-            </div>
-            <div>{w.why}</div>
-          </div>
-        ))}
-      {st.state === "done" && (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, paddingTop: 12, borderTop: "1px solid var(--hairline)" }}>
-          <button type="button" className="btn btn-sm" onClick={onPlaySlowly}>
-            <Icon name="play" size={11} />
-            Play at 0.7×
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** The review of a finished episode (design D18): written by itself when the review opens, then kept. */
-function EpisodeReviewPanel({ attemptId, mistakes, ai, lang, onShow }: { attemptId: number; mistakes: number; ai: AiStatus | undefined; lang: string; onShow: (n: number) => void }) {
+/** The review of a finished episode (design D18): its mistakes by reason, written by itself when the review
+ * opens, then kept. */
+function EpisodeReviewPanel({
+  itemId,
+  attemptId,
+  answers,
+  mistakes,
+  ai,
+  lang,
+  onShow,
+}: {
+  itemId: number;
+  attemptId: number;
+  answers: Map<number, Answer>;
+  mistakes: number;
+  ai: AiStatus | undefined;
+  lang: string;
+  onShow: (n: number) => void;
+}) {
   const navigate = useNavigate();
   const [st, setSt] = useState<{ state: "loading" } | { state: "done"; review: EpisodeReview } | { state: "problem"; problem: AiProblem } | null>(null);
   const [again, setAgain] = useState(0);
@@ -369,7 +329,7 @@ function EpisodeReviewPanel({ attemptId, mistakes, ai, lang, onShow }: { attempt
     return (
       <div className="panel" style={{ padding: "12px 16px", display: "flex", alignItems: "center", gap: 12, fontSize: 13 }}>
         <span className="muted" style={{ flexGrow: 1 }}>
-          With AI set up, a review of your {plural(mistakes, "sentence")} with mistakes appears here: what they have in common and what to practise.
+          With AI set up, a review of your {plural(mistakes, "sentence")} with mistakes appears here: why you missed them, by reason, and what to do next time.
         </span>
         <button type="button" className="btn btn-sm" onClick={() => navigate(SETTINGS_AI)}>
           Set up AI
@@ -384,12 +344,7 @@ function EpisodeReviewPanel({ attemptId, mistakes, ai, lang, onShow }: { attempt
           <h2 id="episode-review" className="h2">
             Episode review
           </h2>
-          {st.state === "done" && (
-            <span className="ai-source">
-              <span className="dot dot-ok" aria-hidden="true" />
-              {sourceName(ai)} · written when you finished
-            </span>
-          )}
+          {st.state === "done" && <AiSource ai={ai}> · written when you finished</AiSource>}
         </div>
         {st.state === "loading" && (
           <div role="status" style={{ padding: "16px 0 18px", display: "flex", flexDirection: "column", gap: 12 }}>
@@ -403,47 +358,15 @@ function EpisodeReviewPanel({ attemptId, mistakes, ai, lang, onShow }: { attempt
           </div>
         )}
         {st.state === "problem" && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 0 16px", flexWrap: "wrap" }}>
-            <span className="muted" style={{ flexGrow: 1, fontSize: 13 }}>
-              {problemText(st.problem)}
-            </span>
-            {st.problem.kind === "limit" ? (
-              <button type="button" className="btn btn-sm" onClick={() => backend.manageUsage()}>
-                Manage usage
-                <Icon name="external" size={12} />
-              </button>
-            ) : st.problem.kind === "failed" ? (
-              <button type="button" className="btn btn-sm btn-ghost" onClick={() => setAgain((n) => n + 1)}>
-                Try again
-              </button>
-            ) : (
-              <button type="button" className="btn btn-sm" onClick={() => navigate(SETTINGS_AI)}>
-                Settings › AI
-              </button>
-            )}
+          <div style={{ padding: "12px 0 16px" }}>
+            <AiProblemLine problem={st.problem} onRetry={() => setAgain((n) => n + 1)} />
           </div>
         )}
         {st.state === "done" && (
           <>
             <p style={{ fontSize: 14, lineHeight: 1.65, color: "var(--ink)", margin: "8px 0 10px" }}>{st.review.summary}</p>
             {st.review.patterns.map((p, k) => (
-              <div key={k} className="ai-pattern">
-                <span className="ai-pattern-n">{p.count}</span>
-                <div>
-                  <div style={{ font: "500 14px/1.4 var(--font-text)", color: "var(--ink)" }}>{p.title}</div>
-                  <div className="ai-text" style={{ marginTop: 2 }}>
-                    {p.explanation}
-                  </div>
-                </div>
-                <div style={{ display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "flex-end", maxWidth: 180 }}>
-                  {p.sentences.slice(0, 4).map((n) => (
-                    <button key={n} type="button" className="ai-chip" onClick={() => onShow(n)} aria-label={`Show sentence ${n}`}>
-                      {n}
-                    </button>
-                  ))}
-                  {p.sentences.length > 4 && <span className="ai-chip" style={{ cursor: "default" }}>+{p.sentences.length - 4}</span>}
-                </div>
-              </div>
+              <Pattern key={k} p={p} itemId={itemId} answers={answers} lang={lang} onShow={onShow} />
             ))}
           </>
         )}
@@ -455,6 +378,96 @@ function EpisodeReviewPanel({ attemptId, mistakes, ai, lang, onShow }: { attempt
         </div>
       )}
     </section>
+  );
+}
+
+/** One reason, with a few of its words and the sentences; new words can all go to My words at once. */
+function Pattern({ p, itemId, answers, lang, onShow }: { p: ReviewPattern; itemId: number; answers: Map<number, Answer>; lang: string; onShow: (n: number) => void }) {
+  // The new words not in My words yet, each with the sentence it came from.
+  const [toAdd, setToAdd] = useState<{ text: string; answer: Answer }[] | null>(null);
+  const [adding, setAdding] = useState<"idle" | "busy" | "done">("idle");
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    if (p.reason !== "newWord") return;
+    let live = true;
+    const inSentence = (w: string) => {
+      const plainWord = ` ${w.toLowerCase()} `;
+      for (const n of p.sentences) {
+        const a = answers.get(n - 1);
+        if (a && ` ${a.original.toLowerCase().replace(/[^\p{L}\p{N}'’\s-]/gu, " ")} `.replace(/\s+/g, " ").includes(plainWord)) return a;
+      }
+      return answers.get((p.sentences[0] ?? 1) - 1) ?? null;
+    };
+    Promise.all(p.words.map(async (text) => ({ text, answer: inSentence(text), saved: await backend.wordSaved(text).catch(() => null) }))).then((all) => {
+      if (live) setToAdd(all.filter((w) => w.saved === null && w.answer).map((w) => ({ text: w.text, answer: w.answer! })));
+    });
+    return () => {
+      live = false;
+    };
+  }, [p, answers]);
+  const addAll = async () => {
+    if (!toAdd) return;
+    setAdding("busy");
+    setError(null);
+    try {
+      for (const w of toAdd) {
+        await saveWordFrom(lang, { itemId, idx: w.answer.idx, sentence: w.answer.original, typed: w.answer.typed, text: w.text, meaning: "", explanation: "" });
+      }
+      setAdding("done");
+    } catch (e) {
+      setAdding("idle");
+      setError(String(e));
+    }
+  };
+  return (
+    <div className="ai-pattern">
+      <span className="ai-pattern-n">{p.count}</span>
+      <div>
+        {p.reason ? <ReasonTag reason={p.reason} many /> : <div style={{ font: "500 14px/1.4 var(--font-text)", color: "var(--ink)" }}>{p.title}</div>}
+        <div className="ai-text" style={{ marginTop: 6 }}>
+          {p.words.length > 0 && (
+            <>
+              {p.words.map((w, k) => (
+                <span key={k}>
+                  {k > 0 && ", "}
+                  <span className="w w-missing">{w}</span>
+                </span>
+              ))}
+              {": "}
+            </>
+          )}
+          {p.explanation}
+        </div>
+        {p.reason === "newWord" && toAdd && (toAdd.length > 0 || adding === "done") && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8 }}>
+            {adding === "done" ? (
+              <span className="flag-label" style={{ color: "var(--semantic-success)" }}>
+                <Icon name="check" size={14} />
+                Added to My words
+              </span>
+            ) : (
+              <button type="button" className="btn btn-sm" onClick={addAll} disabled={adding === "busy"}>
+                <Icon name="plus" size={12} />
+                {toAdd.length === 1 ? `Add ${toAdd[0].text} to My words` : `Add these ${toAdd.length} to My words`}
+              </button>
+            )}
+            {error && (
+              <span className="lookup-sub" role="alert">
+                {error}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+      <div style={{ display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "flex-end", maxWidth: 180 }}>
+        {p.sentences.slice(0, 4).map((n) => (
+          <button key={n} type="button" className="ai-chip" onClick={() => onShow(n)} aria-label={`Show sentence ${n}`}>
+            {n}
+          </button>
+        ))}
+        {p.sentences.length > 4 && <span className="ai-chip" style={{ cursor: "default" }}>+{p.sentences.length - 4}</span>}
+      </div>
+    </div>
   );
 }
 

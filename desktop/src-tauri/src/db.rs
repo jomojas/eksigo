@@ -183,6 +183,19 @@ const MIGRATIONS: &[&str] = &[
         created    INTEGER NOT NULL,
         PRIMARY KEY (attempt_id, idx, lang)
     );",
+    // 13: AI conversations about one sentence (ai.rs, design D17): per attempt on Results, per episode on Listen
+    // (no attempt). `why` holds the answer to *Why did I miss this?*, by reason; `answer` the rest.
+    "CREATE TABLE ai_messages (
+        id         INTEGER PRIMARY KEY,
+        item_id    INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+        attempt_id INTEGER REFERENCES attempts(id) ON DELETE CASCADE,
+        idx        INTEGER NOT NULL,
+        question   TEXT NOT NULL,
+        why        TEXT,
+        answer     TEXT NOT NULL DEFAULT '',
+        created    INTEGER NOT NULL
+    );
+    CREATE INDEX ai_messages_by_sentence ON ai_messages (item_id, idx);",
 ];
 
 pub struct Db(pub Mutex<Connection>);

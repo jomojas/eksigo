@@ -1,8 +1,8 @@
-// AI (DESIGN.md section 6, designs D16–D18): what is connected, and connecting ChatGPT through the browser.
+// AI (DESIGN.md section 6, designs D16–D19): what is connected, and connecting ChatGPT through the browser.
 // One state for the whole app, so Settings, the lookup card and the review always agree.
 
 import { useEffect, useState } from "react";
-import { aiProblem, backend, on, type AiKey, type AiProblem, type AiStatus } from "./backend";
+import { aiProblem, backend, on, type AiKey, type AiProblem, type AiStatus, type SavedWord } from "./backend";
 
 export type AiState = {
   /** undefined until read. */
@@ -97,3 +97,37 @@ export function problemText(p: AiProblem): string {
 }
 
 export const SETTINGS_AI = "/settings?s=ai";
+
+/** Picks the model (null: Eksigo picks a small one). */
+export async function setModel(model: string | null) {
+  set({ status: await backend.aiSetModel(model) });
+}
+
+const plain = (w: string) => w.replace(/’/g, "'").toLowerCase().replace(/[^\p{L}\p{N}']/gu, "");
+
+/** Adds a word the AI named (a new word in *Why did I miss this?* or the episode review) to My words, with its
+ * sentence: the dictionary's meaning when it has one, else the AI's; the AI's explanation goes with it. */
+export async function saveWordFrom(
+  lang: string,
+  w: { itemId: number; idx: number; sentence: string; typed: string; text: string; meaning: string; explanation: string },
+): Promise<SavedWord> {
+  const words = w.sentence.split(/\s+/).filter(Boolean).map(plain);
+  const want = w.text.split(/\s+/).filter(Boolean).map(plain);
+  let from = words.findIndex((_, i) => want.length > 0 && want.every((x, k) => words[i + k] === x));
+  if (from < 0) from = 0;
+  const found = await backend.lookup(lang, w.text).catch(() => null);
+  const entry = found?.whole ? found.entry : null;
+  return backend.addWord({
+    text: found?.query || w.text,
+    headword: entry?.headword ?? "",
+    ipa: entry?.ipa ?? "",
+    meaning: entry?.meaning ?? w.meaning,
+    note: "",
+    explanation: w.explanation,
+    itemId: w.itemId,
+    idx: w.idx,
+    from,
+    to: Math.min(from + Math.max(want.length, 1) - 1, Math.max(words.length - 1, 0)),
+    typed: w.typed,
+  });
+}

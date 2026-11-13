@@ -205,15 +205,70 @@ fn ai_result<T>(app: &AppHandle, db: &Db, r: Result<T, ai::AiError>) -> Result<T
     r
 }
 
+/// The models the ChatGPT plan offers, for choosing one in Settings › AI.
 #[tauri::command]
-async fn ai_explain(app: AppHandle, db: State<'_, Db>, lang: String, text: String, sentence: String) -> Result<String, ai::AiError> {
-    let r = ai::explain(&db, &lang, &text, &sentence).await;
+async fn ai_models(app: AppHandle, db: State<'_, Db>) -> Result<Vec<ai::ModelInfo>, ai::AiError> {
+    let r = ai::models(&db).await;
     ai_result(&app, &db, r)
 }
 
+/// None: Eksigo picks a small model.
 #[tauri::command]
-async fn ai_why(app: AppHandle, db: State<'_, Db>, lang: String, attempt_id: i64, idx: i64) -> Result<ai::Why, ai::AiError> {
-    let r = ai::why(&db, &lang, attempt_id, idx).await;
+fn ai_set_model(app: AppHandle, db: State<Db>, model: Option<String>) -> CmdResult<ai::Status> {
+    let s = ai::set_model(&db, model).map_err(err)?;
+    ai_changed(&app, &db);
+    Ok(s)
+}
+
+/// What words mean in their sentence, or a question about them; the answer arrives in pieces on `on_text`.
+#[tauri::command]
+async fn ai_explain(
+    app: AppHandle,
+    db: State<'_, Db>,
+    lang: String,
+    text: String,
+    sentence: String,
+    history: Vec<ai::Exchange>,
+    question: Option<String>,
+    on_text: tauri::ipc::Channel<String>,
+) -> Result<String, ai::AiError> {
+    let send = move |t: &str| {
+        let _ = on_text.send(t.to_string());
+    };
+    let r = ai::explain(&db, &lang, &text, &sentence, &history, question.as_deref(), &send).await;
+    ai_result(&app, &db, r)
+}
+
+/// The conversation about one sentence (`attempt_id` None: on Listen).
+#[tauri::command]
+fn ai_thread(db: State<Db>, item_id: i64, attempt_id: Option<i64>, idx: i64) -> CmdResult<Vec<ai::Message>> {
+    ai::thread(&db.conn(), item_id, attempt_id, idx).map_err(err)
+}
+
+/// The sentences that have a conversation.
+#[tauri::command]
+fn ai_asked(db: State<Db>, item_id: i64, attempt_id: Option<i64>) -> CmdResult<Vec<i64>> {
+    ai::asked(&db.conn(), item_id, attempt_id).map_err(err)
+}
+
+/// Asks about one sentence and keeps it; the answer arrives in pieces on `on_text` (not for `why`).
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+async fn ai_ask(
+    app: AppHandle,
+    db: State<'_, Db>,
+    lang: String,
+    item_id: i64,
+    attempt_id: Option<i64>,
+    idx: i64,
+    question: String,
+    why: bool,
+    on_text: tauri::ipc::Channel<String>,
+) -> Result<ai::Message, ai::AiError> {
+    let send = move |t: &str| {
+        let _ = on_text.send(t.to_string());
+    };
+    let r = ai::ask_sentence(&db, &lang, item_id, attempt_id, idx, &question, why, &send).await;
     ai_result(&app, &db, r)
 }
 
@@ -947,8 +1002,12 @@ pub fn run() {
             ai_disconnect,
             ai_set_key,
             ai_remove_key,
+            ai_models,
+            ai_set_model,
             ai_explain,
-            ai_why,
+            ai_thread,
+            ai_asked,
+            ai_ask,
             ai_review,
             models_list,
             model_download,
