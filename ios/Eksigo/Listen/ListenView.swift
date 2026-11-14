@@ -1,7 +1,7 @@
 import SwiftData
 import SwiftUI
 
-/// The Listen tab (design P02, P10): last night's missed sentences, the episode to continue, new episodes.
+/// The Listen tab (design P26, P10): last night's missed sentences, the episode to continue, Up Next, new episodes.
 struct ListenView: View {
     @Environment(RecordStore.self) private var store
     @Environment(Account.self) private var account
@@ -30,7 +30,7 @@ struct ListenView: View {
                             NavigationLink(value: e) {
                                 VStack(spacing: 10) {
                                     Row(title: e.title, subtitle: "\(e.showTitle) · \(Stats.length(max(60, r.duration - r.position))) left",
-                                        leading: { Artwork(url: e.artwork, size: 52) },
+                                        leading: { Artwork(episode: e, size: 52) },
                                         trailing: { RoundButton(symbol: "play.fill", label: "Resume") { center.play(e) } })
                                     Track(value: r.progress).padding(.horizontal, 12).padding(.bottom, 12).padding(.top, -6)
                                 }
@@ -39,6 +39,7 @@ struct ListenView: View {
                         }
                     }
                 }
+                upNext
                 newEpisodes
             }
             .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 24)
@@ -57,6 +58,28 @@ struct ListenView: View {
     private var continuing: EpisodeRecord? {
         recent.first { r in
             !r.played && r.position > 30 && r.progress < 0.98 && !(r.key == center.episode?.key && center.isPlaying)
+        }
+    }
+
+    /// The next three in Up Next; the rest on its page.
+    @ViewBuilder private var upNext: some View {
+        if !center.queue.isEmpty {
+            Block("Up Next · \(center.queue.count)", trailing: { NavigationLink("See all", value: Route.upNext) }) {
+                RowGroup {
+                    ForEach(center.queue.prefix(3)) { e in
+                        Swipeable(actions: [SwipeAction(title: "Remove", symbol: "minus.circle", background: Theme.error, foreground: .white) {
+                            center.removeFromQueue(e.key)
+                        }]) {
+                            NavigationLink(value: e) {
+                                Row(title: e.title, subtitle: [e.showTitle, e.duration.map(Stats.length)].compactMap { $0 }.joined(separator: " · "),
+                                    leading: { Artwork(episode: e, size: 44) },
+                                    trailing: { RoundButton(symbol: "play.fill", label: "Play \(e.title) now") { center.play(e) } })
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -82,8 +105,9 @@ struct ListenView: View {
                     HStack { Spacer(); ProgressView(); Spacer() }.padding(.vertical, 20)
                 } else {
                     RowGroup {
-                        ForEach(episodes) { e in EpisodeRow(episode: e, showArt: true) }
+                        ForEach(episodes) { e in EpisodeRow(episode: e, showArt: true, swipe: true) }
                     }
+                    Note("Swipe an episode left to add it to Up Next or download it.")
                 }
             }
         }
@@ -115,7 +139,7 @@ struct SyncBadge: View {
     }
 }
 
-/// The missed sentences waiting from the computer.
+/// The missed sentences waiting from the computer: one line and Play; a tap on the text opens the list.
 private struct MissedCard: View {
     @Environment(RecordStore.self) private var store
     @Environment(PlaybackCenter.self) private var center
@@ -127,29 +151,32 @@ private struct MissedCard: View {
         let all = groups.flatMap(\.items)
         let playable = all.filter(center.playable)
         let seconds = playable.reduce(0) { $0 + $1.seconds * Double(settings.repeats) + settings.gap * Double(settings.repeats) }
-        VStack(alignment: .leading, spacing: 12) {
-            Text(MissedGroup.when(groups.first?.latest ?? 0)).font(Theme.text(12, .medium)).tracking(0.3).foregroundStyle(Theme.inkSubtle)
-            Text("\(all.count) sentence\(all.count == 1 ? "" : "s") you missed").font(Theme.display(22)).tracking(-0.4).foregroundStyle(Theme.ink)
-            Text(summary(groups: groups.count, minutes: Int((seconds / 60).rounded(.up)), textOnly: all.count - playable.count))
-                .font(Theme.text(13)).foregroundStyle(Theme.inkSubtle)
-            HStack(spacing: 8) {
-                Button {
-                    center.startMissed(all)
-                    ui.showMissed = true
-                } label: {
-                    Label("Play them all", systemImage: "play.fill")
+        HStack(spacing: 14) {
+            NavigationLink(value: Route.missedList) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("\(plural(all.count, "sentence")) you missed").font(Theme.display(17)).tracking(-0.2).foregroundStyle(Theme.ink)
+                    Text(summary(when: groups.first?.latest ?? 0, minutes: Int((seconds / 60).rounded(.up)), textOnly: all.count - playable.count))
+                        .font(Theme.text(13)).foregroundStyle(Theme.inkSubtle).lineLimit(2)
                 }
-                .buttonStyle(.eks(.primary))
-                .disabled(playable.isEmpty)
-                NavigationLink(value: Route.missedList) { Text("See all") }.buttonStyle(.eks(.ghost))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .accessibilityHint("Shows them all")
+            Button {
+                center.startMissed(all)
+                ui.showMissed = true
+            } label: {
+                Label("Play", systemImage: "play.fill")
+            }
+            .buttonStyle(.eks(.primary, small: true, height: 36))
+            .disabled(playable.isEmpty)
         }
-        .card()
+        .card(padding: 14)
     }
 
-    private func summary(groups: Int, minutes: Int, textOnly: Int) -> String {
-        var s = "\(groups) episode\(groups == 1 ? "" : "s") · about \(max(1, minutes)) minute\(minutes == 1 ? "" : "s")"
-        s += settings.repeats == 1 ? "" : settings.repeats == 2 ? ", each twice" : ", each \(settings.repeats) times"
+    private func summary(when: Int, minutes: Int, textOnly: Int) -> String {
+        var s = "\(MissedGroup.when(when)) · about \(max(1, minutes)) min"
         if textOnly > 0 { s += " · \(textOnly) as text only" }
         return s
     }
@@ -184,26 +211,56 @@ private struct EmptyMissedCard: View {
 struct EpisodeRow: View {
     let episode: PodcastEpisode
     var showArt = false
+    /// Swipe left for Up Next and Download.
+    var swipe = false
     @Environment(PlaybackCenter.self) private var center
+    @Environment(AppUI.self) private var ui
     @Query private var records: [EpisodeRecord]
 
-    init(episode: PodcastEpisode, showArt: Bool = false) {
+    init(episode: PodcastEpisode, showArt: Bool = false, swipe: Bool = false) {
         self.episode = episode
         self.showArt = showArt
+        self.swipe = swipe
         let key = episode.key
         _records = Query(filter: #Predicate<EpisodeRecord> { $0.key == key })
     }
 
     var body: some View {
+        if swipe {
+            Swipeable(actions: swipeActions) { link }
+        } else {
+            link
+        }
+    }
+
+    private var swipeActions: [SwipeAction] {
+        var list: [SwipeAction] = []
+        if center.isQueued(episode) {
+            list.append(SwipeAction(title: "Remove", symbol: "text.badge.minus") { center.removeFromQueue(episode.key) })
+        } else if center.episode?.key != episode.key {
+            list.append(SwipeAction(title: "Up Next", symbol: "text.badge.plus") { ui.addToUpNext(episode, center: center) })
+        }
+        if !center.isDownloaded(episode), center.downloading[episode.key] == nil {
+            list.append(SwipeAction(title: "Download", symbol: "arrow.down", background: Theme.hairlineStrong) { center.download(episode) })
+        }
+        return list
+    }
+
+    private var link: some View {
         let record = records.first
-        NavigationLink(value: episode) {
+        return NavigationLink(value: episode) {
             Row(title: episode.title, subtitle: subtitle(record),
-                leading: { if showArt { Artwork(url: episode.artwork, size: 44) } },
+                leading: { if showArt { Artwork(episode: episode, size: 44) } },
                 trailing: { trailing(record) })
         }
         .buttonStyle(.plain)
         .contextMenu {
             Button("Play", systemImage: "play") { center.play(episode) }
+            if center.isQueued(episode) {
+                Button("Remove from Up Next", systemImage: "text.badge.minus") { center.removeFromQueue(episode.key) }
+            } else if center.episode?.key != episode.key {
+                Button("Add to Up Next", systemImage: "text.badge.plus") { ui.addToUpNext(episode, center: center) }
+            }
             if center.isDownloaded(episode) {
                 Button("Remove download", systemImage: "trash", role: .destructive) { center.deleteDownload(episode) }
             } else {

@@ -26,9 +26,27 @@ nonisolated enum Directory {
                                   artworkUrl: URL(string: $0.artworkUrl), note: $0.blurb) }
     }
 
-    /// Apple's top podcasts in the US store, where nearly every English show is listed.
-    static func top(country: String = "us") async throws -> [Listing] {
-        let url = URL(string: "https://itunes.apple.com/\(country)/rss/toppodcasts/limit=30/json")!
+    /// Discover's topics: Apple's podcast genres.
+    struct Topic: Identifiable, Hashable, Sendable {
+        let id: Int
+        let name: String
+        let symbol: String
+    }
+
+    static let topics: [Topic] = [
+        Topic(id: 1489, name: "News", symbol: "newspaper"),
+        Topic(id: 1533, name: "Science", symbol: "flask"),
+        Topic(id: 1321, name: "Business", symbol: "briefcase"),
+        Topic(id: 1324, name: "Society & Culture", symbol: "globe"),
+        Topic(id: 1487, name: "History", symbol: "clock.arrow.circlepath"),
+        Topic(id: 1512, name: "Health", symbol: "heart"),
+        Topic(id: 1318, name: "Technology", symbol: "desktopcomputer"),
+        Topic(id: 1303, name: "Comedy", symbol: "face.smiling"),
+    ]
+
+    /// Apple's top podcasts in the US store, where nearly every English show is listed; all, or one topic.
+    static func top(genre: Int? = nil, country: String = "us") async throws -> [Listing] {
+        let url = URL(string: "https://itunes.apple.com/\(country)/rss/toppodcasts/limit=30\(genre.map { "/genre=\($0)" } ?? "")/json")!
         let (data, _) = try await URLSession.shared.data(from: url)
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         let entries = (json?["feed"] as? [String: Any])?["entry"] as? [[String: Any]] ?? []
@@ -40,6 +58,17 @@ nonisolated enum Directory {
             return Listing(appleId: id, title: title, author: label(e["im:artist"]) ?? "", feedUrl: nil,
                            artworkUrl: image.flatMap(URL.init(string:)), note: nil)
         }
+    }
+
+    /// Chart shows already looked up, so a subscribed one shows its check.
+    @MainActor static var looked: [String: PodcastShow] = [:]
+
+    /// A show's feed from its Apple id.
+    @MainActor static func lookupCached(_ appleId: String) async throws -> PodcastShow {
+        if let s = looked[appleId] { return s }
+        let s = try await lookup(appleId)
+        looked[appleId] = s
+        return s
     }
 
     /// A show's feed from its Apple id.

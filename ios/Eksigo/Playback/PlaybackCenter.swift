@@ -68,12 +68,13 @@ final class PlaybackCenter {
 
     // MARK: Episodes
 
-    /// Plays an episode from where it was left (or from `at`).
-    func play(_ episode: PodcastEpisode, at time: Double? = nil) {
+    /// Plays an episode from where it was left (or from `at`). It leaves Up Next if it was there.
+    func play(_ episode: PodcastEpisode, at time: Double? = nil, saveCurrent: Bool = true) {
         if mode == .missed { endMissed() }
         let record = Store.record(for: episode, in: context)
+        removeFromQueue(episode.key)
         if self.episode?.key != episode.key {
-            saveProgress()
+            if saveCurrent { saveProgress() }
             self.episode = episode
             duration = record.duration > 0 ? record.duration : (episode.duration ?? 0)
             position = time ?? (record.played || record.progress > 0.98 ? 0 : record.position)
@@ -85,6 +86,8 @@ final class PlaybackCenter {
         record.lastPlayedAt = .now
         record.played = false
         record.episodeData = (try? JSONEncoder().encode(episode)) ?? record.episodeData
+        // Saved now: the mini player and Continue find it even if the app is closed straight away.
+        try? context.save()
         mode = .episode
         activate()
         player.playImmediately(atRate: rate)
@@ -209,18 +212,75 @@ final class PlaybackCenter {
         return json
     }
 
+    /// The episode ended (or was marked played): the first in Up Next starts, unless the sleep timer said to stop
+    /// at the end of this one. With nothing in Up Next, playback stops.
     private func finished() {
         guard let episode else { return }
         let record = Store.record(for: episode, in: context)
         record.played = true
-        position = duration
+        if duration > 0 { position = duration }
+        let wasPlaying = isPlaying
         isPlaying = false
+        player.pause()
         saveProgress(force: true)
         record.position = 0
         position = 0
+        let stop = sleepAtEnd
         sleepAtEnd = false
+        if !stop, wasPlaying, let next = queue.first {
+            play(next, saveCurrent: false)
+            return
+        }
         updateNowPlaying()
         onPause?()
+    }
+
+    /// The More menu's "Mark as played": as if it had ended.
+    func markPlayed() {
+        guard episode != nil else { return }
+        finished()
+    }
+
+    // MARK: Up Next
+
+    /// Episodes to play after this one, in order; each leaves the list when it starts. Kept on this phone only (the
+    /// computer has no queue).
+    private(set) var queue: [PodcastEpisode] = PlaybackCenter.loadQueue() {
+        didSet { Self.saveQueue(queue) }
+    }
+
+    func isQueued(_ episode: PodcastEpisode) -> Bool { queue.contains { $0.key == episode.key } }
+
+    /// Adds it at the end; returns its place (1 = next), or nil when it is playing now or already there.
+    @discardableResult
+    func addToQueue(_ episode: PodcastEpisode) -> Int? {
+        guard episode.key != self.episode?.key, !isQueued(episode) else { return nil }
+        queue.append(episode)
+        return queue.count
+    }
+
+    func removeFromQueue(_ key: String) { queue.removeAll { $0.key == key } }
+
+    func moveQueue(from source: IndexSet, to destination: Int) { queue.move(fromOffsets: source, toOffset: destination) }
+
+    func clearQueue() { queue = [] }
+
+    /// Plays the first in Up Next now; the current episode keeps its place.
+    func playNextInQueue() {
+        guard let next = queue.first else { return }
+        play(next)
+    }
+
+    /// The time Up Next will take.
+    var queueSeconds: Double { queue.reduce(0) { $0 + ($1.duration ?? 0) } }
+
+    nonisolated private static func loadQueue() -> [PodcastEpisode] {
+        guard let data = UserDefaults.standard.data(forKey: "upNext") else { return [] }
+        return (try? JSONDecoder().decode([PodcastEpisode].self, from: data)) ?? []
+    }
+
+    nonisolated private static func saveQueue(_ queue: [PodcastEpisode]) {
+        UserDefaults.standard.set(try? JSONEncoder().encode(queue), forKey: "upNext")
     }
 
     // MARK: Missed sentences
@@ -433,6 +493,8 @@ final class PlaybackCenter {
     }
 
     private(set) var downloading: [String: Double] = [:]
+    /// Bumped when a download finishes or is removed, so pages that count downloads draw again.
+    private var downloadsChanged = 0
 
     /// Downloads started by themselves that failed: not tried again until the app restarts, and never an alert.
     @ObservationIgnored private var failedAuto: Set<String> = []
@@ -456,6 +518,7 @@ final class PlaybackCenter {
                 record.downloadedAt = .now
                 record.fileBytes = (try? FileManager.default.attributesOfItem(atPath: destination.path)[.size] as? NSNumber)?.int64Value
                 try? context.save()
+                downloadsChanged += 1
             } catch {
                 log.error("download failed: \(error.localizedDescription)")
                 if asked {
@@ -490,6 +553,7 @@ final class PlaybackCenter {
         record.localFile = nil
         record.fileBytes = nil
         try? context.save()
+        downloadsChanged += 1
     }
 
     func localURL(_ episode: PodcastEpisode) -> URL? {
@@ -497,11 +561,13 @@ final class PlaybackCenter {
     }
 
     func isDownloaded(_ episode: PodcastEpisode) -> Bool {
-        Store.existingRecord(key: episode.key, in: context).flatMap(localFile) != nil
+        _ = downloadsChanged
+        return Store.existingRecord(key: episode.key, in: context).flatMap(localFile) != nil
     }
 
     /// Downloads made on this phone, newest first.
     func downloads() -> [EpisodeRecord] {
+        _ = downloadsChanged
         let all = (try? context.fetch(FetchDescriptor<EpisodeRecord>(predicate: #Predicate { $0.localFile != nil }))) ?? []
         for r in all where r.fileBytes == nil {
             // Downloads made before sizes were kept: read it from the file.
@@ -637,7 +703,7 @@ final class PlaybackCenter {
                 MPMediaItemPropertyPlaybackDuration: duration,
                 MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? Double(rate) : 0,
             ]
-            loadArtwork(episode.artwork)
+            loadArtwork(episode.artworkUrl, fallback: episode.showArtworkUrl)
         } else {
             return
         }
@@ -648,12 +714,12 @@ final class PlaybackCenter {
     @ObservationIgnored private var artworkImage: UIImage?
     @ObservationIgnored private var artworkURL: URL?
 
-    private func loadArtwork(_ url: URL?) {
-        guard let url, url != artworkURL else { return }
-        artworkURL = url
+    private func loadArtwork(_ url: URL?, fallback: URL? = nil) {
+        guard let first = url ?? fallback, first != artworkURL else { return }
+        artworkURL = first
         artworkImage = nil
         Task {
-            guard let (data, _) = try? await URLSession.shared.data(from: API.shared.art(url)), let image = UIImage(data: data) else { return }
+            guard let image = await CoverCache.shared.image([url, fallback].compactMap { $0 }), artworkURL == first else { return }
             artworkImage = image
             updateNowPlaying()
         }

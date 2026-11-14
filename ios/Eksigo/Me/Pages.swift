@@ -423,7 +423,7 @@ struct DownloadsView: View {
                 if let e = r.episode {
                     NavigationLink(value: e) {
                         HStack(spacing: 12) {
-                            Artwork(url: e.artwork, size: 40)
+                            Artwork(episode: e, size: 40)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(e.title).font(Theme.text(15, .medium)).foregroundStyle(Theme.ink).lineLimit(1)
                                 Text([e.showTitle, r.fileBytes.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) }].compactMap { $0 }.joined(separator: " · "))

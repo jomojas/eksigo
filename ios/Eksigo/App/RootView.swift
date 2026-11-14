@@ -38,7 +38,12 @@ struct RootView: View {
                 .navigationDestination(for: Listing.self) { ShowLoader(listing: $0) }
                 .navigationDestination(for: Route.self) { $0.view }
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) { MiniPlayer() }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            VStack(spacing: 0) {
+                ToastView()
+                MiniPlayer()
+            }
+        }
     }
 }
 
@@ -52,6 +57,10 @@ enum Route: Hashable {
     case account
     case downloads
     case missedList
+    case upNext
+    case forLearners
+    /// Apple's top shows, all or one topic (an Apple genre id).
+    case topShows(Int?)
 
     @ViewBuilder var view: some View {
         switch self {
@@ -63,6 +72,39 @@ enum Route: Hashable {
         case .account: AccountView()
         case .downloads: DownloadsView()
         case .missedList: MissedListView(asPage: true)
+        case .upNext: UpNextView(asPage: true)
+        case .forLearners: ForLearnersView()
+        case .topShows(let genre): TopShowsView(genre: genre)
+        }
+    }
+}
+
+/// The message at the bottom, above the mini player, for a few seconds.
+struct ToastView: View {
+    @Environment(AppUI.self) private var ui
+
+    var body: some View {
+        if let t = ui.toast {
+            HStack(spacing: 10) {
+                Image(systemName: t.symbol).font(.system(size: 15, weight: .medium))
+                Text(t.text).font(Theme.text(14, .medium)).lineLimit(1)
+                Spacer(minLength: 8)
+                if let undo = t.undo {
+                    Button("Undo") {
+                        undo()
+                        ui.toast = nil
+                    }
+                    .font(Theme.text(14, .semibold)).opacity(0.7)
+                }
+            }
+            .foregroundStyle(Theme.canvas)
+            .padding(.horizontal, 14).frame(height: 48)
+            .background(Theme.ink, in: RoundedRectangle(cornerRadius: 12))
+            .padding(.horizontal, 16).padding(.bottom, 8)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+            .id(t.id)
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.updatesFrequently)
         }
     }
 }
