@@ -43,8 +43,9 @@ struct ListenView: View {
 
     /// The last episode left in the middle.
     private var continuing: EpisodeRecord? {
+        // The same one while it plays (the card turns into its pause button), so a tap doesn't swap it for another.
         recent.first { r in
-            !r.played && r.position > 30 && r.progress < 0.98 && !(r.key == center.episode?.key && center.isPlaying)
+            (r.key == center.episode?.key && center.position > 30) || (!r.played && r.position > 30 && r.progress < 0.98)
         }
     }
 
@@ -215,7 +216,10 @@ private struct ContinueCard: View {
     @Environment(PlaybackCenter.self) private var center
 
     var body: some View {
-        let left = Stats.length(max(60, record.duration - record.position))
+        let current = center.episode?.key == record.key
+        let position = current ? center.position : record.position
+        let left = Stats.length(max(60, record.duration - position))
+        let playing = current && center.isPlaying
         NavigationLink(value: episode) {
             HStack(spacing: 14) {
                 Artwork(episode: episode, size: 96, radius: 12)
@@ -225,12 +229,12 @@ private struct ContinueCard: View {
                     Text(episode.title).font(Theme.text(17, .semibold)).foregroundStyle(Theme.ink).lineLimit(2)
                         .multilineTextAlignment(.leading)
                     HStack(spacing: 10) {
-                        Button { center.play(episode) } label: {
-                            Label("\(left) left", systemImage: "play.fill").font(Theme.text(14, .semibold))
+                        Button { current ? center.togglePlayPause() : center.play(episode) } label: {
+                            Label("\(left) left", systemImage: playing ? "pause.fill" : "play.fill").font(Theme.text(14, .semibold))
                         }
                         .buttonStyle(.eks(.secondary, small: true, height: 32))
-                        .accessibilityLabel("Resume, \(left) left")
-                        Track(value: record.progress)
+                        .accessibilityLabel(playing ? "Pause, \(left) left" : "Resume, \(left) left")
+                        Track(value: record.duration > 0 ? min(1, position / record.duration) : 0)
                     }
                     .padding(.top, 8)
                 }
