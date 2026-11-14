@@ -112,10 +112,12 @@ struct NowPlayingView: View {
     // MARK: The first screen
 
     private func top(_ e: PodcastEpisode, side: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 22) {
+        // The controls sit together at the bottom; any spare height goes under the cover, not between them.
+        VStack(alignment: .leading, spacing: 0) {
             Artwork(episode: e, size: side, radius: 16)
                 .shadow(color: .black.opacity(0.35), radius: 24, y: 14)
                 .frame(maxWidth: .infinity)
+            Spacer(minLength: 22)
             VStack(alignment: .leading, spacing: 10) {
                 Text(e.title).font(Theme.display(21)).foregroundStyle(Theme.ink).lineLimit(2)
                 let missed = missedHere(e)
@@ -135,9 +137,8 @@ struct NowPlayingView: View {
                     .disabled(!missed.contains(where: center.playable))
                 }
             }
-            scrubber
-            controls
-            Spacer(minLength: 8)
+            scrubber.padding(.top, 18)
+            controls.padding(.top, 2)
             if let next = center.queue.first {
                 Button { showUpNext = true } label: {
                     HStack(spacing: 10) {
@@ -156,8 +157,9 @@ struct NowPlayingView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Up next: \(next.title)")
                 .padding(.horizontal, -12)
+                .padding(.top, 14)
             }
-            controlRow(e).padding(.horizontal, -16).padding(.bottom, 8)
+            controlRow(e).padding(.horizontal, -16).padding(.top, 16).padding(.bottom, 8)
         }
         .padding(.top, 6)
     }
