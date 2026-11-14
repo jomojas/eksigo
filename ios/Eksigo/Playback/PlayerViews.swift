@@ -71,7 +71,7 @@ struct NowPlayingView: View {
                 GeometryReader { g in
                     ScrollView {
                         VStack(alignment: .leading, spacing: 0) {
-                            top(e, side: min(g.size.width - 56, g.size.height * 0.42))
+                            top(e, side: min(g.size.width - 72, g.size.height - 400))
                                 .frame(minHeight: g.size.height)
                             details(e)
                         }
@@ -112,62 +112,65 @@ struct NowPlayingView: View {
     // MARK: The first screen
 
     private func top(_ e: PodcastEpisode, side: CGFloat) -> some View {
-        // Two groups: the cover with its title, and the controls together at the bottom. Spare height (an episode
-        // with no missed-sentences line has more) is split above the cover and between the groups, so the gap under
-        // the cover stays the same on every episode.
+        // Fixed gaps from the design, top to bottom: cover 22, title 26, progress 22, controls 22, Up Next 26,
+        // control row 20. The title row has the same height on every episode (the missed pill sits on its right),
+        // so nothing moves between episodes; spare height goes under the control row.
         VStack(alignment: .leading, spacing: 0) {
-            Spacer(minLength: 0)
             Artwork(episode: e, size: side, radius: 16)
                 .shadow(color: .black.opacity(0.35), radius: 24, y: 14)
                 .frame(maxWidth: .infinity)
-            VStack(alignment: .leading, spacing: 10) {
-                Text(e.title).font(Theme.display(21)).foregroundStyle(Theme.ink).lineLimit(2)
+                .padding(.top, 22)
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(e.title).font(Theme.display(21)).foregroundStyle(Theme.ink).lineLimit(2)
+                    Text([e.showTitle, e.published?.formatted(.dateTime.day().month(.abbreviated))].compactMap { $0 }.joined(separator: " · "))
+                        .font(Theme.text(17)).foregroundStyle(Theme.inkSubtle).lineLimit(1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 let missed = missedHere(e)
                 if !missed.isEmpty {
                     Button { playMissed(missed) } label: {
                         HStack(spacing: 6) {
                             Image(systemName: "ear").font(.system(size: 14, weight: .semibold))
-                            Text(plural(missed.count, "missed sentence"))
-                            Text("· Play").foregroundStyle(Theme.inkSubtle)
+                            Text("\(missed.count) missed")
                         }
-                        .font(Theme.text(14, .semibold)).foregroundStyle(Theme.ink)
-                        .padding(.leading, 12).padding(.trailing, 14).frame(height: 34)
+                        .font(Theme.text(13, .semibold)).foregroundStyle(Theme.ink)
+                        .padding(.horizontal, 12).frame(height: 32)
                         .background(.white.opacity(0.16), in: Capsule())
-                        .frame(minHeight: 44)
+                        .frame(minHeight: 44, alignment: .top)
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Play \(plural(missed.count, "missed sentence"))")
                     .disabled(!missed.contains(where: center.playable))
                 }
             }
-            .padding(.top, 28)
-            // Two spacers here to the one above the cover: a third of the spare height above, two thirds here.
-            Spacer(minLength: 9)
-            Spacer(minLength: 9)
-            scrubber
-            controls.padding(.top, 2)
+            .padding(.top, 26)
+            scrubber.padding(.top, 22)
+            controls.padding(.top, 22 - 10)  // the buttons' tap areas are taller than their glyphs
             if let next = center.queue.first {
                 Button { showUpNext = true } label: {
                     HStack(spacing: 10) {
-                        Artwork(episode: next, size: 36, radius: 6)
-                        VStack(alignment: .leading, spacing: 3) {
+                        Artwork(episode: next, size: 40, radius: 8)
+                        VStack(alignment: .leading, spacing: 2) {
                             Text("UP NEXT · \(center.queue.count)").font(Theme.text(11, .semibold)).tracking(0.3).foregroundStyle(Theme.inkSubtle)
                             Text(next.title).font(Theme.text(15, .semibold)).foregroundStyle(Theme.ink).lineLimit(1)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.inkTertiary)
                     }
-                    .padding(.leading, 10).padding(.trailing, 14).frame(height: 58)
+                    .padding(.horizontal, 12).frame(height: 60)
                     .background(.white.opacity(0.13), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Up next: \(next.title)")
                 .padding(.horizontal, -12)
-                .padding(.top, 14)
+                .padding(.top, 26 - 10)
             }
-            controlRow(e).padding(.horizontal, -16).padding(.top, 16).padding(.bottom, 8)
+            controlRow(e).padding(.horizontal, -16).padding(.top, 20).padding(.bottom, 8)
+            Spacer(minLength: 0)
         }
-        .padding(.top, 6)
     }
 
     private var scrubber: some View {
