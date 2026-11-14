@@ -250,7 +250,7 @@ struct ListingRow: View {
     private var feedUrl: URL? { listing.feedUrl ?? listing.appleId.flatMap { Directory.looked[$0]?.feedUrl } }
 
     private var row: some View {
-        let subscribed = feedUrl.map { url in subscriptions.contains { $0.feedUrl == url.absoluteString } } ?? false
+        let subscribed = !matching.isEmpty
         return Row(title: listing.title, subtitle: listing.note ?? listing.author,
                    leading: {
                        HStack(spacing: 10) {
@@ -270,7 +270,24 @@ struct ListingRow: View {
                    })
     }
 
+    /// Subscriptions for this show. Apple's charts give no feed until the show is looked up, so before that the
+    /// title decides (both come from Apple's directory, so they match).
+    private var matching: [Subscription] {
+        if let url = feedUrl?.absoluteString { return subscriptions.filter { $0.feedUrl == url } }
+        let title = Self.normal(listing.title)
+        return subscriptions.filter { $0.show.map { Self.normal($0.title) == title } ?? false }
+    }
+
+    private static func normal(_ s: String) -> String {
+        s.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
     private func toggle(_ subscribed: Bool) async {
+        if subscribed {
+            matching.forEach(context.delete)
+            try? context.save()
+            return
+        }
         if let show = listing.show {
             Store.setSubscribed(show, !subscribed, in: context)
             return
