@@ -47,7 +47,9 @@ struct UpNextView: View {
                             .accessibilityAddTraits(.isButton)
                             .accessibilityHint("Plays it now")
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                // Red by name: the app's tint is the ink colour, which made this button white in the dark player.
                                 Button("Remove", systemImage: "trash", role: .destructive) { center.removeFromQueue(e.key) }
+                                    .tint(.red)
                             }
                     }
                     .onMove { center.moveQueue(from: $0, to: $1) }
