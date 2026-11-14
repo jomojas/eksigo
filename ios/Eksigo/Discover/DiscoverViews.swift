@@ -34,8 +34,6 @@ struct DiscoverView: View {
                                     VStack(alignment: .leading, spacing: 5) {
                                         Artwork(url: show.artworkUrl, size: 84, radius: 14)
                                         Text(show.title).font(Theme.text(13, .medium)).foregroundStyle(Theme.ink).lineLimit(1)
-                                        let n = newCount(show)
-                                        if !n.isEmpty { Text(n).font(Theme.text(12)).foregroundStyle(Theme.primary).lineLimit(1) }
                                     }
                                     .frame(width: 84)
                                 }
@@ -84,6 +82,8 @@ struct DiscoverView: View {
         }
         .canvas()
         .navigationTitle("Discover")
+        // The title in the bar's own row, not a row below it: less empty space at the top.
+        .toolbarTitleDisplayMode(.inlineLarge)
         .navigationDestination(isPresented: $searching) { SearchView() }
         .task {
             if top.isEmpty { top = (try? await Directory.top()) ?? [] }
@@ -91,12 +91,6 @@ struct DiscoverView: View {
         }
     }
 
-    /// "2 new" this week.
-    private func newCount(_ show: PodcastShow) -> String {
-        let week = Date.now.addingTimeInterval(-7 * 86400)
-        let n = feeds.feed(show.feedUrl)?.episodes.filter { ($0.published ?? .distantPast) > week }.count ?? 0
-        return n > 0 ? "\(n) new" : ""
-    }
 }
 
 /// A row that scrolls sideways, to the screen's edges.
@@ -399,6 +393,7 @@ struct ShowView: View {
     let show: PodcastShow
     @Environment(\.modelContext) private var context
     @Query private var subscriptions: [Subscription]
+    @Query private var records: [EpisodeRecord]
     @State private var feed: FeedParser.Feed?
     @State private var error: String?
     @State private var newestFirst = true
@@ -451,9 +446,7 @@ struct ShowView: View {
                 Button(newestFirst ? "Newest first" : "Oldest first") { newestFirst.toggle() }
             }) {
                 if let feed {
-                    RowGroup {
-                        ForEach(newestFirst ? feed.episodes : feed.episodes.reversed()) { EpisodeRow(episode: $0) }
-                    }
+                    episodeList(newestFirst ? feed.episodes : Array(feed.episodes.reversed()))
                 } else if let error {
                     Note(error)
                 } else {
@@ -462,8 +455,26 @@ struct ShowView: View {
             }
         }
         .task {
+            if let f = FeedCache.shared.feed(show.feedUrl) { feed = f }
             do { feed = try await FeedCache.shared.load(show.feedUrl) } catch { self.error = "Couldn't read this show's feed: \(error.localizedDescription)" }
         }
+    }
+}
+
+extension ShowView {
+    /// A show can have thousands of episodes: rows are made only as they scroll in, and played/left come from one
+    /// lookup rather than a query per row.
+    fileprivate func episodeList(_ episodes: [PodcastEpisode]) -> some View {
+        let byKey = Dictionary(records.map { ($0.key, $0) }, uniquingKeysWith: { a, _ in a })
+        let last = episodes.last?.id
+        return LazyVStack(spacing: 0) {
+            ForEach(episodes) { e in
+                EpisodeRowContent(episode: e, record: byKey[e.key])
+                if e.id != last { Rectangle().fill(Theme.hairline).frame(height: 0.5).padding(.leading, 16) }
+            }
+        }
+        .background(Theme.surface1)
+        .clipShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
     }
 }
 

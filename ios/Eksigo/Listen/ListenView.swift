@@ -30,6 +30,8 @@ struct ListenView: View {
         }
         .canvas()
         .navigationTitle("Listen")
+        // The title in the bar's own row, not a row below it: less empty space at the top.
+        .toolbarTitleDisplayMode(.inlineLarge)
         .toolbar { ToolbarItem(placement: .topBarTrailing) { SyncBadge() } }
         .refreshable {
             await feeds.load(subscriptions.compactMap { URL(string: $0.feedUrl) })
@@ -57,10 +59,6 @@ struct ListenView: View {
                                       subtitle: [e.showTitle, e.duration.map(Stats.length)].compactMap { $0 }.joined(separator: " · "))
                         }
                         .buttonStyle(.plain)
-                        .contextMenu {
-                            Button("Play now", systemImage: "play") { center.play(e) }
-                            Button("Remove from Up Next", systemImage: "text.badge.minus", role: .destructive) { center.removeFromQueue(e.key) }
-                        }
                     }
                 }
             }
@@ -267,8 +265,6 @@ struct EpisodeRow: View {
     var swipe = false
     /// Straight on the page rather than in a grey group.
     var plain = false
-    @Environment(PlaybackCenter.self) private var center
-    @Environment(AppUI.self) private var ui
     @Query private var records: [EpisodeRecord]
 
     init(episode: PodcastEpisode, showArt: Bool = false, swipe: Bool = false, plain: Bool = false) {
@@ -279,6 +275,21 @@ struct EpisodeRow: View {
         let key = episode.key
         _records = Query(filter: #Predicate<EpisodeRecord> { $0.key == key })
     }
+
+    var body: some View {
+        EpisodeRowContent(episode: episode, record: records.first, showArt: showArt, swipe: swipe, plain: plain)
+    }
+}
+
+/// An episode row whose record the caller already has (a show's long list looks them all up at once).
+struct EpisodeRowContent: View {
+    let episode: PodcastEpisode
+    let record: EpisodeRecord?
+    var showArt = false
+    var swipe = false
+    var plain = false
+    @Environment(PlaybackCenter.self) private var center
+    @Environment(AppUI.self) private var ui
 
     var body: some View {
         if swipe {
@@ -302,14 +313,13 @@ struct EpisodeRow: View {
     }
 
     private var link: some View {
-        let record = records.first
-        return NavigationLink(value: episode) {
+        NavigationLink(value: episode) {
             Row(title: episode.title, subtitle: subtitle(record),
                 leading: { if showArt { Artwork(episode: episode, size: plain ? 56 : 44) } },
                 trailing: { trailing(record) })
         }
         .buttonStyle(.plain)
-        .contextMenu {
+        .contextMenu(swipe ? nil : ContextMenu {
             Button("Play", systemImage: "play") { center.play(episode) }
             if center.isQueued(episode) {
                 Button("Remove from Up Next", systemImage: "text.badge.minus") { center.removeFromQueue(episode.key) }
@@ -321,7 +331,7 @@ struct EpisodeRow: View {
             } else {
                 Button("Download", systemImage: "arrow.down.circle") { center.download(episode) }
             }
-        }
+        })
     }
 
     private func subtitle(_ r: EpisodeRecord?) -> String {

@@ -7,7 +7,8 @@ nonisolated final class FeedParser: NSObject, XMLParserDelegate {
         var episodes: [PodcastEpisode]
     }
 
-    static func load(_ url: URL) async throws -> Feed {
+    /// Off the main thread: a big feed (thousands of episodes) takes a second or more to read.
+    @concurrent static func load(_ url: URL) async throws -> Feed {
         let (data, response) = try await URLSession.shared.data(from: url)
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             throw URLError(.badServerResponse)
@@ -43,13 +44,18 @@ nonisolated final class FeedParser: NSObject, XMLParserDelegate {
         return parts.reduce(0) { $0 * 60 + $1 }
     }
 
-    static func parseDate(_ s: String) -> Date? {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        for format in ["EEE, dd MMM yyyy HH:mm:ss Z", "EEE, dd MMM yyyy HH:mm:ss zzz", "dd MMM yyyy HH:mm:ss Z", "EEE, dd MMM yyyy HH:mm Z"] {
-            f.dateFormat = format
-            if let d = f.date(from: s.trimmingCharacters(in: .whitespaces)) { return d }
+    /// Made once: a formatter is slow to make, and a feed has a date per episode. Only read from, so shared safely.
+    private static let dateFormatters: [DateFormatter] =
+        ["EEE, dd MMM yyyy HH:mm:ss Z", "EEE, dd MMM yyyy HH:mm:ss zzz", "dd MMM yyyy HH:mm:ss Z", "EEE, dd MMM yyyy HH:mm Z"].map {
+            let f = DateFormatter()
+            f.locale = Locale(identifier: "en_US_POSIX")
+            f.dateFormat = $0
+            return f
         }
+
+    static func parseDate(_ s: String) -> Date? {
+        let s = s.trimmingCharacters(in: .whitespaces)
+        for f in dateFormatters { if let d = f.date(from: s) { return d } }
         return nil
     }
 

@@ -25,6 +25,8 @@ struct ReviewView: View {
         }
         .canvas()
         .navigationTitle("Review")
+        // The title in the bar's own row, not a row below it: less empty space at the top.
+        .toolbarTitleDisplayMode(.inlineLarge)
     }
 
     @ViewBuilder private func todayCard(words: [Word], counts: PracticeRules.Counts, now: Int) -> some View {

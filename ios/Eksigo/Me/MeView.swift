@@ -53,6 +53,8 @@ struct MeView: View {
         }
         .canvas()
         .navigationTitle("Me")
+        // The title in the bar's own row, not a row below it: less empty space at the top.
+        .toolbarTitleDisplayMode(.inlineLarge)
     }
 }
 
