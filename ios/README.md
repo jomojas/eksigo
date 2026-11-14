@@ -23,18 +23,18 @@ xcodebuild test -project ios/Eksigo.xcodeproj -scheme Eksigo -destination 'platf
 ```
 
 The tests check that word review schedules exactly as the desktop's rs-fsrs (values from running the crate), the
-review queue's rules, the sync bookkeeping (what is sent, what wins, another account), streaks, and the marking of
-missed words. CI runs them on pull requests that change `ios/` (`.github/workflows/ios.yml`).
+review queue's rules, the sync bookkeeping (what is sent, what wins, another account), streaks, the marking of
+missed words, and Up Next (order, no repeats, kept between launches). CI runs them on pull requests that change `ios/` (`.github/workflows/ios.yml`).
 
 ## Layout
 
 | Folder | What |
 |---|---|
-| `App/` | The tabs, the theme (the desktop's tokens) and the shared pieces: rows, cards, buttons, cover art |
+| `App/` | The tabs, the theme (the desktop's tokens) and the shared pieces: rows, cards, buttons, swipe actions, the message at the bottom; cover art (`Cover.swift`: loaded once, cached in memory and on disk, the show's cover when an episode's own can't be had) |
 | `Sync/` | Sync records as Swift values, the record store (SwiftData), `Syncer` (`POST /v1/sync`), figures for streaks and history |
 | `Review/` | FSRS (a port of rs-fsrs), the review rules, the Review tab and session |
 | `Listen/` | The Listen tab, the missed-sentence player and list |
-| `Playback/` | `PlaybackCenter` (episodes and missed sentences on one `AVPlayer`, downloads, lock screen), the players |
+| `Playback/` | `PlaybackCenter` (episodes and missed sentences on one `AVPlayer`, Up Next, downloads, lock screen), the players, the Up Next list |
 | `Discover/`, `Directory/` | Discover, search, show and episode pages; Apple's directory and charts, RSS, the learners list |
 | `Me/` | Me, My words, a word, History, Progress, Settings, Downloads, Account |
 | `Account/` | Sign in with Apple and Google, the session token in the Keychain |
@@ -48,5 +48,6 @@ missed words. CI runs them on pull requests that change `ios/` (`.github/workflo
 - A missed sentence plays from the phone's download when it is the computer's file (the size in `missed.bytes`), else
   from the stream; a download that differs shows the text only. Episodes with missed sentences download by themselves
   on Wi-Fi.
+- Up Next stays on the phone (UserDefaults): the computer has no queue to share it with.
 - Sync runs when the app opens or goes to the background, a few seconds after a review or a pause, and every ten
   minutes while it is open.

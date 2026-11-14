@@ -79,6 +79,43 @@ final class AppUI {
     }
 
     enum Tab: Hashable { case listen, discover, review, me }
+
+    /// A short message at the bottom ("Added to Up Next · 4th"), with Undo when it can be taken back.
+    struct Toast: Identifiable {
+        let id = UUID()
+        let text: String
+        var symbol = "text.badge.plus"
+        var undo: (() -> Void)?
+    }
+
+    var toast: Toast?
+
+    func show(_ toast: Toast) {
+        self.toast = toast
+        let id = toast.id
+        Task {
+            try? await Task.sleep(for: .seconds(3))
+            if self.toast?.id == id { self.toast = nil }
+        }
+    }
+
+    /// Adds to Up Next from anywhere, and says where it went.
+    func addToUpNext(_ episode: PodcastEpisode, center: PlaybackCenter) {
+        guard let place = center.addToQueue(episode) else { return }
+        show(Toast(text: place == 1 ? "Added to Up Next · plays next" : "Added to Up Next · \(place.ordinal)") {
+            center.removeFromQueue(episode.key)
+        })
+    }
+}
+
+extension Int {
+    /// 1st, 2nd, 3rd, 4th…
+    var ordinal: String {
+        let f = NumberFormatter()
+        f.numberStyle = .ordinal
+        f.locale = Locale(identifier: "en")
+        return f.string(from: NSNumber(value: self)) ?? "\(self)"
+    }
 }
 
 #if DEBUG

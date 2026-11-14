@@ -306,6 +306,8 @@ Accounts stay **optional** on every app. Listening on the phone and dictating on
 
 Free, with no AI and no in-app purchase. Built 2026-11-13 from the canvas (P01–P22), tabs Listen, Discover, Review and Me (`ios/README.md`).
 - **Podcast player**, as today. Listening history syncs and becomes *Today* on the desktop.
+  - **v2.1 (2026-11-14, canvas P23–P31):** Discover became short rows you swipe sideways (your shows, for learners, top shows) plus topic tiles, with *See all* pages; the player gained the episode's missed sentences, what plays next, a labelled row (Speed, Sleep, Up Next, AirPlay, More) and the notes under it.
+  - **Up Next:** add from an episode page, by swiping an episode left, or by holding it. Episodes play in the order added; each leaves the list when it starts; with the list empty, playback stops after the current episode ("sleep at the end of the episode" also stops it). Shown in Listen (the next three) and as a sheet from the player (reorder, remove, clear). Kept on the phone only: the desktop has no queue.
 - **Missed-sentence playlist:** last night's mistakes, played back to back with their text, for the commute. How the phone finds the sentence in its own copy:
   1. **The file matches:** play the exact timestamps. This is common for podcasts without inserted ads. Built as a size check: the phone's download has the size the computer's had (`missed.bytes`); with no download yet, the stream plays. Episodes with missed sentences download by themselves on Wi-Fi (Settings, on by default).
   2. **The hash differs:** search the phone's copy near the expected time with a small audio fingerprint of the sentence (about 3 seconds, about 100 bytes, synced with the sentence). Added later.

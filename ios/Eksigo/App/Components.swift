@@ -421,27 +421,6 @@ struct MissedWordsText: View {
     }
 }
 
-/// Podcast cover art, through our server's copy (`/v1/art`), which reaches image hosts blocked in some countries.
-struct Artwork: View {
-    let url: URL?
-    var size: CGFloat = 44
-    var radius: CGFloat = 8
-
-    var body: some View {
-        AsyncImage(url: url.map(API.shared.art)) { phase in
-            if let image = phase.image {
-                image.resizable().scaledToFill()
-            } else {
-                Theme.surface3
-            }
-        }
-        .frame(width: size, height: size)
-        .clipShape(RoundedRectangle(cornerRadius: radius))
-        .overlay(RoundedRectangle(cornerRadius: radius).strokeBorder(Theme.hairline))
-        .accessibilityHidden(true)
-    }
-}
-
 /// A small note under a section.
 struct Note: View {
     let text: String
@@ -456,13 +435,16 @@ struct Note: View {
 struct NavBar<Trailing: View>: View {
     var title: String = ""
     var close = false
+    /// A small grey title (the player's show name) instead of the page's name.
+    var quiet = false
     var onBack: () -> Void
     @ViewBuilder var trailing: Trailing
 
     var body: some View {
         HStack(spacing: 4) {
             IconButton(symbol: close ? "chevron.down" : "chevron.left", label: close ? "Close" : "Back", size: 20, action: onBack)
-            Text(title).font(Theme.text(16, .semibold)).foregroundStyle(Theme.ink).lineLimit(1)
+            Text(title).font(quiet ? Theme.text(13, .medium) : Theme.text(16, .semibold))
+                .foregroundStyle(quiet ? Theme.inkSubtle : Theme.ink).lineLimit(1)
                 .frame(maxWidth: .infinity)
             trailing.frame(minWidth: 44)
         }
