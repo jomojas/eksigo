@@ -23,10 +23,9 @@ struct WordsView: View {
                 Image(systemName: "magnifyingglass").foregroundStyle(Theme.inkSubtle)
                 TextField("Search \(words.count) words", text: $search).autocorrectionDisabled().textInputAutocapitalization(.never)
             }
-            .font(Theme.text(15))
+            .font(Theme.text(17))
             .padding(.horizontal, 12).frame(height: 40)
-            .background(Theme.surface2, in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.hairline))
+            .background(Theme.surface2, in: Capsule())
             ChipRow(items: [("all", "All"), ("due", "Due \(due.count)")] + Word.Level.allCases.map {
                 l in (l.rawValue, "\(l.label) \(words.filter { $0.level == l.rawValue }.count)")
             }, selection: $filter)
@@ -95,13 +94,11 @@ struct WordView: View {
                     RoundButton(symbol: "speaker.wave.2", label: "Say the word", size: 44) { clips.say(w.text) }
                 }
                 MeaningBlock(word: w)
-                HStack(spacing: 1) {
+                HStack(spacing: 8) {
                     fact(w.level_.label, "Level")
                     fact(dueText(w).capFirst, "Next review")
                     fact("\(reviews)", "Reviews")
                 }
-                .background(Theme.hairline).clipShape(RoundedRectangle(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.hairline))
                 if !w.note.isEmpty {
                     Block("Your note") {
                         Text(w.note).font(Theme.text(15)).foregroundStyle(Theme.inkMuted).card(padding: 14)
@@ -147,11 +144,12 @@ struct WordView: View {
     }
 
     private func fact(_ value: String, _ label: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(value).font(Theme.display(16)).foregroundStyle(Theme.ink).lineLimit(1).minimumScaleFactor(0.7)
-            Text(label).font(Theme.text(12)).foregroundStyle(Theme.inkSubtle)
+        VStack(alignment: .leading, spacing: 4) {
+            Text(value).font(Theme.display(18)).foregroundStyle(Theme.ink).lineLimit(1).minimumScaleFactor(0.7)
+            Text(label).font(Theme.text(13)).foregroundStyle(Theme.inkSubtle)
         }
-        .padding(12).frame(maxWidth: .infinity, alignment: .leading).background(Theme.surface1)
+        .padding(12).frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.surface1, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 }
 
@@ -446,6 +444,5 @@ struct DownloadsView: View {
         .canvas()
         .navigationTitle("Downloads")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(Theme.canvas, for: .navigationBar)
     }
 }

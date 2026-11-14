@@ -13,22 +13,18 @@ struct DiscoverView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                VStack(alignment: .leading, spacing: 16) {
-                    LargeTitle("Discover")
-                    Button { searching = true } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "magnifyingglass")
-                            Text("Shows, episodes or an RSS link")
-                            Spacer()
-                        }
-                        .font(Theme.text(15)).foregroundStyle(Theme.inkSubtle)
-                        .padding(.horizontal, 12).frame(height: 40)
-                        .background(Theme.surface2, in: RoundedRectangle(cornerRadius: 10))
-                        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.hairline))
+                Button { searching = true } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "magnifyingglass")
+                        Text("Shows, episodes or an RSS link")
+                        Spacer()
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Search")
+                    .font(Theme.text(17)).foregroundStyle(Theme.inkSubtle)
+                    .padding(.horizontal, 10).frame(height: 40)
+                    .background(Theme.surface2, in: Capsule())
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Search")
 
                 if !subscriptions.isEmpty {
                     Block("Your shows") {
@@ -36,12 +32,12 @@ struct DiscoverView: View {
                             ForEach(subscriptions.compactMap(\.show)) { show in
                                 NavigationLink(value: show) {
                                     VStack(alignment: .leading, spacing: 5) {
-                                        Artwork(url: show.artworkUrl, size: 72, radius: 10)
-                                        Text(show.title).font(Theme.text(12, .medium)).foregroundStyle(Theme.ink).lineLimit(1)
+                                        Artwork(url: show.artworkUrl, size: 84, radius: 14)
+                                        Text(show.title).font(Theme.text(13, .medium)).foregroundStyle(Theme.ink).lineLimit(1)
                                         let n = newCount(show)
-                                        if !n.isEmpty { Text(n).font(Theme.text(11)).foregroundStyle(Theme.inkSubtle).lineLimit(1) }
+                                        if !n.isEmpty { Text(n).font(Theme.text(12)).foregroundStyle(Theme.primary).lineLimit(1) }
                                     }
-                                    .frame(width: 72)
+                                    .frame(width: 84)
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -49,15 +45,15 @@ struct DiscoverView: View {
                     }
                 }
 
-                Block("For learners", trailing: { NavigationLink("See all", value: Route.forLearners) }) {
+                Block("For learners", trailing: { NavigationLink("See All", value: Route.forLearners) }) {
                     Shelf(spacing: 12) {
                         ForEach(learners) { l in
-                            ListingTile(listing: l, size: 148)
+                            ListingTile(listing: l, size: 170)
                         }
                     }
                 }
 
-                Block("Top shows", trailing: { NavigationLink("See all", value: Route.topShows(nil)) }) {
+                Block("Top shows", trailing: { NavigationLink("See All", value: Route.topShows(nil)) }) {
                     if top.isEmpty {
                         HStack { Spacer(); ProgressView(); Spacer() }.frame(height: 192)
                     } else {
@@ -66,17 +62,17 @@ struct DiscoverView: View {
                 }
 
                 Block("Browse by topic") {
-                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
+                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                         ForEach(Directory.topics) { t in
                             NavigationLink(value: Route.topShows(t.id)) {
-                                HStack(spacing: 10) {
-                                    Image(systemName: t.symbol).font(.system(size: 15)).foregroundStyle(Theme.inkSubtle).frame(width: 20)
-                                    Text(t.name).font(Theme.text(14, .medium)).foregroundStyle(Theme.ink).lineLimit(1).minimumScaleFactor(0.85)
+                                VStack(alignment: .leading) {
+                                    Image(systemName: t.symbol).font(.system(size: 20, weight: .semibold))
                                     Spacer(minLength: 0)
+                                    Text(t.name).font(Theme.display(17)).lineLimit(1).minimumScaleFactor(0.8)
                                 }
-                                .padding(.horizontal, 12).frame(height: 52)
-                                .background(Theme.surface1, in: RoundedRectangle(cornerRadius: 10))
-                                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.hairline))
+                                .foregroundStyle(.white)
+                                .padding(12).frame(maxWidth: .infinity, alignment: .leading).frame(height: 88)
+                                .background(TopicColor.gradient(t.id), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                                 .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
@@ -84,10 +80,10 @@ struct DiscoverView: View {
                     }
                 }
             }
-            .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 24)
+            .padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 24)
         }
         .canvas()
-        .toolbar(.hidden, for: .navigationBar)
+        .navigationTitle("Discover")
         .navigationDestination(isPresented: $searching) { SearchView() }
         .task {
             if top.isEmpty { top = (try? await Directory.top()) ?? [] }
@@ -127,14 +123,14 @@ struct ListingTile: View {
         link {
             VStack(alignment: .leading, spacing: 6) {
                 if let size {
-                    Artwork(url: listing.artworkUrl, size: size, radius: 12)
+                    Artwork(url: listing.artworkUrl, size: size, radius: 14)
                 } else {
                     Color.clear.aspectRatio(1, contentMode: .fit)
-                        .overlay { GeometryReader { g in Artwork(url: listing.artworkUrl, size: g.size.width, radius: 12) } }
+                        .overlay { GeometryReader { g in Artwork(url: listing.artworkUrl, size: g.size.width, radius: 14) } }
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(listing.title).font(Theme.text(14, .medium)).foregroundStyle(Theme.ink).lineLimit(1)
-                    Text(listing.note ?? listing.author).font(Theme.text(12)).foregroundStyle(Theme.inkSubtle).lineLimit(1)
+                    Text(listing.title).font(Theme.text(15, .medium)).foregroundStyle(Theme.ink).lineLimit(1)
+                    Text(listing.note ?? listing.author).font(Theme.text(13)).foregroundStyle(Theme.inkSubtle).lineLimit(1)
                 }
             }
             .frame(width: size)
@@ -163,7 +159,7 @@ private struct ChartColumns: View {
                     VStack(spacing: 0) {
                         ForEach(Array(column.enumerated()), id: \.offset) { r, item in
                             ChartRow(listing: item, rank: c * 3 + r + 1)
-                            if r < column.count - 1 { Rectangle().fill(Theme.hairline).frame(height: 1).padding(.leading, 64) }
+                            if r < column.count - 1 { Rectangle().fill(Theme.hairline).frame(height: 0.5).padding(.leading, 94) }
                         }
                     }
                     .containerRelativeFrame(.horizontal) { w, _ in w - 32 - 40 }
@@ -185,9 +181,9 @@ private struct ChartRow: View {
         NavigationLink(value: listing) {
             HStack(spacing: 12) {
                 Artwork(url: listing.artworkUrl, size: 52)
-                Text("\(rank)").font(Theme.mono(13)).foregroundStyle(Theme.inkSubtle).frame(width: 18, alignment: .leading)
+                Text("\(rank)").font(Theme.mono(17, .semibold)).foregroundStyle(Theme.inkSubtle).frame(width: 18, alignment: .leading)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(listing.title).font(Theme.text(15, .medium)).foregroundStyle(Theme.ink).lineLimit(1)
+                    Text(listing.title).font(Theme.text(16, .semibold)).foregroundStyle(Theme.ink).lineLimit(1)
                     Text(listing.author).font(Theme.text(13)).foregroundStyle(Theme.inkSubtle).lineLimit(1)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -206,8 +202,8 @@ struct ForLearnersView: View {
     var body: some View {
         Page(title: "For learners") {
             Text("Shows made for people learning English: clear voices, a gentler pace.")
-                .font(Theme.text(14)).lineSpacing(3).foregroundStyle(Theme.inkSubtle).padding(.horizontal, 4)
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 18) {
+                .font(Theme.text(15)).lineSpacing(2).foregroundStyle(Theme.inkSubtle).padding(.horizontal, 4)
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)], spacing: 18) {
                 ForEach(learners) { ListingTile(listing: $0) }
             }
         }
@@ -265,8 +261,8 @@ struct ListingRow: View {
         return Row(title: listing.title, subtitle: listing.note ?? listing.author,
                    leading: {
                        HStack(spacing: 10) {
-                           if let rank { Text("\(rank)").font(Theme.mono(13)).foregroundStyle(Theme.inkSubtle).frame(width: 20) }
-                           Artwork(url: listing.artworkUrl, size: 48)
+                           if let rank { Text("\(rank)").font(Theme.mono(17, .semibold)).foregroundStyle(Theme.inkSubtle).frame(width: 22) }
+                           Artwork(url: listing.artworkUrl, size: 56, radius: 10)
                        }
                    },
                    trailing: {
@@ -338,11 +334,10 @@ struct SearchView: View {
                         .foregroundStyle(Theme.ink)
                         .onSubmit { Task { await search() } }
                 }
-                .font(Theme.text(15))
-                .padding(.horizontal, 12).frame(height: 40)
-                .background(Theme.surface2, in: RoundedRectangle(cornerRadius: 10))
-                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.hairline))
-                Button("Cancel") { dismiss() }.font(Theme.text(15)).foregroundStyle(Theme.ink)
+                .font(Theme.text(17))
+                .padding(.horizontal, 12).frame(height: 44)
+                .glassCapsule()
+                GlassCircleButton(symbol: "xmark", label: "Cancel") { dismiss() }
             }
             Segmented(items: [(0, "Shows"), (1, "Episodes")], selection: $kind, label: "Search for")
             ScrollView {
@@ -408,28 +403,47 @@ struct ShowView: View {
     @State private var error: String?
     @State private var newestFirst = true
     @State private var expanded = false
+    @State private var tint: UIColor?
 
     var body: some View {
         let subscribed = subscriptions.contains { $0.feedUrl == show.feedUrl.absoluteString }
         let current = feed?.show ?? show
         Page {
-            HStack(alignment: .bottom, spacing: 16) {
-                Artwork(url: current.artworkUrl ?? show.artworkUrl, size: 120, radius: 12)
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(current.title.isEmpty ? show.title : current.title).font(Theme.display(22)).tracking(-0.4).foregroundStyle(Theme.ink)
-                        .lineLimit(3)
-                    if let a = current.author ?? show.author { Text(a).font(Theme.text(14)).foregroundStyle(Theme.inkSubtle).lineLimit(1) }
-                    Button {
-                        Store.setSubscribed(current.artworkUrl == nil ? show : current, !subscribed, in: context)
-                    } label: {
-                        Label(subscribed ? "Subscribed" : "Subscribe", systemImage: subscribed ? "checkmark" : "plus")
-                    }
-                    .buttonStyle(.eks(subscribed ? .secondary : .primary, small: true))
-                    .padding(.top, 4)
+            // The cover on its own colour, edge to edge under the bar (design N12).
+            VStack(spacing: 14) {
+                Artwork(url: current.artworkUrl ?? show.artworkUrl, size: 200, radius: 18)
+                    .shadow(color: .black.opacity(0.3), radius: 20, y: 12)
+                VStack(spacing: 3) {
+                    Text(current.title.isEmpty ? show.title : current.title).font(Theme.display(24)).foregroundStyle(.white)
+                        .multilineTextAlignment(.center).lineLimit(3)
+                    if let a = current.author ?? show.author { Text(a).font(Theme.text(15)).foregroundStyle(.white.opacity(0.75)).lineLimit(1) }
                 }
+                Button {
+                    Store.setSubscribed(current.artworkUrl == nil ? show : current, !subscribed, in: context)
+                } label: {
+                    Label(subscribed ? "Subscribed" : "Subscribe", systemImage: subscribed ? "checkmark" : "plus")
+                        .font(Theme.text(17, .semibold))
+                        .foregroundStyle(subscribed ? .white : .black)
+                        .padding(.horizontal, 22).frame(height: 46)
+                        .background(subscribed ? AnyShapeStyle(.white.opacity(0.22)) : AnyShapeStyle(.white), in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.top, 8).padding(.bottom, 26)
+            .background {
+                CoverBackdrop(tint: tint)
+                    .padding(.horizontal, -16).padding(.top, -400)
+                    .mask(LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.88), .init(color: .clear, location: 1)],
+                                         startPoint: .top, endPoint: .bottom).padding(.horizontal, -16).padding(.top, -400))
+            }
+            .task {
+                let urls = [current.artworkUrl ?? show.artworkUrl].compactMap { $0 }
+                let t = await CoverCache.shared.tint(urls)
+                withAnimation(.easeOut(duration: 0.3)) { tint = t }
             }
             if let summary = current.summary ?? show.summary, !summary.isEmpty {
-                Text(summary).font(Theme.text(14)).lineSpacing(3).foregroundStyle(Theme.inkSubtle)
+                Text(summary).font(Theme.text(15)).lineSpacing(2).foregroundStyle(Theme.inkSubtle)
                     .lineLimit(expanded ? nil : 3)
                     .onTapGesture { expanded.toggle() }
             }
@@ -536,9 +550,8 @@ struct EpisodeView: View {
                 Button("Remove download", systemImage: "trash", role: .destructive) { center.deleteDownload(episode) }
             } label: {
                 Label(sizeText, systemImage: "checkmark").font(Theme.text(15, .medium)).foregroundStyle(Theme.inkSubtle)
-                    .padding(.horizontal, 16).frame(height: 44)
-                    .background(Theme.surface2, in: RoundedRectangle(cornerRadius: 8))
-                    .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.hairlineStrong))
+                    .padding(.horizontal, 16).frame(height: 50)
+                    .background(Theme.surface2, in: Capsule())
             }
             .accessibilityLabel("Downloaded")
         } else {
@@ -551,5 +564,23 @@ struct EpisodeView: View {
     private var sizeText: String {
         let bytes = center.downloads().first { $0.key == episode.key }?.fileBytes ?? episode.audioBytes ?? 0
         return bytes > 0 ? ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file) : "Downloaded"
+    }
+}
+
+/// Each topic tile has its own colour (design N02), so Discover isn't grey.
+enum TopicColor {
+    static func gradient(_ genre: Int) -> LinearGradient {
+        let pair: (UInt32, UInt32) = switch genre {
+        case 1489: (0xFF6B5E, 0xD63A5A)   // News
+        case 1533: (0x30B0C7, 0x1F6FD1)   // Science
+        case 1321: (0x5E5CE6, 0x3A2FB0)   // Business
+        case 1324: (0xFF9F0A, 0xE0610A)   // Society & Culture
+        case 1487: (0xA2845E, 0x6D5235)   // History
+        case 1512: (0x34C759, 0x1F8F53)   // Health
+        case 1318: (0x64748B, 0x334155)   // Technology
+        case 1303: (0xFF2D92, 0xBF5AF2)   // Comedy
+        default: (0x8E8E93, 0x48484A)
+        }
+        return LinearGradient(colors: [Color(hex: pair.0), Color(hex: pair.1)], startPoint: .topLeading, endPoint: .bottomTrailing)
     }
 }

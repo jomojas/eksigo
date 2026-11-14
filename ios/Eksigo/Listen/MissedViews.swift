@@ -20,9 +20,12 @@ struct MissedPlayerView: View {
                 Spacer()
             }
         }
-        .canvas()
+        .background(MissedBackdrop().ignoresSafeArea())
+        .environment(\.colorScheme, .dark)
+        .environment(\.groupFill, .white.opacity(0.14))
+        .preferredColorScheme(.dark)
         .sheet(isPresented: $showList) {
-            NavigationStack { MissedListView(asPage: false) }
+            NavigationStack { MissedListView(asPage: false) }.environment(\.colorScheme, .light)
         }
     }
 
@@ -30,12 +33,12 @@ struct MissedPlayerView: View {
         if s.finishedAll {
             VStack(alignment: .leading, spacing: 20) {
                 Image(systemName: "checkmark").font(.system(size: 24, weight: .medium)).foregroundStyle(Theme.success)
-                    .frame(width: 56, height: 56).background(Theme.surface2, in: Circle()).overlay(Circle().strokeBorder(Theme.hairlineStrong))
-                Text("All \(s.items.count) sentences played").font(Theme.display(28)).tracking(-0.7).foregroundStyle(Theme.ink)
+                    .frame(width: 56, height: 56).background(.white.opacity(0.16), in: Circle())
+                Text("All \(s.items.count) sentences played").font(Theme.display(28)).foregroundStyle(Theme.ink)
                 Text("They stay here until you dictate the episode again on your computer.")
                     .font(Theme.text(16)).foregroundStyle(Theme.inkSubtle)
                 Button("Play them again") { center.missedJump(to: 0) }.buttonStyle(.eks(.secondary, block: true))
-                Button("Done") { dismiss() }.buttonStyle(.eks(.primary, block: true, height: 52))
+                Button("Done") { dismiss() }.buttonStyle(WhiteCapsuleStyle())
                 Spacer()
             }
             .padding(.horizontal, 24).padding(.top, 32)
@@ -53,7 +56,7 @@ struct MissedPlayerView: View {
                         }
                     }
                     VStack(alignment: .leading, spacing: 14) {
-                        Eyebrow("The sentence")
+                        Eyebrow("THE SENTENCE")
                         if s.revealed {
                             MissedWordsText(parts: parts.sentence.map { ($0.text, $0.marked) }, font: Theme.display(24, .medium))
                                 .lineSpacing(6)
@@ -66,8 +69,7 @@ struct MissedPlayerView: View {
                                 }
                                 .font(Theme.text(15)).foregroundStyle(Theme.inkSubtle)
                                 .frame(maxWidth: .infinity, minHeight: 96)
-                                .background(Theme.surface1, in: RoundedRectangle(cornerRadius: 12))
-                                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.hairline, style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
+                                .background(.white.opacity(0.10), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                             }
                             .buttonStyle(.plain)
                         }
@@ -77,13 +79,13 @@ struct MissedPlayerView: View {
                     }
                     if s.revealed, !m.typed.trimmingCharacters(in: .whitespaces).isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
-                            Eyebrow("You typed")
+                            Eyebrow("YOU TYPED")
                             Text(MissedWordsText.attributed(parts.typed.map { ($0.text, $0.marked) }, color: Theme.inkMuted, wrong: true))
                                 .font(Theme.text(16)).lineSpacing(4)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.top, 16)
-                        .overlay(alignment: .top) { Rectangle().fill(Theme.hairline).frame(height: 1) }
+                        .overlay(alignment: .top) { Rectangle().fill(.white.opacity(0.22)).frame(height: 0.5) }
                     }
                     HStack(spacing: 8) {
                         Image(systemName: "repeat")
@@ -116,7 +118,14 @@ struct MissedPlayerView: View {
                 Spacer()
                 IconButton(symbol: "arrow.counterclockwise", label: "Play again", size: 24) { center.missedReplay() }
                 Spacer()
-                BigPlayButton(playing: center.isPlaying) { center.togglePlayPause() }
+                Button { center.togglePlayPause() } label: {
+                    Image(systemName: center.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 28))
+                        .foregroundStyle(Theme.missedInk)
+                        .frame(width: 72, height: 72).background(.white, in: Circle())
+                        .contentTransition(.symbolEffect(.replace))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(center.isPlaying ? "Pause" : "Play")
                 Spacer()
                 IconButton(symbol: s.revealed ? "eye.slash" : "eye", label: s.revealed ? "Hide the text" : "Show the text", size: 22) {
                     center.missedReveal()
@@ -171,9 +180,8 @@ struct MissedListView: View {
             .padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 40)
         }
         .canvas()
-        .navigationTitle("Missed sentences")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(Theme.canvas, for: .navigationBar)
+        .navigationTitle("Missed")
+        .navigationBarTitleDisplayMode(asPage ? .large : .inline)
         .toolbar {
             if !asPage {
                 ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } }
@@ -216,5 +224,22 @@ struct MissedListView: View {
         .buttonStyle(.plain)
         .disabled(textOnly)
         .accessibilityLabel("Sentence \(m.idx + 1): \(m.text)")
+    }
+}
+
+/// The missed sentences' own colour, behind their player.
+struct MissedBackdrop: View {
+    var body: some View {
+        LinearGradient(colors: [Color(hex: 0x5B4AE0), Color(hex: 0x7A4FD6), Color(hex: 0x2A1B63)], startPoint: .top, endPoint: .bottom)
+    }
+}
+
+/// A white capsule with the missed colour's ink: the main button on a coloured page.
+struct WhiteCapsuleStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label.font(Theme.text(17, .semibold)).foregroundStyle(Theme.missedInk)
+            .frame(maxWidth: .infinity).frame(height: 52)
+            .background(.white, in: Capsule())
+            .opacity(configuration.isPressed ? 0.75 : 1)
     }
 }

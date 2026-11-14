@@ -11,33 +11,32 @@ struct MeView: View {
         let byDay = Stats.secondsByDay(store.days)
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
-                LargeTitle("Me")
                 NavigationLink(value: Route.account) {
                     HStack(spacing: 12) {
-                        Avatar(letter: account.isSignedIn ? account.initial : nil, size: 44)
+                        Avatar(letter: account.isSignedIn ? account.initial : nil, size: 56)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(account.isSignedIn ? account.displayName : "Sign in to sync").font(Theme.text(15, .medium)).foregroundStyle(Theme.ink)
+                            Text(account.isSignedIn ? account.displayName : "Sign in to sync").font(Theme.text(20, .semibold)).foregroundStyle(Theme.ink)
                             SyncLine()
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.inkTertiary)
                     }
-                    .padding(.horizontal, 12).padding(.vertical, 14).card(padding: 0)
+                    .padding(.horizontal, 16).padding(.vertical, 14).card(padding: 0)
                 }
                 .buttonStyle(.plain)
                 Cells(items: [("\(Stats.streak(byDay))", "Day streak"), (Stats.short(Stats.thisWeek(byDay)), "This week"), ("\(store.words.count)", "Words")])
                 RowGroup {
                     NavigationLink(value: Route.words(nil)) {
-                        Row(title: "My words", chevron: true, leading: { IconTile("text.book.closed") }, trailing: { RowValue("\(store.words.count)") })
+                        Row(title: "My words", chevron: true, leading: { IconTile("text.book.closed", color: Color(uiColor: .systemOrange)) }, trailing: { RowValue("\(store.words.count)") })
                     }
                     NavigationLink(value: Route.history) {
-                        Row(title: "History", chevron: true, leading: { IconTile("clock") }, trailing: { EmptyView() })
+                        Row(title: "History", chevron: true, leading: { IconTile("clock", color: Theme.primary) }, trailing: { EmptyView() })
                     }
                     NavigationLink(value: Route.progress) {
-                        Row(title: "Progress", chevron: true, leading: { IconTile("chart.bar") }, trailing: { EmptyView() })
+                        Row(title: "Progress", chevron: true, leading: { IconTile("chart.bar.fill", color: Color(uiColor: .systemGreen)) }, trailing: { EmptyView() })
                     }
                     NavigationLink(value: Route.downloads) {
-                        Row(title: "Downloads", chevron: true, leading: { IconTile("arrow.down.circle") }, trailing: {
+                        Row(title: "Downloads", chevron: true, leading: { IconTile("arrow.down", color: Color(uiColor: .systemBlue)) }, trailing: {
                             RowValue(center.downloadedText)
                         })
                     }
@@ -45,15 +44,15 @@ struct MeView: View {
                 .buttonStyle(.plain)
                 RowGroup {
                     NavigationLink(value: Route.settings) {
-                        Row(title: "Settings", chevron: true, leading: { IconTile("gearshape") }, trailing: { EmptyView() })
+                        Row(title: "Settings", chevron: true, leading: { IconTile("gearshape.fill") }, trailing: { EmptyView() })
                     }
                 }
                 .buttonStyle(.plain)
             }
-            .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 24)
+            .padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 24)
         }
         .canvas()
-        .toolbar(.hidden, for: .navigationBar)
+        .navigationTitle("Me")
     }
 }
 
@@ -63,14 +62,14 @@ struct Avatar: View {
     var body: some View {
         Group {
             if let letter {
-                Text(letter).font(Theme.display(size * 0.39)).foregroundStyle(Theme.ink)
+                Text(letter).font(Theme.display(size * 0.4, .semibold)).foregroundStyle(.white)
             } else {
-                Image(systemName: "person").font(.system(size: size * 0.4)).foregroundStyle(Theme.inkSubtle)
+                Image(systemName: "person.fill").font(.system(size: size * 0.42)).foregroundStyle(.white)
             }
         }
         .frame(width: size, height: size)
-        .background(Theme.surface3, in: Circle())
-        .overlay(Circle().strokeBorder(Theme.hairlineStrong))
+        .background(LinearGradient(colors: letter == nil ? [Color(uiColor: .systemGray2), Color(uiColor: .systemGray)] : [Color(hex: 0x5E5CE6), Color(hex: 0xBF5AF2)],
+                                   startPoint: .topLeading, endPoint: .bottomTrailing), in: Circle())
         .accessibilityHidden(true)
     }
 }

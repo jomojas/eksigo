@@ -13,47 +13,62 @@ struct ReviewView: View {
         let counts = PracticeRules.counts(words: words, reviews: store.reviews, now: now, today: today)
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                LargeTitle("Review")
                 todayCard(words: words, counts: counts, now: now)
                 if !words.isEmpty {
-                    Block("Your words", trailing: { NavigationLink("My words", value: Route.words(nil)) }) {
+                    Block("Your words", trailing: { NavigationLink("See All", value: Route.words(nil)) }) {
                         LevelCells(words: words)
                     }
                 }
                 WeekBlock()
             }
-            .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 24)
+            .padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 24)
         }
         .canvas()
-        .toolbar(.hidden, for: .navigationBar)
+        .navigationTitle("Review")
     }
 
     @ViewBuilder private func todayCard(words: [Word], counts: PracticeRules.Counts, now: Int) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             if words.isEmpty {
-                IconTile("laptopcomputer")
-                Text(account.isSignedIn ? "No words yet" : "Your words come from the computer").font(Theme.display(19)).tracking(-0.3).foregroundStyle(Theme.ink)
+                IconTile("laptopcomputer", color: Theme.warm)
+                Text(account.isSignedIn ? "No words yet" : "Your words come from the computer").font(Theme.display(20)).foregroundStyle(Theme.ink)
                 Text("Save words while you dictate on your computer. They come here with the sentence you heard them in, to review on the way.")
                     .font(Theme.text(14)).lineSpacing(3).foregroundStyle(Theme.inkSubtle)
                 if !account.isSignedIn {
-                    NavigationLink(value: Route.account) { Text("Sign in") }.buttonStyle(.eks(.primary))
+                    NavigationLink(value: Route.account) { Text("Sign in") }.buttonStyle(.eks(.primary, small: true))
                 }
             } else {
-                Text("Today").font(Theme.text(12, .medium)).tracking(0.3).foregroundStyle(Theme.inkSubtle)
+                let on = counts.total > 0
+                Text("TODAY").font(Theme.text(12, .semibold)).tracking(0.3).foregroundStyle(on ? .white.opacity(0.85) : Theme.inkSubtle)
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text("\(counts.due)").font(Theme.display(40)).tracking(-1).foregroundStyle(Theme.ink)
-                    Text("word\(counts.due == 1 ? "" : "s") due · \(counts.new) new").font(Theme.text(15)).foregroundStyle(Theme.inkSubtle)
+                    Text("\(counts.due)").font(Theme.display(40)).foregroundStyle(on ? .white : Theme.ink)
+                    Text("word\(counts.due == 1 ? "" : "s") due · \(counts.new) new").font(Theme.text(17, .semibold)).foregroundStyle(on ? .white : Theme.ink)
                 }
                 .accessibilityElement(children: .combine)
                 Text(counts.total > 0 ? "About \(max(1, Int((Double(min(counts.total, PracticeRules.perSession)) * 0.5).rounded()))) minutes. Each one plays the sentence you saved it from."
                      : nextText(words, now: now))
-                    .font(Theme.text(13)).foregroundStyle(Theme.inkSubtle)
-                Button("Start review") { ui.showReview = true }
-                    .buttonStyle(.eks(.primary, block: true))
-                    .disabled(counts.total == 0)
+                    .font(Theme.text(15)).foregroundStyle(on ? .white.opacity(0.9) : Theme.inkSubtle)
+                if on {
+                Button { ui.showReview = true } label: {
+                    Label("Start review", systemImage: "play.fill").font(Theme.text(17, .semibold))
+                        .foregroundStyle(Color(hex: 0xE0610A))
+                        .frame(maxWidth: .infinity).frame(height: 48)
+                        .background(.white, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                }
             }
         }
-        .card()
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            if words.isEmpty || counts.total == 0 {
+                RoundedRectangle(cornerRadius: Theme.radius, style: .continuous).fill(Theme.surface1)
+            } else {
+                RoundedRectangle(cornerRadius: Theme.radius, style: .continuous)
+                    .fill(LinearGradient(colors: [Color(hex: 0xFF9F0A), Color(hex: 0xFF6B3D)], startPoint: .topLeading, endPoint: .bottomTrailing))
+            }
+        }
     }
 
     private func nextText(_ words: [Word], now: Int) -> String {
@@ -70,21 +85,19 @@ struct ReviewView: View {
 struct LevelCells: View {
     let words: [Word]
     var body: some View {
-        HStack(spacing: 1) {
+        HStack(spacing: 8) {
             ForEach(Word.Level.allCases, id: \.self) { level in
                 NavigationLink(value: Route.words(level)) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("\(words.filter { $0.level == level.rawValue }.count)").font(Theme.display(20)).tracking(-0.5).foregroundStyle(Theme.ink)
-                        Text(level.label).font(Theme.text(12)).foregroundStyle(Theme.inkSubtle)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("\(words.filter { $0.level == level.rawValue }.count)").font(Theme.display(22)).foregroundStyle(level.color)
+                        Text(level.label).font(Theme.text(13)).foregroundStyle(Theme.inkSubtle).lineLimit(1).minimumScaleFactor(0.8)
                     }
-                    .padding(12).frame(maxWidth: .infinity, alignment: .leading).background(Theme.surface1)
+                    .padding(12).frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Theme.surface1, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                 }
                 .buttonStyle(.plain)
             }
         }
-        .background(Theme.hairline)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.hairline))
     }
 }
 
@@ -97,13 +110,13 @@ struct WeekBlock: View {
         let peak = max(days.map(\.1).max() ?? 0, 600)
         let streak = Stats.streak(byDay)
         Block("This week", trailing: {
-            Text("\(streak) day streak").font(Theme.mono(12)).foregroundStyle(Theme.inkSubtle)
+            Text("\(streak) day streak").font(Theme.text(15)).foregroundStyle(Theme.inkSubtle)
         }) {
             VStack(spacing: 8) {
                 HStack(alignment: .bottom, spacing: 8) {
                     ForEach(Array(days.enumerated()), id: \.offset) { i, d in
                         RoundedRectangle(cornerRadius: 3)
-                            .fill(i == days.count - 1 ? Theme.ink : d.1 == 0 ? Theme.hairlineStrong : Theme.inkMuted)
+                            .fill(d.1 == 0 ? Theme.surface3 : i == days.count - 1 ? Theme.warm : Theme.warm.opacity(0.55))
                             .frame(height: max(4, 72 * CGFloat(d.1) / CGFloat(peak)))
                             .frame(maxWidth: .infinity)
                     }
@@ -236,12 +249,14 @@ struct ReviewSessionView: View {
                     ForEach(Array(["Again", "Hard", "Good", "Easy"].enumerated()), id: \.offset) { i, label in
                         Button { grade(item, i + 1, mode: "recall") } label: {
                             VStack(spacing: 5) {
-                                Text(label).font(Theme.text(14, .medium)).foregroundStyle(Theme.ink)
-                                Text(intervalText(item.next[i])).font(Theme.mono(11)).foregroundStyle(Theme.inkSubtle)
+                                Text(label).font(Theme.text(16, .semibold))
+                                    .foregroundStyle(i == 2 ? .white : i == 0 ? Theme.error : Theme.ink)
+                                Text(intervalText(item.next[i])).font(Theme.mono(12))
+                                    .foregroundStyle(i == 2 ? .white.opacity(0.8) : Theme.inkSubtle)
                             }
-                            .frame(maxWidth: .infinity).frame(height: 56)
-                            .background(i == 2 ? Theme.surface3 : Theme.surface2, in: RoundedRectangle(cornerRadius: 8))
-                            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(i == 2 ? Theme.hairlineTertiary : Theme.hairlineStrong))
+                            .frame(maxWidth: .infinity).frame(height: 62)
+                            .background(i == 2 ? Theme.primary : i == 0 ? Theme.errorFill : Theme.surface1,
+                                        in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel("\(label), back in \(intervalText(item.next[i]))")
@@ -351,8 +366,10 @@ struct ReviewSessionView: View {
                         Spacer(minLength: 0)
                     }
                     .padding(.horizontal, 16).frame(minHeight: 54)
-                    .background(Theme.surface2, in: RoundedRectangle(cornerRadius: 8))
-                    .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(state == 1 ? Theme.success : state == 2 ? Theme.error : Theme.hairlineStrong))
+                    .background(state == 1 ? Theme.success.opacity(0.15) : state == 2 ? Theme.errorFill : Theme.surface1,
+                                in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .strokeBorder(state == 1 ? Theme.success : state == 2 ? Theme.error : .clear, lineWidth: 2))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(choice + (state == 1 ? ", right" : state == 2 ? ", wrong" : ""))
@@ -441,7 +458,7 @@ private struct DoneView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     Image(systemName: "checkmark").font(.system(size: 24, weight: .medium)).foregroundStyle(Theme.success)
-                        .frame(width: 56, height: 56).background(Theme.surface2, in: Circle()).overlay(Circle().strokeBorder(Theme.hairlineStrong))
+                        .frame(width: 56, height: 56).background(Theme.success.opacity(0.15), in: Circle())
                     VStack(alignment: .leading, spacing: 10) {
                         Text("\(results.count) word\(results.count == 1 ? "" : "s") reviewed").font(Theme.display(30)).tracking(-0.8).foregroundStyle(Theme.ink)
                         Text(counts.total > 0 ? "\(counts.total) more \(counts.total == 1 ? "is" : "are") waiting for another session."
@@ -470,4 +487,16 @@ private struct DoneView: View {
 
 extension Array {
     subscript(safe i: Int) -> Element? { indices.contains(i) ? self[i] : nil }
+}
+
+extension Word.Level {
+    /// Each level's colour: grey, orange, green, the accent.
+    var color: Color {
+        switch self {
+        case .new: Color(uiColor: .systemGray)
+        case .learning: Color(uiColor: .systemOrange)
+        case .familiar: Color(uiColor: .systemGreen)
+        case .known: Theme.primary
+        }
+    }
 }

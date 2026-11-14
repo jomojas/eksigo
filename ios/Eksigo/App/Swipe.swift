@@ -4,8 +4,8 @@ import SwiftUI
 struct SwipeAction: Identifiable {
     let title: String
     let symbol: String
-    var background: Color = Theme.surface3
-    var foreground: Color = Theme.ink
+    var background: Color = Theme.primary
+    var foreground: Color = .white
     let run: () -> Void
     var id: String { title }
 }
@@ -14,6 +14,7 @@ struct SwipeAction: Identifiable {
 /// they show closes them. VoiceOver gets the same actions from the rotor.
 struct Swipeable<Content: View>: View {
     let actions: [SwipeAction]
+    var background: Color = Theme.surface1
     @ViewBuilder var content: Content
     @State private var offset: CGFloat = 0
     @State private var settled: CGFloat = 0
@@ -45,7 +46,7 @@ struct Swipeable<Content: View>: View {
             .accessibilityHidden(true)
 
             content
-                .background(Theme.surface1)
+                .background(background)
                 // A sideways drag mustn't end as a tap on the row (it would open it).
                 .disabled(dragging == true || settled < 0)
                 .overlay {

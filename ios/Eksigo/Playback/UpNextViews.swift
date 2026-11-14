@@ -64,7 +64,6 @@ struct UpNextView: View {
         .canvas()
         .navigationTitle(asPage ? "Up Next" : "")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(Theme.canvas, for: .navigationBar)
         .toolbar { if asPage { ToolbarItem(placement: .topBarTrailing) { clearButton } } }
         .confirmationDialog("Clear Up Next?", isPresented: $confirmClear, titleVisibility: .visible) {
             Button("Clear \(plural(center.queue.count, "episode"))", role: .destructive) { center.clearQueue() }
