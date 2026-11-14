@@ -47,7 +47,9 @@ struct UpNextView: View {
                             .accessibilityAddTraits(.isButton)
                             .accessibilityHint("Plays it now")
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                // Red by name: the app's tint is the ink colour, which made this button white in the dark player.
                                 Button("Remove", systemImage: "trash", role: .destructive) { center.removeFromQueue(e.key) }
+                                    .tint(.red)
                             }
                     }
                     .onMove { center.moveQueue(from: $0, to: $1) }
@@ -64,10 +66,12 @@ struct UpNextView: View {
         .canvas()
         .navigationTitle(asPage ? "Up Next" : "")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(Theme.canvas, for: .navigationBar)
         .toolbar { if asPage { ToolbarItem(placement: .topBarTrailing) { clearButton } } }
-        .confirmationDialog("Clear Up Next?", isPresented: $confirmClear, titleVisibility: .visible) {
-            Button("Clear \(plural(center.queue.count, "episode"))", role: .destructive) { center.clearQueue() }
+        .alert("Clear Up Next?", isPresented: $confirmClear) {
+            Button("Cancel", role: .cancel) {}
+            Button("Clear", role: .destructive) { center.clearQueue() }
+        } message: {
+            Text("This removes \(plural(center.queue.count, "episode")) from Up Next.")
         }
     }
 

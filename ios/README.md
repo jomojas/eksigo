@@ -2,7 +2,7 @@
 
 The listening companion ([DESIGN.md](../docs/DESIGN.md) section 9): podcasts, the sentences missed in dictation on the
 computer, and word review. SwiftUI, iOS 18+, no third-party packages. The screens are P01–P22 on the design canvas, in
-the desktop's Linear style (light and dark).
+the native iOS look (design canvas N01–N27): system colours and font, plain content, Liquid Glass on the tab bar, bars and mini player, colour from the covers, light and dark.
 
 ## Run
 
@@ -30,7 +30,7 @@ missed words, and Up Next (order, no repeats, kept between launches). CI runs th
 
 | Folder | What |
 |---|---|
-| `App/` | The tabs, the theme (the desktop's tokens) and the shared pieces: rows, cards, buttons, swipe actions, the message at the bottom; cover art (`Cover.swift`: loaded once, cached in memory and on disk, the show's cover when an episode's own can't be had) |
+| `App/` | The tabs, the theme (iOS system colours, one indigo accent) and the shared pieces: rows, cards, buttons, swipe actions, the message at the bottom; cover art (`Cover.swift`: loaded once, cached in memory and on disk, the show's cover when an episode's own can't be had) |
 | `Sync/` | Sync records as Swift values, the record store (SwiftData), `Syncer` (`POST /v1/sync`), figures for streaks and history |
 | `Review/` | FSRS (a port of rs-fsrs), the review rules, the Review tab and session |
 | `Listen/` | The Listen tab, the missed-sentence player and list |

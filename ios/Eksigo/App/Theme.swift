@@ -1,31 +1,43 @@
 import SwiftUI
 
-/// The Linear style the desktop uses (design canvas, "Shared style"): a near-black canvas, a ladder of surfaces with
-/// hairlines instead of shadows, and one lavender accent kept for the main action of a screen. The light theme is
-/// the desktop's. Inter isn't bundled: the system font stands in, as on the desktop's fallback stack.
+/// The native iOS look (design canvas, iPhone v3): the system's own colours, so light, dark and Increase Contrast come
+/// out right by themselves; plain content with soft grey groups and no outlines; Liquid Glass only on the controls the
+/// system draws (tab bar, bars, the mini player); colour from the covers and one indigo accent for the main action.
 enum Theme {
-    static let primary = Color(hex: 0x5E6AD2)
-    /// The text on `primary` (the canvas has it a soft grey rather than white).
-    static let onPrimary = Color(light: 0xD2D2D9, dark: 0xD2D2D9)
-    static let canvas = Color(light: 0xFCFCFD, dark: 0x010102)
-    static let surface1 = Color(light: 0xF5F5F7, dark: 0x0F1011)
-    static let surface2 = Color(light: 0xEFEFF2, dark: 0x141516)
-    static let surface3 = Color(light: 0xE9E9ED, dark: 0x18191A)
-    static let hairline = Color(light: 0xE3E3E8, dark: 0x23252A)
-    static let hairlineStrong = Color(light: 0xD2D2D9, dark: 0x34343A)
-    static let hairlineTertiary = Color(light: 0xC2C2CA, dark: 0x3E3E44)
-    static let ink = Color(light: 0x121316, dark: 0xF7F8F8)
-    static let inkMuted = Color(light: 0x3A3D44, dark: 0xD0D6E0)
-    static let inkSubtle = Color(light: 0x62666F, dark: 0x8A8F98)
-    static let inkTertiary = Color(light: 0x9A9DA5, dark: 0x62666D)
-    static let success = Color(light: 0x1F8A3A, dark: 0x27A644)
-    static let error = Color(light: 0xD33F45, dark: 0xEB5757)
-    static let errorFill = Color(light: 0xD33F45, dark: 0xEB5757, opacity: (0.10, 0.14))
-    static let missFill = Color(light: 0x121316, dark: 0xFFFFFF, opacity: (0.07, 0.08))
+    /// The accent: the one main action of a screen, links, the selected tab.
+    static let primary = Color(light: 0x5E5CE6, dark: 0x7D7AFF)
+    static let primarySoft = Color(light: 0x5E5CE6, dark: 0x7D7AFF, opacity: (0.12, 0.20))
+    static let onPrimary = Color.white
+    static let canvas = Color(uiColor: .systemBackground)
+    /// Groups of rows and cards on the canvas: a soft grey, no outline.
+    static let surface1 = Color(uiColor: .secondarySystemBackground)
+    static let surface2 = Color(uiColor: .tertiarySystemFill)
+    static let surface3 = Color(uiColor: .secondarySystemFill)
+    static let hairline = Color(uiColor: .separator)
+    static let hairlineStrong = Color(uiColor: .separator)
+    static let hairlineTertiary = Color(uiColor: .tertiaryLabel)
+    static let ink = Color(uiColor: .label)
+    static let inkMuted = Color(uiColor: .label).opacity(0.85)
+    static let inkSubtle = Color(uiColor: .secondaryLabel)
+    static let inkTertiary = Color(uiColor: .tertiaryLabel)
+    static let success = Color(uiColor: .systemGreen)
+    static let error = Color(uiColor: .systemRed)
+    static let errorFill = Color(light: 0xFF3B30, dark: 0xFF453A, opacity: (0.12, 0.20))
+    /// The missed words in a sentence: a highlighter yellow.
+    static let missFill = Color(light: 0xFFD60A, dark: 0xFFD60A, opacity: (0.45, 0.32))
+    static let warm = Color(uiColor: .systemOrange)
+    /// Missed sentences have their own colour: the card on Listen, the missed player.
+    static let missedGradient = LinearGradient(colors: [Color(hex: 0x6D5CF0), Color(hex: 0xA35CF0), Color(hex: 0xE070C4)],
+                                               startPoint: .topLeading, endPoint: .bottomTrailing)
+    static let missedInk = Color(hex: 0x5B4AE0)
 
-    static func display(_ size: CGFloat, _ weight: Font.Weight = .semibold) -> Font { .system(size: size, weight: weight) }
+    /// Group corners (iOS 26 inset groups are rounder than before).
+    static let radius: CGFloat = 22
+
+    static func display(_ size: CGFloat, _ weight: Font.Weight = .bold) -> Font { .system(size: size, weight: weight) }
     static func text(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font { .system(size: size, weight: weight) }
-    static func mono(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font { .system(size: size, weight: weight, design: .monospaced) }
+    /// Times and counts: the system font with digits that don't jump, not a typewriter face.
+    static func mono(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font { .system(size: size, weight: weight).monospacedDigit() }
 }
 
 extension Color {
