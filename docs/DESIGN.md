@@ -302,15 +302,16 @@ Accounts stay **optional** on every app. Listening on the phone and dictating on
 
 ---
 
-## 9. iPhone app: listening companion (later, after the desktop MVP)
+## 9. iPhone app: listening companion
 
-Free, with no AI and no in-app purchase.
+Free, with no AI and no in-app purchase. Built 2026-11-13 from the canvas (P01–P22), tabs Listen, Discover, Review and Me (`ios/README.md`).
 - **Podcast player**, as today. Listening history syncs and becomes *Today* on the desktop.
 - **Missed-sentence playlist:** last night's mistakes, played back to back with their text, for the commute. How the phone finds the sentence in its own copy:
-  1. **The file hash matches:** play the exact timestamps. This is common for podcasts without inserted ads.
+  1. **The file matches:** play the exact timestamps. This is common for podcasts without inserted ads. Built as a size check: the phone's download has the size the computer's had (`missed.bytes`); with no download yet, the stream plays. Episodes with missed sentences download by themselves on Wi-Fi (Settings, on by default).
   2. **The hash differs:** search the phone's copy near the expected time with a small audio fingerprint of the sentence (about 3 seconds, about 100 bytes, synced with the sentence). Added later.
   3. **No match, or the episode is not on the phone:** show the text and what was typed, without audio.
 - **Word review with spaced repetition:** cards from the desktop sessions, each with its original sentence and audio (FSRS scheduling, on the phone).
+  - Built as recall (the sentence plays with the word as a gap, then the answer and Again/Hard/Good/Easy) and, for new words, pick the meaning from four. No typing on the phone. The rules are the desktop's: due words first, at most 10 new a day and 20 a session, a missed word once more at the end. FSRS is a port of the desktop's rs-fsrs, tested against it.
 - **My words, history and progress**, view only.
 - **Removed:** Breakdown, AI speaking practice, transcripts made by AI, the level test that tunes breakdowns, free breakdown lessons, and the Premium purchase and paywall.
 - A read-only web page at eksigo.com for My words and history could cover Android users later.
@@ -402,7 +403,7 @@ push to main (backend/**)
 - **DNS (done by the owner in Cloudflare):** A records for `eksigo.com` and `www` to the VPS, **DNS only**, like `api`. Caddy gets the certificates itself.
 - **App Store button:** until the app is in the store, it says "Coming soon to the App Store" and doesn't link anywhere. Once there's an App Store ID, it becomes the official "Download on the App Store" badge linking to `https://apps.apple.com/app/id<ID>`; the iPhone also shows Safari's Smart App Banner from the `apple-itunes-app` meta tag.
 - **Support e-mail:** `support@eksigo.com`, forwarded to the owner by Cloudflare Email Routing (free, set up by the owner).
-- **Privacy manifest** (to update in the cleanup: no purchases, no audio sent) (`ios/Eksigo/PrivacyInfo.xcprivacy`, 2026-11-05): no tracking; required-reason APIs `UserDefaults` (CA92.1) and file metadata through `attributesOfItem` (C617.1). Data collected, for app functionality only: name, e-mail, user ID, purchases and usage counts (linked to the account); audio and other content (not linked, not kept). **App Store Connect's privacy labels must say the same.** Using another required-reason API means adding it here.
+- **Privacy manifest** (`ios/Eksigo/PrivacyInfo.xcprivacy`, updated 2026-11-13 for v2): no tracking; required-reason APIs `UserDefaults` (CA92.1) and file metadata through `attributesOfItem` (C617.1). Data collected, for app functionality only, linked to the account: name, e-mail, user ID, product interaction (listening and practice time) and other content (saved words and reviews, through sync). No purchases and no audio. **App Store Connect's privacy labels must say the same.** Using another required-reason API means adding it here.
 - **Privacy policy facts** (keep in step with the code; the website's privacy page is rewritten for v2, section 13 step 1):
   - Accounts are optional; with one, the server keeps the provider's user ID, e-mail and name (with Apple the user may withhold them), the plan and allowance use.
   - Synced data (section 7): listening history, saved words, missed sentences as text and timestamps, practice summaries. No audio.

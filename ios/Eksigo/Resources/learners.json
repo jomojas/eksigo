@@ -1,0 +1,82 @@
+[
+ {
+  "appleId": "262026947",
+  "title": "BBC 6 Minute English",
+  "author": "BBC Radio",
+  "feedUrl": "https://podcasts.files.bbci.co.uk/p02pc9tn.rss",
+  "artworkUrl": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts211/v4/ba/98/35/ba9835eb-1ef3-60e4-bf05-3d141b8d1c7a/mza_3844641997714022659.jpg/600x600bb.jpg",
+  "blurb": "Six minutes on one topic, with the key words explained"
+ },
+ {
+  "appleId": "262026989",
+  "title": "Learning English Conversations",
+  "author": "BBC Radio",
+  "feedUrl": "https://podcasts.files.bbci.co.uk/p02pc9zn.rss",
+  "artworkUrl": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts211/v4/9d/9f/9a/9d9f9ac2-18ed-fef1-6b5a-2370cb2d2eca/mza_16678796634995991769.jpg/600x600bb.jpg",
+  "blurb": "Everyday conversations from the BBC, with notes on the language"
+ },
+ {
+  "appleId": "1489301603",
+  "title": "English Learning for Curious Minds",
+  "author": "Leonardo English",
+  "feedUrl": "https://feeds.transistor.fm/leonardo-english-english-language-learning-for-curious-minds",
+  "artworkUrl": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts211/v4/23/a3/cd/23a3cd71-88ec-7bee-d0f7-d18752b1d5e1/mza_16883907159795938954.jpg/600x600bb.jpg",
+  "blurb": "Interesting stories told slowly and clearly"
+ },
+ {
+  "appleId": "1524310725",
+  "title": "American Stories",
+  "author": "VOA Learning English",
+  "feedUrl": "https://learningenglish.voanews.com/podcast/?zoneId=1581",
+  "artworkUrl": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts211/v4/e1/ed/74/e1ed7429-5b23-e357-311e-d54f6b076a2c/mza_4485705362810054336.jpg/600x600bb.jpg",
+  "blurb": "Classic American short stories, read slowly"
+ },
+ {
+  "appleId": "1505603790",
+  "title": "Simple English News Daily",
+  "author": "SEND7",
+  "feedUrl": "https://www.spreaker.com/show/4907677/episodes/feed",
+  "artworkUrl": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts221/v4/bb/23/e8/bb23e8d6-0b5b-813d-9fd3-450810d19718/mza_615770896190910080.jpg/600x600bb.jpg",
+  "blurb": "Short daily news in simple English"
+ },
+ {
+  "appleId": "751574016",
+  "title": "All Ears English Podcast",
+  "author": "Lindsay McMahon and Michelle Kaplan",
+  "feedUrl": "https://feeds.megaphone.fm/allearsenglish",
+  "artworkUrl": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts211/v4/cb/a1/13/cba113a7-999d-3c3d-a594-900adb69624e/mza_7992161192502469150.jpg/600x600bb.jpg",
+  "blurb": "Natural American conversation at a learner-friendly pace"
+ },
+ {
+  "appleId": "312059190",
+  "title": "Luke's English Podcast",
+  "author": "Luke Thompson",
+  "feedUrl": "https://feeds.acast.com/public/shows/62b0ada25c7ea10012f541cb",
+  "artworkUrl": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts112/v4/07/8c/30/078c3053-2fdf-bd8b-7065-0eb490e27029/mza_8948714377807896144.jpeg/600x600bb.jpg",
+  "blurb": "Long, relaxed episodes in British English"
+ },
+ {
+  "appleId": "1216879060",
+  "title": "Speak English Now",
+  "author": "Georgiana, founder of SpeakEnglishPodcast.com",
+  "feedUrl": "https://rss.libsyn.com/shows/95915/destinations/491662.xml",
+  "artworkUrl": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts221/v4/6e/fa/c8/6efac86f-d9ae-e31b-3ae6-ea6ca43380e6/mza_12347604421466927243.jpg/600x600bb.jpg",
+  "blurb": "Clear, slow American English for intermediate learners"
+ },
+ {
+  "appleId": "957223102",
+  "title": "Espresso English Podcast",
+  "author": "Shayna Oliveira",
+  "feedUrl": "https://rss.libsyn.com/shows/56803/destinations/212704.xml",
+  "artworkUrl": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts115/v4/83/4a/31/834a31b2-3941-72ae-1253-b9e430796451/mza_16021704442878844145.jpg/600x600bb.jpg",
+  "blurb": "Short lessons on everyday words and phrases"
+ },
+ {
+  "appleId": "600128442",
+  "title": "RealLife English",
+  "author": "RealLife English",
+  "feedUrl": "https://rss.libsyn.com/shows/41632/destinations/126390.xml",
+  "artworkUrl": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts112/v4/6a/16/96/6a16968c-e765-54f6-d222-ed5fbe16efdc/mza_17156835718007196421.png/600x600bb.jpg",
+  "blurb": "Real conversations about English and culture"
+ }
+]
