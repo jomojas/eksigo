@@ -6,31 +6,45 @@ struct MiniPlayer: View {
     @Environment(PlaybackCenter.self) private var center
     @Environment(AppUI.self) private var ui
 
+    /// From iOS 26.1 the mini player is the tab bar's accessory (the system draws its glass and leaves room for it);
+    /// before that it is our own card above the tab bar.
+    static var isTabAccessory: Bool {
+        if #available(iOS 26.1, *) { true } else { false }
+    }
+
     var body: some View {
         if let e = center.episode, center.mode != .missed {
-            HStack(spacing: 10) {
-                Artwork(episode: e, size: 40, radius: 6)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(e.title).font(Theme.text(14, .medium)).foregroundStyle(Theme.ink).lineLimit(1)
-                    Text("\(center.rate.speedText) · \(Stats.clock(max(0, center.duration - center.position))) left")
-                        .font(Theme.mono(12)).foregroundStyle(Theme.inkSubtle).lineLimit(1)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                IconButton(symbol: "gobackward.15", label: "Back 15 seconds", size: 19) { center.skip(-center.settings.skipBack) }
-                IconButton(symbol: center.isPlaying ? "pause.fill" : "play.fill", label: center.isPlaying ? "Pause" : "Play", size: 18) {
-                    center.togglePlayPause()
-                }
+            if Self.isTabAccessory {
+                row(e).padding(.horizontal, 10)
+            } else {
+                row(e)
+                    .padding(.leading, 8).padding(.trailing, 6).padding(.vertical, 6)
+                    .background(Theme.surface2, in: RoundedRectangle(cornerRadius: 12))
+                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.hairlineStrong))
+                    .padding(.horizontal, 8).padding(.bottom, 8)
             }
-            .padding(.leading, 8).padding(.trailing, 6).padding(.vertical, 6)
-            .background(Theme.surface2, in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.hairlineStrong))
-            .contentShape(RoundedRectangle(cornerRadius: 12))
-            .onTapGesture { ui.showPlayer = true }
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel("Now playing: \(e.title)")
-            .accessibilityAction(named: "Open the player") { ui.showPlayer = true }
-            .padding(.horizontal, 8).padding(.bottom, 8)
         }
+    }
+
+    private func row(_ e: PodcastEpisode) -> some View {
+        HStack(spacing: 10) {
+            Artwork(episode: e, size: Self.isTabAccessory ? 32 : 40, radius: 6)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(e.title).font(Theme.text(14, .medium)).foregroundStyle(Theme.ink).lineLimit(1)
+                Text("\(center.rate.speedText) · \(Stats.clock(max(0, center.duration - center.position))) left")
+                    .font(Theme.mono(11)).foregroundStyle(Theme.inkSubtle).lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            IconButton(symbol: "gobackward.15", label: "Back 15 seconds", size: 18) { center.skip(-center.settings.skipBack) }
+            IconButton(symbol: center.isPlaying ? "pause.fill" : "play.fill", label: center.isPlaying ? "Pause" : "Play", size: 18) {
+                center.togglePlayPause()
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { ui.showPlayer = true }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Now playing: \(e.title)")
+        .accessibilityAction(named: "Open the player") { ui.showPlayer = true }
     }
 }
 

@@ -16,6 +16,7 @@ struct RootView: View {
                     Tab("Review", systemImage: "rectangle.stack", value: AppUI.Tab.review) { stack { ReviewView() } }
                     Tab("Me", systemImage: "person", value: AppUI.Tab.me) { stack { MeView() } }
                 }
+                .miniPlayerAccessory(showing: hasMiniPlayer)
             } else {
                 WelcomeView()
             }
@@ -41,8 +42,22 @@ struct RootView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(spacing: 0) {
                 ToastView()
-                MiniPlayer()
+                if !MiniPlayer.isTabAccessory { MiniPlayer() }
             }
+        }
+    }
+
+    private var hasMiniPlayer: Bool { center.episode != nil && center.mode != .missed }
+}
+
+private extension View {
+    /// From iOS 26.1 the mini player sits in the tab bar's own accessory spot, so the system leaves room for it at
+    /// the bottom of every page (a view placed over the floating tab bar covered the last rows).
+    @ViewBuilder func miniPlayerAccessory(showing: Bool) -> some View {
+        if #available(iOS 26.1, *) {
+            tabViewBottomAccessory(isEnabled: showing) { MiniPlayer() }
+        } else {
+            self
         }
     }
 }
