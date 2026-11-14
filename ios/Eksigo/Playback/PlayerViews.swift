@@ -71,7 +71,7 @@ struct NowPlayingView: View {
                 GeometryReader { g in
                     ScrollView {
                         VStack(alignment: .leading, spacing: 0) {
-                            top(e, side: min(g.size.width - 56, g.size.height * 0.40))
+                            top(e, side: min(g.size.width - 56, g.size.height * 0.42))
                                 .frame(minHeight: g.size.height)
                             details(e)
                         }
@@ -112,12 +112,14 @@ struct NowPlayingView: View {
     // MARK: The first screen
 
     private func top(_ e: PodcastEpisode, side: CGFloat) -> some View {
-        // The controls sit together at the bottom; any spare height goes under the cover, not between them.
+        // Two groups: the cover with its title, and the controls together at the bottom. Spare height (an episode
+        // with no missed-sentences line has more) is split above the cover and between the groups, so the gap under
+        // the cover stays the same on every episode.
         VStack(alignment: .leading, spacing: 0) {
+            Spacer(minLength: 0)
             Artwork(episode: e, size: side, radius: 16)
                 .shadow(color: .black.opacity(0.35), radius: 24, y: 14)
                 .frame(maxWidth: .infinity)
-            Spacer(minLength: 36)
             VStack(alignment: .leading, spacing: 10) {
                 Text(e.title).font(Theme.display(21)).foregroundStyle(Theme.ink).lineLimit(2)
                 let missed = missedHere(e)
@@ -137,7 +139,11 @@ struct NowPlayingView: View {
                     .disabled(!missed.contains(where: center.playable))
                 }
             }
-            scrubber.padding(.top, 18)
+            .padding(.top, 28)
+            // Two spacers here to the one above the cover: a third of the spare height above, two thirds here.
+            Spacer(minLength: 9)
+            Spacer(minLength: 9)
+            scrubber
             controls.padding(.top, 2)
             if let next = center.queue.first {
                 Button { showUpNext = true } label: {
