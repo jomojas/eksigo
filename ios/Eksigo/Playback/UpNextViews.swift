@@ -67,8 +67,11 @@ struct UpNextView: View {
         .navigationTitle(asPage ? "Up Next" : "")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { if asPage { ToolbarItem(placement: .topBarTrailing) { clearButton } } }
-        .confirmationDialog("Clear Up Next?", isPresented: $confirmClear, titleVisibility: .visible) {
-            Button("Clear \(plural(center.queue.count, "episode"))", role: .destructive) { center.clearQueue() }
+        .alert("Clear Up Next?", isPresented: $confirmClear) {
+            Button("Cancel", role: .cancel) {}
+            Button("Clear", role: .destructive) { center.clearQueue() }
+        } message: {
+            Text("This removes \(plural(center.queue.count, "episode")) from Up Next.")
         }
     }
 
