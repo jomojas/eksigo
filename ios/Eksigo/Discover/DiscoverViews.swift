@@ -6,14 +6,14 @@ import SwiftUI
 struct DiscoverView: View {
     @Query(sort: \Subscription.subscribedAt) private var subscriptions: [Subscription]
     @State private var top: [Listing] = []
-    @State private var searching = false
     private let learners = Directory.forLearners()
     private let feeds = FeedCache.shared
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                Button { searching = true } label: {
+                // Pushed by value like the show it leads to, so the show lands above Search, not under it.
+                NavigationLink(value: Route.search) {
                     HStack(spacing: 6) {
                         Image(systemName: "magnifyingglass")
                         Text("Shows, episodes or an RSS link")
@@ -84,7 +84,6 @@ struct DiscoverView: View {
         .navigationTitle("Discover")
         // The title in the bar's own row, not a row below it: less empty space at the top.
         .toolbarTitleDisplayMode(.inlineLarge)
-        .navigationDestination(isPresented: $searching) { SearchView() }
         .task {
             if top.isEmpty { top = (try? await Directory.top()) ?? [] }
             await feeds.load(subscriptions.compactMap { URL(string: $0.feedUrl) })
@@ -360,7 +359,7 @@ struct SearchView: View {
         .padding(.horizontal, 16).padding(.top, 8)
         .canvas()
         .toolbar(.hidden, for: .navigationBar)
-        .onAppear { focused = true }
+        .onAppear { if text.isEmpty { focused = true } }
         .onChange(of: kind) { Task { await search() } }
     }
 

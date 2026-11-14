@@ -76,6 +76,7 @@ enum Route: Hashable {
     case forLearners
     /// Apple's top shows, all or one topic (an Apple genre id).
     case topShows(Int?)
+    case search
 
     @ViewBuilder var view: some View {
         switch self {
@@ -89,6 +90,7 @@ enum Route: Hashable {
         case .missedList: MissedListView(asPage: true)
         case .upNext: UpNextView(asPage: true)
         case .forLearners: ForLearnersView()
+        case .search: SearchView()
         case .topShows(let genre): TopShowsView(genre: genre)
         }
     }
