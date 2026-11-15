@@ -721,12 +721,15 @@ struct Session {
     answers: Vec<dictation::Answer>,
     /// Sentences flagged for the review.
     flagged: Vec<i64>,
+    /// Sentences that go to the phone; None when this attempt's can't (an older attempt, or the learner's own file).
+    to_phone: Option<Vec<i64>>,
 }
 
 fn session(conn: &rusqlite::Connection, attempt: dictation::Attempt) -> anyhow::Result<Session> {
     let answers = dictation::answers(conn, attempt.id)?;
     let flagged = dictation::flagged(conn, attempt.id)?;
-    Ok(Session { attempt, answers, flagged })
+    let to_phone = dictation::to_phone(conn, attempt.id)?;
+    Ok(Session { attempt, answers, flagged, to_phone })
 }
 
 /// Opens dictation of an item: the unfinished attempt, or a new one (`again` starts a new one regardless).
@@ -788,6 +791,15 @@ fn dictation_session(db: State<Db>, attempt_id: i64) -> CmdResult<Session> {
     let conn = db.conn();
     let attempt = dictation::attempt(&conn, attempt_id).map_err(err)?;
     session(&conn, attempt).map_err(err)
+}
+
+/// Sends sentence `idx` to the phone's missed sentences, or keeps it here; returns what goes now.
+#[tauri::command]
+fn dictation_to_phone(app: AppHandle, db: State<Db>, attempt_id: i64, idx: i64, send: bool) -> CmdResult<Option<Vec<i64>>> {
+    let conn = db.conn();
+    dictation::send_to_phone(&conn, attempt_id, idx, send).map_err(err)?;
+    let _ = app.emit("practice", ());
+    dictation::to_phone(&conn, attempt_id).map_err(err)
 }
 
 /// Flags sentence `idx` for the review, or takes the flag off.
@@ -1131,6 +1143,7 @@ pub fn run() {
             dictation_summary,
             dictation_session,
             dictation_flag,
+            dictation_to_phone,
             dictation_attempts,
             dictation_in_progress,
             dictionary_lookup,

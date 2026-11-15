@@ -164,8 +164,8 @@ fn episode_json(r: &rusqlite::Row, from: usize) -> rusqlite::Result<Value> {
     }))
 }
 
-/// The sentences missed in the latest attempt at each podcast episode: wrong words, or flagged. They become the
-/// phone's listening playlist. The learner's own files are left out: the phone can't play them.
+/// The sentences missed in the latest attempt at each podcast episode that go to the phone (`dictation::TO_PHONE`):
+/// wrong words or flagged, as the learner chose. They become the phone's listening playlist. The learner's own files are left out: the phone can't play them.
 fn missed(conn: &Connection) -> Result<Vec<Record>> {
     let mut st = conn.prepare(&format!(
         "SELECT {EPISODE}, n.idx, s2.start_ms, s2.end_ms, n.original, n.typed, n.answered_at,
@@ -175,9 +175,10 @@ fn missed(conn: &Connection) -> Result<Vec<Record>> {
          JOIN answers n ON n.attempt_id = a.id
          JOIN sentences s2 ON s2.item_id = a.item_id AND s2.idx = n.idx
          WHERE a.id = (SELECT id FROM attempts WHERE item_id = a.item_id ORDER BY started_at DESC, id DESC LIMIT 1)
-           AND ((n.kind = 'typed' AND n.credit < n.total)
-                OR EXISTS (SELECT 1 FROM flagged f WHERE f.attempt_id = a.id AND f.idx = n.idx))
-         ORDER BY a.id, n.idx"
+           AND {} AND {}
+         ORDER BY a.id, n.idx",
+        crate::dictation::PHONE_CANDIDATE,
+        crate::dictation::TO_PHONE
     ))?;
     let rows = st.query_map([], |r| {
         let mut data = episode_json(r, 0)?;

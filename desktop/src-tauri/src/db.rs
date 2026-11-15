@@ -219,6 +219,14 @@ const MIGRATIONS: &[&str] = &[
         SELECT day, kind, seconds FROM practice_days
         UNION ALL
         SELECT json_extract(data, '$.day'), json_extract(data, '$.kind'), json_extract(data, '$.seconds') FROM synced WHERE kind = 'day';",
+    // 15: which sentences with mistakes go to the phone (sync.rs `missed`), when the learner chose; otherwise
+    // `dictation::TO_PHONE` decides: real mistakes and flags go, spelling slips stay.
+    "CREATE TABLE phone_picks (
+        attempt_id INTEGER NOT NULL REFERENCES attempts(id) ON DELETE CASCADE,
+        idx        INTEGER NOT NULL,
+        send       INTEGER NOT NULL,
+        PRIMARY KEY (attempt_id, idx)
+    );",
 ];
 
 pub struct Db(pub Mutex<Connection>);
