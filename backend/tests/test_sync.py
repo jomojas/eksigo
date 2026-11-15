@@ -37,6 +37,14 @@ def test_the_latest_change_wins(client, auth_headers):
     assert post(client, auth_headers, 0)["changes"][0]["data"]["meaning"] == "newer"
 
 
+def test_a_refused_change_comes_back_even_past_the_cursor(client, auth_headers):
+    first = post(client, auth_headers, 0, [word("gist", "要点", 1000)])
+    gone = post(client, auth_headers, first["cursor"], [{"kind": "word", "key": "gist", "changedAt": 3000, "deleted": True}])
+    # Sent again with an older time by a device that is already past the deletion: it hears it was refused.
+    again = post(client, auth_headers, gone["cursor"], [word("gist", "要点", 2000)])
+    assert again["changes"] == [{"kind": "word", "key": "gist", "changedAt": 3000, "deleted": True}]
+
+
 def test_a_deletion_reaches_the_other_devices(client, auth_headers):
     first = post(client, auth_headers, 0, [word("gist", "要点", 1000)])
     post(client, auth_headers, first["cursor"], [{"kind": "word", "key": "gist", "changedAt": 2000, "deleted": True}])

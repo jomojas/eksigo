@@ -101,4 +101,18 @@ struct PracticeTests {
         #expect(c.bytes == 25_079_747)
         #expect(WordContext.from(json: ["sentence": "No size."]).bytes == nil)
     }
+
+    /// A sentence the phone can't play (another file, the learner's own audio) isn't asked as a gap: the meaning is.
+    @Test func aWordWhoseSentenceCantPlayIsAskedByItsMeaning() throws {
+        let all = ["one", "two", "three", "four"].map { Self.word($0, level: "familiar", due: Self.now - 10) }
+        var rng = SystemRandomNumberGenerator()
+        var item = try #require(PracticeRules.item(all[0], all: all, now: Self.now, random: &rng))
+        #expect(item.mode == "recall")
+        item.heard = false
+        #expect(item.mode == "pick")
+        // Too few other words for four meanings: still asked as a gap.
+        var alone = try #require(PracticeRules.item(all[0], all: [all[0]], now: Self.now, random: &rng))
+        alone.heard = false
+        #expect(alone.mode == "recall")
+    }
 }

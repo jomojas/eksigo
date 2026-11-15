@@ -28,6 +28,7 @@ def apply(conn: sqlite3.Connection, user_id: int, since: int, changes: list[dict
     if len(changes) > MAX_CHANGES:
         raise APIError(400, "bad_request", f"At most {MAX_CHANGES} changes per request")
     mine: set[tuple[str, str]] = set()  # stored from this request: the device already has them
+    refused: list[tuple[str, str]] = []  # older than what's stored: the stored version goes back, whatever the cursor
     with conn:
         conn.execute("INSERT OR IGNORE INTO sync_accounts (user_id) VALUES (?)", (user_id,))
         acc = conn.execute("SELECT seq, bytes FROM sync_accounts WHERE user_id = ?", (user_id,)).fetchone()
@@ -46,7 +47,8 @@ def apply(conn: sqlite3.Connection, user_id: int, since: int, changes: list[dict
             old = conn.execute("SELECT data, changed_at FROM sync_records WHERE user_id = ? AND kind = ? AND key = ?",
                                (user_id, kind, key)).fetchone()  # fmt: skip
             if old is not None and old["changed_at"] > at:
-                continue  # changed later on another device: that version comes back in the answer
+                refused.append((kind, key))  # changed later on another device: that version comes back in the answer
+                continue
             total += _size(kind, key, data) - (_size(kind, key, old["data"]) if old else 0)
             if total > MAX_ACCOUNT:
                 raise APIError(413, "sync_full", "This account has reached the sync limit")
@@ -68,6 +70,20 @@ def apply(conn: sqlite3.Connection, user_id: int, since: int, changes: list[dict
         if (r["kind"], r["key"]) in mine:
             continue
         item: dict[str, Any] = {"kind": r["kind"], "key": r["key"], "changedAt": r["changed_at"]}
+        if r["deleted"]:
+            item["deleted"] = True
+        else:
+            item["data"] = json.loads(r["data"])
+        out.append(item)
+    # A refused change whose newer version the device has already been past (its cursor is beyond it) would
+    # otherwise never come back, and the device would believe the server took it.
+    listed = {(c["kind"], c["key"]) for c in out}
+    for kind, key in dict.fromkeys(refused):
+        if (kind, key) in listed:
+            continue
+        r = conn.execute("SELECT data, deleted, changed_at FROM sync_records WHERE user_id = ? AND kind = ? AND key = ?",
+                         (user_id, kind, key)).fetchone()  # fmt: skip
+        item = {"kind": kind, "key": key, "changedAt": r["changed_at"]}
         if r["deleted"]:
             item["deleted"] = True
         else:

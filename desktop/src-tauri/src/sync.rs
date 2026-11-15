@@ -31,6 +31,11 @@ const LAST: &str = "sync.last";
 const CHUNK: usize = 400;
 /// Kinds this computer makes. Anything else that arrives is kept in `synced`.
 const MINE: [&str; 5] = ["word", "review", "missed", "practice", "day"];
+/// Kinds only this computer changes: each change it sends is the newest there is, so it goes with the time of
+/// sending. (A missed sentence put back on the phone would otherwise carry the time it was answered, older than
+/// when it was taken off, and the server would keep it deleted.) Words and reviews keep their own times, since the
+/// phone changes them too.
+const ONLY_HERE: [&str; 3] = ["missed", "practice", "day"];
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Record {
@@ -291,7 +296,13 @@ pub fn changes(conn: &Connection, records: &[Record]) -> Result<Vec<(Change, Opt
         let id = (r.kind.to_string(), r.key.clone());
         if sent.get(&id) != Some(&h) {
             out.push((
-                Change { kind: id.0.clone(), key: id.1.clone(), changed_at: r.changed_at.unwrap_or(now), deleted: false, data: Some(r.data.clone()) },
+                Change {
+                    kind: id.0.clone(),
+                    key: id.1.clone(),
+                    changed_at: if ONLY_HERE.contains(&r.kind) { now } else { r.changed_at.unwrap_or(now) },
+                    deleted: false,
+                    data: Some(r.data.clone()),
+                },
                 Some(h),
             ));
         }
@@ -361,6 +372,11 @@ pub fn apply(conn: &Connection, device: &str, incoming: &[Change]) -> Result<()>
                 let own = d["device"].as_str() == Some(device) || (MINE.contains(&kind) && mine.contains(&(c.kind.clone(), c.key.clone())));
                 if c.deleted {
                     conn.execute("DELETE FROM synced WHERE kind = ?1 AND key = ?2", params![kind, c.key])?;
+                    // The server has one of this computer's own records as deleted while this computer still has it
+                    // (it refused a later copy): send it again.
+                    if ONLY_HERE.contains(&kind) && mine.contains(&(c.kind.clone(), c.key.clone())) {
+                        conn.execute("UPDATE sync_sent SET hash = '' WHERE kind = ?1 AND key = ?2", params![kind, c.key])?;
+                    }
                 } else if !own {
                     conn.execute(
                         "INSERT INTO synced (kind, key, data, changed_at) VALUES (?1, ?2, ?3, ?4)
@@ -852,6 +868,41 @@ mod tests {
         c.execute("DELETE FROM saved_words", []).unwrap();
         let ch: Vec<_> = changes(&c, &build(&c, "d").unwrap()).unwrap().into_iter().map(|(c, _)| (c.kind, c.deleted)).collect();
         assert_eq!(ch, [("review".to_string(), true), ("word".to_string(), true)]);
+    }
+
+    /// Taken off the phone, then put back: the second send must be newer than the deletion, or the server keeps
+    /// the deletion and the phone never gets the sentence again.
+    #[test]
+    fn a_missed_sentence_put_back_on_the_phone_goes_with_the_time_it_is_sent() {
+        let db = Db::open_in_memory().unwrap();
+        let c = db.conn();
+        seed(&c);
+        sent_all(&c, &build(&c, "d").unwrap());
+        crate::dictation::send_to_phone(&c, 1, 1, false).unwrap();
+        let off = changes(&c, &build(&c, "d").unwrap()).unwrap();
+        assert_eq!((off[0].0.kind.as_str(), off[0].0.deleted), ("missed", true));
+        sent_all(&c, &build(&c, "d").unwrap());
+        crate::dictation::send_to_phone(&c, 1, 1, true).unwrap();
+        let back = changes(&c, &build(&c, "d").unwrap()).unwrap();
+        assert_eq!(back[0].0.kind, "missed");
+        assert!(back[0].0.changed_at >= off[0].0.changed_at, "answered at 200 s, but sent now");
+        // Words keep their own time: the phone changes them too.
+        c.execute("UPDATE saved_words SET note = 'x', updated_at = 400 WHERE id = 1", []).unwrap();
+        let w = changes(&c, &build(&c, "d").unwrap()).unwrap();
+        assert!(w.iter().any(|(ch, _)| ch.kind == "word" && ch.changed_at == 400_000));
+    }
+
+    /// The server says one of this computer's missed sentences is deleted while it's still here: it goes again.
+    #[test]
+    fn a_missed_sentence_the_server_has_deleted_is_sent_again() {
+        let db = Db::open_in_memory().unwrap();
+        let c = db.conn();
+        seed(&c);
+        sent_all(&c, &build(&c, "d").unwrap());
+        let gone = Change { kind: "missed".into(), key: "https://f/1.mp3|1".into(), changed_at: 9_999, deleted: true, data: None };
+        apply(&c, "d", &[gone]).unwrap();
+        let again = changes(&c, &build(&c, "d").unwrap()).unwrap();
+        assert_eq!(again.iter().map(|(ch, _)| (ch.kind.as_str(), ch.deleted)).collect::<Vec<_>>(), [("missed", false)]);
     }
 
     #[test]
