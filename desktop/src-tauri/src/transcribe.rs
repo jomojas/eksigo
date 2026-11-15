@@ -444,7 +444,13 @@ impl Worker {
                 }
                 continue;
             };
-            match self.transcribe(item_id) {
+            // A bug in one episode mustn't stop the thread: everything after it would wait forever.
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.transcribe(item_id))).unwrap_or_else(|p| {
+                self.engine = None; // it may have been mid-use; load it afresh
+                let why = p.downcast_ref::<&str>().map(|s| s.to_string()).or_else(|| p.downcast_ref::<String>().cloned());
+                Err(anyhow!("Transcription stopped on an error ({}). Try again, or tell us about this episode.", why.unwrap_or_default()))
+            });
+            match result {
                 Ok(Next::Done) => {}
                 Ok(Next::Yield) => self.queue.insert(1.min(self.queue.len()), item_id),
                 Ok(Next::Cancelled) => {}
