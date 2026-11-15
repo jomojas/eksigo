@@ -239,6 +239,58 @@ pub fn to_phone(conn: &Connection, attempt_id: i64) -> Result<Option<Vec<i64>>> 
     Ok(Some(rows))
 }
 
+/// A sentence to hear again: one with mistakes in the latest attempt at an episode, as chosen for the phone.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MissedSentence {
+    pub item_id: i64,
+    pub attempt_id: i64,
+    pub title: String,
+    pub source: String,
+    pub artwork_url: Option<String>,
+    /// The audio on this computer.
+    pub path: String,
+    pub start_ms: i64,
+    pub end_ms: i64,
+    pub answered_at: i64,
+    pub answer: Answer,
+}
+
+/// The sentences to hear again (`TO_PHONE`), newest dictation first, in order within each episode. Only episodes
+/// whose audio is still on this computer, the learner's own files included.
+pub fn missed(conn: &Connection) -> Result<Vec<MissedSentence>> {
+    let mut st = conn.prepare(&format!(
+        "SELECT n.idx, n.kind, n.original, n.typed, n.plays, n.credit, n.total, n.spelling, n.marks,
+                i.id, a.id, i.title, i.source, COALESCE(e.artwork_url, s.artwork_url), i.path, se.start_ms, se.end_ms,
+                n.answered_at, a.started_at
+         FROM attempts a
+         JOIN items i ON i.id = a.item_id
+         LEFT JOIN episodes e ON e.id = i.episode_id LEFT JOIN shows s ON s.id = e.show_id
+         JOIN answers n ON n.attempt_id = a.id
+         JOIN sentences se ON se.item_id = a.item_id AND se.idx = n.idx
+         WHERE a.id = (SELECT id FROM attempts WHERE item_id = a.item_id ORDER BY started_at DESC, id DESC LIMIT 1)
+           AND i.path IS NOT NULL AND {PHONE_CANDIDATE} AND {TO_PHONE}
+         ORDER BY a.started_at DESC, a.id DESC, n.idx"
+    ))?;
+    let rows = st
+        .query_map([], |r| {
+            Ok(MissedSentence {
+                answer: answer_from(r)?,
+                item_id: r.get(9)?,
+                attempt_id: r.get(10)?,
+                title: r.get(11)?,
+                source: r.get(12)?,
+                artwork_url: r.get(13)?,
+                path: r.get(14)?,
+                start_ms: r.get(15)?,
+                end_ms: r.get(16)?,
+                answered_at: r.get(17)?,
+            })
+        })?
+        .collect::<rusqlite::Result<_>>()?;
+    Ok(rows)
+}
+
 /// The learner's choice: sentence `idx` goes to the phone, or doesn't.
 pub fn send_to_phone(conn: &Connection, attempt_id: i64, idx: i64, send: bool) -> Result<()> {
     conn.execute(
@@ -456,9 +508,14 @@ mod tests {
         flag(&c, a.id, 2, true).unwrap();
         assert_eq!(to_phone(&c, a.id).unwrap(), Some(vec![2, 3]), "the learner's choices win; a flagged sentence goes");
 
+        let m = missed(&c).unwrap();
+        assert_eq!(m.iter().map(|x| x.answer.idx).collect::<Vec<_>>(), vec![2, 3], "the same sentences to hear again here");
+        assert_eq!((m[0].path.as_str(), m[0].start_ms, m[0].end_ms), ("/x.mp3", 2000, 2900));
+
         finish(&c, a.id).unwrap();
         let b = start(&c, 1, true).unwrap();
         assert_eq!(to_phone(&c, a.id).unwrap(), None, "only the latest attempt goes");
+        assert!(missed(&c).unwrap().is_empty(), "a new attempt starts over");
         assert_eq!(to_phone(&c, b.id).unwrap(), Some(vec![]));
     }
 

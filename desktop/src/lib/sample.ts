@@ -25,6 +25,7 @@ import type {
   Added,
   Answer,
   AnswerKind,
+  MissedSentence,
   Lookup,
   NewWord,
   SavedWord,
@@ -999,6 +1000,22 @@ export const sample = {
     const i = savedWords.findIndex((x) => x.id === id);
     if (i >= 0) savedWords.splice(i, 1);
     emit("words", null);
+  },
+
+  missedSentences(): MissedSentence[] {
+    const latest = new Map<number, Attempt>();
+    for (const a of attempts) if (!latest.has(a.itemId) || latest.get(a.itemId)!.startedAt <= a.startedAt) latest.set(a.itemId, a);
+    const out: MissedSentence[] = [];
+    for (const a of [...latest.values()].sort((x, y) => y.startedAt - x.startedAt)) {
+      const item = items.find((i) => i.id === a.itemId);
+      const s = sample.session(a.id);
+      for (const n of s.answers) {
+        const sen = transcripts.get(a.itemId)?.sentences[n.idx];
+        if (!item?.path || !sen || !s.toPhone?.includes(n.idx)) continue;
+        out.push({ itemId: a.itemId, attemptId: a.id, title: item.title, source: item.source, artworkUrl: item.artworkUrl ?? null, path: item.path, startMs: sen.startMs, endMs: sen.endMs, answeredAt: a.updatedAt, answer: n });
+      }
+    }
+    return out;
   },
 
   toPhone(attemptId: number, idx: number, send: boolean): number[] | null {

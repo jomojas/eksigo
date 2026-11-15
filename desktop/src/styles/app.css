@@ -1991,3 +1991,15 @@ select.btn {
   color: var(--ink-subtle);
   white-space: nowrap;
 }
+
+/* Missed sentences, heard again: the done mark. */
+.missed-done-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 9999px;
+  color: var(--semantic-success);
+  background: color-mix(in srgb, var(--semantic-success) 14%, transparent);
+}

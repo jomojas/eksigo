@@ -17,6 +17,7 @@ import { aiProblem, backend, on, type AiProblem, type AiStatus, type Answer, typ
 import { dictationPath, percent, useDictationSettings } from "../lib/dictation";
 import { clock, plural } from "../lib/format";
 import { usePlayer } from "../lib/playback";
+import { useMissed } from "./Missed";
 
 type Filter = "all" | "flagged" | "mistakes";
 
@@ -68,6 +69,9 @@ export function Review({
     const a = answers.get(i);
     return !!a && (mistaken(i) || (flagged.has(i) && a.kind !== "ad"));
   };
+  const navigate = useNavigate();
+  // This episode's sentences to hear again (the latest attempt only).
+  const hearAgain = useMissed(item.id)?.filter((m) => m.attemptId === s.attempt.id).length ?? 0;
   const sendToPhone = (i: number, send: boolean) =>
     backend.toPhone(s.attempt.id, i, send).then((x) => setToPhone(x ? new Set(x) : null), () => {});
   const player = usePlayer(item.path);
@@ -189,6 +193,15 @@ export function Review({
           Select words in the original to look them up{ai?.using ? <> · <Kbd keys="?" /> asks about a sentence</> : ""}. <span className="w w-missing">Boxed</span> words were missed, <span className="w w-wrong">red</span> ones wrong,{" "}
           <span className="w w-spelling">underlined</span> ones misspelled (half a word).
           {s.ads > 0 && ` ${plural(s.ads, "sentence")} skipped as ads.`}
+          {hearAgain > 0 && (
+            <>
+              {" "}
+              <button type="button" className="btn btn-xs" style={{ marginLeft: 4 }} onClick={() => navigate(`/missed?item=${item.id}`)}>
+                <Icon name="replay" size={11} />
+                Hear {hearAgain === 1 ? "it" : `the ${hearAgain}`} again
+              </button>
+            </>
+          )}
           {toPhone && rows.some(sendable) && (
             <>
               {" "}

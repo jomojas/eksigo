@@ -1,14 +1,15 @@
 // Today: what to practise next, and the week so far.
 
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { Art } from "../components/Art";
 import { Icon } from "../components/Icon";
 import { addAudio, Kbd, Page } from "../components/Shell";
-import { backend, inApp, on, type Heard, type NewEpisode, type PracticeCounts, type Week } from "../lib/backend";
+import { backend, inApp, on, type Heard, type MissedSentence, type NewEpisode, type PracticeCounts, type Week } from "../lib/backend";
 import { dictationPath, useInProgress } from "../lib/dictation";
 import { clock, plural, practised, whenDay } from "../lib/format";
 import { usePracticeCounts } from "../lib/words";
+import { useMissed } from "./Missed";
 
 /** Episodes heard on the phone in the last three days (design D20); empty without an account. */
 function useHeard(): Heard[] | null {
@@ -207,6 +208,14 @@ export function Today() {
   const first = continuing[0];
   const resumeAt = first ? Math.min(first.position + 1, first.sentences || first.position + 1) : 0;
 
+  const missed = useMissed();
+  // One row per episode, newest dictation first (the order they come in).
+  const missedGroups = useMemo(() => {
+    const by = new Map<number, MissedSentence[]>();
+    for (const m of missed ?? []) by.set(m.itemId, [...(by.get(m.itemId) ?? []), m]);
+    return [...by.values()];
+  }, [missed]);
+
   const heard = useHeard();
   const [opening, setOpening] = useState<string | null>(null);
   const [heardError, setHeardError] = useState<string | null>(null);
@@ -241,16 +250,18 @@ export function Today() {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key === "Enter" && first) navigate(dictationPath(first.itemId));
       else if (e.key.toLowerCase() === "p" && words?.total) navigate("/words/practice");
+      else if (e.key.toLowerCase() === "h" && missed?.length) navigate("/missed");
       else return;
       e.preventDefault();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [first, words, navigate]);
+  }, [first, words, missed, navigate]);
 
   const keys: [string, string][] = [];
   if (first) keys.push(["Enter", "Resume"]);
   if (words?.total) keys.push(["P", "Practise words"]);
+  if (missed?.length) keys.push(["H", "Hear missed sentences"]);
   keys.push(["Mod O", "Add audio"]);
 
   return (
@@ -301,6 +312,33 @@ export function Today() {
                 <Kbd keys="Enter" />
               </button>
             </article>
+          )}
+
+          {missedGroups.length > 0 && (
+            <section aria-labelledby="missed">
+              <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
+                <h2 id="missed" className="eyebrow" style={{ flexGrow: 1 }}>
+                  Hear again · {plural(missed!.length, "missed sentence")}
+                </h2>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => navigate("/missed")}>
+                  Hear all
+                  <Kbd keys="H" />
+                </button>
+              </div>
+              <div className="panel" style={{ overflow: "hidden" }}>
+                {missedGroups.map((g) => (
+                  <Row
+                    key={g[0].itemId}
+                    art={<Art url={g[0].artworkUrl} size={36} file={g[0].source === "My files"} />}
+                    title={g[0].title}
+                    sub={[plural(g.length, "sentence"), g[0].source, whenDay(g[0].answeredAt)].filter(Boolean).join(" · ")}
+                    action="Hear again"
+                    onOpen={() => navigate(`/library/${g[0].itemId}/review/${g[0].attemptId}`)}
+                    onAction={() => navigate(`/missed?item=${g[0].itemId}`)}
+                  />
+                ))}
+              </div>
+            </section>
           )}
 
           {heard && heard.length > 0 && (
