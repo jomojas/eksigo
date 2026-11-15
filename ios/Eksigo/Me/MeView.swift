@@ -15,7 +15,7 @@ struct MeView: View {
                     HStack(spacing: 12) {
                         Avatar(letter: account.isSignedIn ? account.initial : nil, size: 56)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(account.isSignedIn ? account.displayName : "Sign in to sync").font(Theme.text(20, .semibold)).foregroundStyle(Theme.ink)
+                            Text(account.isSignedIn ? account.displayName : L("Sign in to sync")).font(Theme.text(20, .semibold)).foregroundStyle(Theme.ink)
                             SyncLine()
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -88,13 +88,13 @@ struct SyncLine: View {
                 Text("Bring your words from the computer")
             case .syncing:
                 ProgressView().controlSize(.mini)
-                Text(syncer.first ? "Adding this phone to your account…" : "Syncing…")
+                Text(L(syncer.first ? "Adding this phone to your account…" : "Syncing…"))
             case .failed:
                 Dot(color: Theme.error)
-                Text(syncer.last.map { "Last synced \($0.agoText)" } ?? "Not synced yet")
+                Text(syncer.last.map { L("Last synced %@", $0.agoText) } ?? L("Not synced yet"))
             case .synced:
                 Dot(color: Theme.success)
-                Text(syncer.last.map { "Synced \($0.agoText)" } ?? "Synced")
+                Text(syncer.last.map { L("Synced %@", $0.agoText) } ?? L("Synced"))
             }
         }
         .font(Theme.text(13)).foregroundStyle(Theme.inkSubtle).lineLimit(1)
@@ -130,7 +130,7 @@ struct AccountView: View {
                             SyncLine()
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        Button(syncer.shown.isFailed ? "Try now" : "Sync now") { syncer.now() }
+                        Button(L(syncer.shown.isFailed ? "Try now" : "Sync now")) { syncer.now() }
                             .buttonStyle(.eks(.secondary, small: true))
                             .disabled(syncer.shown == .syncing)
                     }

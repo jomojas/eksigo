@@ -90,7 +90,7 @@ struct WelcomeView: View {
     private func welcomeLine(_ symbol: String, _ color: Color, _ text: String) -> some View {
         HStack(spacing: 12) {
             IconTile(symbol, color: color)
-            Text(text).font(Theme.text(16)).foregroundStyle(Theme.ink)
+            Text(L(text)).font(Theme.text(16)).foregroundStyle(Theme.ink)
         }
     }
 }

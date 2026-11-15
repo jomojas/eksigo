@@ -17,7 +17,7 @@ struct MissedListView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 if groups.count > 1 {
-                    ChipRow(items: [("all", "All \(groups.reduce(0) { $0 + $1.items.count })")] + groups.map { ($0.id, "\(short($0.ref.episode)) · \($0.items.count)") },
+                    ChipRow(items: [("all", L("All %lld", groups.reduce(0) { $0 + $1.items.count }))] + groups.map { ($0.id, "\(short($0.ref.episode)) · \($0.items.count)") },
                             selection: $filter)
                 }
                 if groups.isEmpty {
@@ -65,6 +65,51 @@ struct MissedListView: View {
         }
         .padding(12)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Sentence \(m.idx + 1): \(m.text). You typed: \(m.typed.isEmpty ? "nothing" : m.typed)")
+        .accessibilityLabel(L("Sentence %lld: %@. You typed: %@", m.idx + 1, m.text, m.typed.isEmpty ? L("nothing") : m.typed))
+    }
+}
+
+/// The missed sentences waiting from the computer, to read: a tap opens them.
+struct MissedCard: View {
+    @Environment(RecordStore.self) private var store
+
+    var body: some View {
+        let groups = MissedGroup.groups(store.missed)
+        let all = groups.flatMap(\.items)
+        NavigationLink(value: Route.missedList) {
+            VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(MissedGroup.when(groups.first?.latest ?? 0).uppercased())
+                        .font(Theme.text(12, .semibold)).tracking(0.3).foregroundStyle(.white.opacity(0.8))
+                    Text(L(all.count, "%lld sentence you missed", "%lld sentences you missed")).font(Theme.display(22)).foregroundStyle(.white)
+                }
+                HStack {
+                    Text(from(groups)).font(Theme.text(15)).foregroundStyle(.white.opacity(0.85)).lineLimit(2)
+                    Spacer(minLength: 12)
+                    Label("Read", systemImage: "text.alignleft").font(Theme.text(15, .semibold))
+                        .foregroundStyle(Theme.missedInk)
+                        .padding(.horizontal, 16).frame(height: 36)
+                        .background(.white, in: Capsule())
+                }
+            }
+            .padding(18)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+                ZStack(alignment: .topTrailing) {
+                    Theme.missedGradient
+                    Circle().fill(.white.opacity(0.12)).frame(width: 130, height: 130).offset(x: 24, y: -24)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Shows the sentences and what you typed")
+    }
+
+    /// "Why do we itch?", "Why do we itch? and 2 more".
+    private func from(_ groups: [MissedGroup]) -> String {
+        guard let first = groups.first?.ref.episode else { return "" }
+        return groups.count == 1 ? first : L("%@ and %lld more", first, groups.count - 1)
     }
 }

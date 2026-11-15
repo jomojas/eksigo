@@ -66,7 +66,7 @@ struct DiscoverView: View {
                                 VStack(alignment: .leading) {
                                     Image(systemName: t.symbol).font(.system(size: 20, weight: .semibold))
                                     Spacer(minLength: 0)
-                                    Text(t.name).font(Theme.display(17)).lineLimit(1).minimumScaleFactor(0.8)
+                                    Text(L(t.name)).font(Theme.display(17)).lineLimit(1).minimumScaleFactor(0.8)
                                 }
                                 .foregroundStyle(.white)
                                 .padding(12).frame(maxWidth: .infinity, alignment: .leading).frame(height: 88)
@@ -226,7 +226,7 @@ struct TopShowsView: View {
         .task(id: genre) {
             shows = []
             error = nil
-            do { shows = try await Directory.top(genre: genre) } catch { self.error = "Couldn't load the chart: \(error.localizedDescription)" }
+            do { shows = try await Directory.top(genre: genre) } catch { self.error = L("Couldn't load the chart: %@", error.localizedDescription) }
         }
     }
 }
@@ -263,7 +263,7 @@ struct ListingRow: View {
                            ProgressView().frame(width: 44, height: 44)
                        } else {
                            RoundButton(symbol: subscribed ? "checkmark" : "plus",
-                                       label: subscribed ? "Subscribed to \(listing.title)" : "Subscribe to \(listing.title)") {
+                                       label: L(subscribed ? "Subscribed to %@" : "Subscribe to %@", listing.title)) {
                                Task { await toggle(subscribed) }
                            }
                        }
@@ -393,13 +393,13 @@ struct SearchView: View {
                 episodes = feed.episodes
             } else if kind == 0 {
                 shows = try await ApplePodcasts.searchShows(term)
-                if shows.isEmpty { error = "No shows found for “\(term)”." }
+                if shows.isEmpty { error = L("No shows found for “%@”.", term) }
             } else {
                 episodes = try await ApplePodcasts.searchEpisodes(term)
-                if episodes.isEmpty { error = "No episodes found for “\(term)”." }
+                if episodes.isEmpty { error = L("No episodes found for “%@”.", term) }
             }
         } catch {
-            self.error = "Couldn't search: \(error.localizedDescription)"
+            self.error = L("Couldn't search: %@", error.localizedDescription)
         }
     }
 }
@@ -432,7 +432,7 @@ struct ShowView: View {
                 Button {
                     Store.setSubscribed(current.artworkUrl == nil ? show : current, !subscribed, in: context)
                 } label: {
-                    Label(subscribed ? "Subscribed" : "Subscribe", systemImage: subscribed ? "checkmark" : "plus")
+                    Label(L(subscribed ? "Subscribed" : "Subscribe"), systemImage: subscribed ? "checkmark" : "plus")
                         .font(Theme.text(17, .semibold))
                         .foregroundStyle(subscribed ? .white : .black)
                         .padding(.horizontal, 22).frame(height: 46)
@@ -459,7 +459,7 @@ struct ShowView: View {
                     .onTapGesture { expanded.toggle() }
             }
             Block("Episodes", trailing: {
-                Button(newestFirst ? "Newest first" : "Oldest first") { newestFirst.toggle() }
+                Button(L(newestFirst ? "Newest first" : "Oldest first")) { newestFirst.toggle() }
             }) {
                 if let feed {
                     episodeList(newestFirst ? feed.episodes : Array(feed.episodes.reversed()))
@@ -472,7 +472,7 @@ struct ShowView: View {
         }
         .task {
             if let f = FeedCache.shared.feed(show.feedUrl) { feed = f }
-            do { feed = try await FeedCache.shared.load(show.feedUrl) } catch { self.error = "Couldn't read this show's feed: \(error.localizedDescription)" }
+            do { feed = try await FeedCache.shared.load(show.feedUrl) } catch { self.error = L("Couldn't read this show's feed: %@", error.localizedDescription) }
         }
     }
 }
@@ -510,14 +510,14 @@ struct EpisodeView: View {
             HStack(spacing: 14) {
                 Artwork(episode: episode, size: 64)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text([episode.showTitle, episode.published?.formatted(.dateTime.day().month(.abbreviated))].compactMap { $0 }.joined(separator: " · "))
+                    Text([episode.showTitle, episode.published?.formatted(Date.FormatStyle(locale: AppLanguage.locale).day().month(.abbreviated))].compactMap { $0 }.joined(separator: " · "))
                         .font(Theme.text(12, .medium)).foregroundStyle(Theme.inkSubtle).lineLimit(1)
                     Text(episode.title).font(Theme.display(20)).tracking(-0.3).foregroundStyle(Theme.ink)
                 }
             }
             HStack(spacing: 8) {
                 Button { center.play(episode) } label: {
-                    Label(center.episode?.key == episode.key && center.isPlaying ? "Playing" : "Play\(episode.duration.map { " · \(Stats.length($0))" } ?? "")",
+                    Label(center.episode?.key == episode.key && center.isPlaying ? L("Playing") : L("Play") + (episode.duration.map { " · \(Stats.length($0))" } ?? ""),
                           systemImage: "play.fill")
                 }
                 .buttonStyle(.eks(.primary, block: true))
@@ -532,7 +532,7 @@ struct EpisodeView: View {
                     if !missed.isEmpty {
                         Button { showMissed = true } label: {
                             RowGroup {
-                                Row(title: "The \(missed.count) missed sentence\(missed.count == 1 ? "" : "s")",
+                                Row(title: L(missed.count, "The %lld missed sentence", "The %lld missed sentences"),
                                     subtitle: "The sentences and what you typed",
                                     chevron: true, leading: { IconTile("text.alignleft") }, trailing: { EmptyView() })
                             }
@@ -564,7 +564,7 @@ struct EpisodeView: View {
         }
         .buttonStyle(.eks(.secondary))
         .disabled(center.episode?.key == episode.key && center.mode == .episode)
-        .accessibilityLabel(queued ? "In Up Next. Remove" : "Add to Up Next")
+        .accessibilityLabel(L(queued ? "In Up Next. Remove" : "Add to Up Next"))
     }
 
     @ViewBuilder private var downloadButton: some View {
@@ -589,7 +589,7 @@ struct EpisodeView: View {
 
     private var sizeText: String {
         let bytes = center.downloads().first { $0.key == episode.key }?.fileBytes ?? episode.audioBytes ?? 0
-        return bytes > 0 ? ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file) : "Downloaded"
+        return bytes > 0 ? ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file) : L("Downloaded")
     }
 }
 

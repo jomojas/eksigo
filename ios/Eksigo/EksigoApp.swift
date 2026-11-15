@@ -14,6 +14,7 @@ struct EksigoApp: App {
     @Environment(\.scenePhase) private var phase
 
     init() {
+        AppLanguage.load()
         // Covers are asked for on every screen: keep them on disk instead of the small default cache.
         URLCache.shared = URLCache(memoryCapacity: 32 << 20, diskCapacity: 300 << 20)
         let container = try! ModelContainer(for: Schema(Store.schema))
@@ -43,6 +44,9 @@ struct EksigoApp: App {
                 .environment(ui)
                 .tint(Theme.ink)
                 .preferredColorScheme(settings.appearance.scheme)
+                // A new language redraws every page (the texts worked out in code too), and dates follow it.
+                .environment(\.locale, AppLanguage.locale)
+                .id(settings.language)
                 .onAppear { clips.center = center }
                 .task { await syncer.every(minutes: 10) }
                 #if DEBUG
@@ -102,7 +106,7 @@ final class AppUI {
     /// Adds to Up Next from anywhere, and says where it went.
     func addToUpNext(_ episode: PodcastEpisode, center: PlaybackCenter) {
         guard let place = center.addToQueue(episode) else { return }
-        show(Toast(text: place == 1 ? "Added to Up Next · plays next" : "Added to Up Next · \(place.ordinal)") {
+        show(Toast(text: place == 1 ? "Added to Up Next · plays next" : L("Added to Up Next · %@", place.ordinal)) {
             center.removeFromQueue(episode.key)
         })
     }
@@ -113,7 +117,7 @@ extension Int {
     var ordinal: String {
         let f = NumberFormatter()
         f.numberStyle = .ordinal
-        f.locale = Locale(identifier: "en")
+        f.locale = AppLanguage.locale
         return f.string(from: NSNumber(value: self)) ?? "\(self)"
     }
 }

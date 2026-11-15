@@ -6,7 +6,7 @@ struct LargeTitle: View {
     let text: String
     init(_ text: String) { self.text = text }
     var body: some View {
-        Text(text).font(Theme.display(34)).tracking(0.37).foregroundStyle(Theme.ink)
+        Text(L(text)).font(Theme.display(34)).tracking(0.37).foregroundStyle(Theme.ink)
             .accessibilityAddTraits(.isHeader)
     }
 }
@@ -15,7 +15,7 @@ struct Eyebrow: View {
     let text: String
     init(_ text: String) { self.text = text }
     var body: some View {
-        Text(text).font(Theme.text(13, .medium)).tracking(0.3).foregroundStyle(Theme.inkSubtle)
+        Text(L(text)).font(Theme.text(13, .medium)).tracking(0.3).foregroundStyle(Theme.inkSubtle)
     }
 }
 
@@ -28,7 +28,7 @@ struct Block<Content: View, Trailing: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
-                Text(title).font(Theme.display(22)).tracking(0.35).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
+                Text(L(title)).font(Theme.display(22)).tracking(0.35).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
                 Spacer(minLength: 8)
                 trailing.font(Theme.text(17)).foregroundStyle(Theme.primary)
             }
@@ -89,9 +89,9 @@ struct Row<Leading: View, Trailing: View>: View {
         HStack(spacing: 12) {
             leading
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(Theme.text(17)).foregroundStyle(titleColor).lineLimit(1)
+                Text(L(title)).font(Theme.text(17)).foregroundStyle(titleColor).lineLimit(1)
                 if let subtitle, !subtitle.isEmpty {
-                    Text(subtitle).font(Theme.text(14)).foregroundStyle(Theme.inkSubtle).lineLimit(2)
+                    Text(L(subtitle)).font(Theme.text(14)).foregroundStyle(Theme.inkSubtle).lineLimit(2)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -122,7 +122,7 @@ extension Row where Leading == EmptyView {
 struct RowValue: View {
     let text: String
     init(_ text: String) { self.text = text }
-    var body: some View { Text(text).font(Theme.text(17)).foregroundStyle(Theme.inkSubtle).lineLimit(1) }
+    var body: some View { Text(L(text)).font(Theme.text(17)).foregroundStyle(Theme.inkSubtle).lineLimit(1) }
 }
 
 /// A small square with an icon, at the start of a row.
@@ -232,7 +232,7 @@ struct RoundButton: View {
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(label)
+        .accessibilityLabel(L(label))
     }
 }
 
@@ -265,7 +265,7 @@ struct IconButton: View {
                 .frame(width: 44, height: 44).contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(label)
+        .accessibilityLabel(L(label))
     }
 }
 
@@ -309,7 +309,7 @@ struct Chip: View {
     var action: () -> Void
     var body: some View {
         Button(action: action) {
-            Text(text).font(Theme.text(15, on ? .semibold : .medium)).lineLimit(1)
+            Text(L(text)).font(Theme.text(15, on ? .semibold : .medium)).lineLimit(1)
                 .foregroundStyle(on ? Theme.canvas : Theme.ink)
                 .padding(.horizontal, 14).frame(height: 34)
                 .background(on ? Theme.ink : Theme.surface2, in: Capsule())
@@ -348,7 +348,7 @@ struct Segmented<Value: Hashable>: View {
             ForEach(items, id: \.0) { value, text in
                 let on = value == selection
                 Button { selection = value } label: {
-                    Text(text).font(Theme.text(14, on ? .semibold : .medium)).foregroundStyle(Theme.ink)
+                    Text(L(text)).font(Theme.text(14, on ? .semibold : .medium)).foregroundStyle(Theme.ink)
                         .frame(maxWidth: .infinity).frame(height: 30)
                         .background(on ? (scheme == .dark ? Color.white.opacity(0.28) : Color.white) : .clear, in: Capsule())
                         .shadow(color: .black.opacity(on ? 0.12 : 0), radius: 4, y: 1)
@@ -361,7 +361,7 @@ struct Segmented<Value: Hashable>: View {
         .padding(2)
         .background(scheme == .dark ? Color.white.opacity(0.12) : Theme.surface2, in: Capsule())
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(label)
+        .accessibilityLabel(L(label))
     }
 }
 
@@ -373,9 +373,9 @@ struct Cells: View {
         HStack(spacing: 10) {
             ForEach(Array(items.enumerated()), id: \.offset) { _, item in
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(item.0).font(Theme.display(small ? 20 : 26)).foregroundStyle(Theme.ink)
+                    Text(L(item.0)).font(Theme.display(small ? 20 : 26)).foregroundStyle(Theme.ink)
                         .lineLimit(1).minimumScaleFactor(0.6)
-                    Text(item.1).font(Theme.text(13)).foregroundStyle(Theme.inkSubtle).lineLimit(1)
+                    Text(L(item.1)).font(Theme.text(13)).foregroundStyle(Theme.inkSubtle).lineLimit(1)
                 }
                 .padding(14)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -414,7 +414,7 @@ struct Note: View {
     let text: String
     init(_ text: String) { self.text = text }
     var body: some View {
-        Text(text).font(Theme.text(13)).lineSpacing(2).foregroundStyle(Theme.inkSubtle).padding(.horizontal, 4)
+        Text(L(text)).font(Theme.text(13)).lineSpacing(2).foregroundStyle(Theme.inkSubtle).padding(.horizontal, 4)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
@@ -431,7 +431,7 @@ struct NavBar<Trailing: View>: View {
     var body: some View {
         HStack(spacing: 4) {
             GlassCircleButton(symbol: close ? "chevron.down" : "chevron.left", label: close ? "Close" : "Back", action: onBack)
-            Text(title).font(quiet ? Theme.text(13, .semibold) : Theme.text(17, .semibold))
+            Text(L(title)).font(quiet ? Theme.text(13, .semibold) : Theme.text(17, .semibold))
                 .foregroundStyle(quiet ? Theme.inkSubtle : Theme.ink).lineLimit(1)
                 .frame(maxWidth: .infinity)
             trailing.frame(minWidth: 44)
@@ -457,7 +457,7 @@ struct GlassCircleButton: View {
         }
         .buttonStyle(.plain)
         .glassCircle()
-        .accessibilityLabel(label)
+        .accessibilityLabel(L(label))
     }
 }
 
@@ -499,7 +499,7 @@ struct Page<Content: View, Trailing: View>: View {
                 .padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 120)
         }
         .canvas()
-        .navigationTitle(title)
+        .navigationTitle(L(title))
         .navigationBarTitleDisplayMode(title.isEmpty ? .inline : .large)
         .toolbar { ToolbarItem(placement: .topBarTrailing) { trailing } }
     }
@@ -524,7 +524,7 @@ struct CoverTile: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text(episode.title).font(Theme.text(14, .medium)).foregroundStyle(Theme.ink).lineLimit(1)
                 if !subtitle.isEmpty {
-                    Text(subtitle).font(Theme.text(13)).foregroundStyle(Theme.inkSubtle).lineLimit(1)
+                    Text(L(subtitle)).font(Theme.text(13)).foregroundStyle(Theme.inkSubtle).lineLimit(1)
                 }
             }
         }

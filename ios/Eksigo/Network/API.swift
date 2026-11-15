@@ -123,9 +123,9 @@ nonisolated struct APIError: LocalizedError {
 
     var errorDescription: String? {
         switch code {
-        case "sign_in_required": "Sign in again to sync."
-        case "invalid_token": "The sign-in couldn't be checked. Try again."
-        case "sync_full": "This account has reached the sync limit."
+        case "sign_in_required": L("Sign in again to sync.")
+        case "invalid_token": L("The sign-in couldn't be checked. Try again.")
+        case "sync_full": L("This account has reached the sync limit.")
         default: message
         }
     }
@@ -134,6 +134,6 @@ nonisolated struct APIError: LocalizedError {
         guard let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) else { return }
         struct Body: Decodable { struct E: Decodable { let code: String; let message: String }; let error: E }
         let body = try? JSONDecoder().decode(Body.self, from: data)
-        throw APIError(status: http.statusCode, message: body?.error.message ?? "The server answered \(http.statusCode).", code: body?.error.code)
+        throw APIError(status: http.statusCode, message: body?.error.message ?? L("The server answered %lld.", http.statusCode), code: body?.error.code)
     }
 }

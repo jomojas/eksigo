@@ -103,7 +103,7 @@ struct ToastView: View {
         if let t = ui.toast {
             HStack(spacing: 10) {
                 Image(systemName: t.symbol).font(.system(size: 16, weight: .semibold))
-                Text(t.text).font(Theme.text(15, .semibold)).lineLimit(1)
+                Text(L(t.text)).font(Theme.text(15, .semibold)).lineLimit(1)
                 Spacer(minLength: 8)
                 if let undo = t.undo {
                     Button("Undo") {

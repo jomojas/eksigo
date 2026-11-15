@@ -51,7 +51,7 @@ final class Account {
         let authorization = try result.get()
         guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
               let tokenData = credential.identityToken, let token = String(data: tokenData, encoding: .utf8) else {
-            throw APIError(status: 0, message: "Apple didn't return a sign-in token.")
+            throw APIError(status: 0, message: L("Apple didn't return a sign-in token."))
         }
         let name = credential.fullName.map { PersonNameComponentsFormatter.localizedString(from: $0, style: .default) }
         let session = try await API.shared.signInWithApple(identityToken: token, nonce: nonce, name: name?.isEmpty == true ? nil : name)
@@ -63,7 +63,7 @@ final class Account {
 
     /// Google's page in a browser sheet (no Google SDK): OAuth with PKCE, then the ID token goes to the server.
     func signInWithGoogle(using session: WebAuthenticationSession) async throws {
-        guard let google = GoogleSignIn() else { throw APIError(status: 0, message: "Google sign-in isn't set up yet.") }
+        guard let google = GoogleSignIn() else { throw APIError(status: 0, message: L("Google sign-in isn't set up yet.")) }
         let code = try await session.authenticate(using: google.authorizeURL, callbackURLScheme: google.scheme,
                                                   preferredBrowserSession: .ephemeral)
         let idToken = try await google.idToken(from: code)
@@ -111,7 +111,7 @@ final class Account {
     var initial: String { String((user?.name?.trimmingCharacters(in: .whitespaces).first ?? user?.email?.first ?? "E")).uppercased() }
     var displayName: String {
         if let n = user?.name, !n.trimmingCharacters(in: .whitespaces).isEmpty { return n }
-        return user?.email ?? "Your account"
+        return user?.email ?? L("Your account")
     }
     var providerName: String {
         switch user?.provider {

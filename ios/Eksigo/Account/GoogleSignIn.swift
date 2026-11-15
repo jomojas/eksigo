@@ -36,7 +36,7 @@ nonisolated struct GoogleSignIn: Sendable {
     func idToken(from callback: URL) async throws -> String {
         let items = URLComponents(url: callback, resolvingAgainstBaseURL: false)?.queryItems ?? []
         guard let code = items.first(where: { $0.name == "code" })?.value else {
-            throw APIError(status: 0, message: "Google didn't return a sign-in code.")
+            throw APIError(status: 0, message: L("Google didn't return a sign-in code."))
         }
         var request = URLRequest(url: URL(string: "https://oauth2.googleapis.com/token")!)
         request.httpMethod = "POST"
@@ -49,7 +49,7 @@ nonisolated struct GoogleSignIn: Sendable {
         let (data, _) = try await URLSession.shared.data(for: request)
         struct Reply: Decodable { let id_token: String? }
         guard let token = try JSONDecoder().decode(Reply.self, from: data).id_token else {
-            throw APIError(status: 0, message: "Google didn't return a sign-in token.")
+            throw APIError(status: 0, message: L("Google didn't return a sign-in token."))
         }
         return token
     }

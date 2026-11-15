@@ -6,7 +6,7 @@ final class AppSettings {
     enum Appearance: String, CaseIterable, Identifiable {
         case system, light, dark
         var id: String { rawValue }
-        var label: String { rawValue.capitalized }
+        var label: String { L(rawValue.capitalized) }
         var scheme: ColorScheme? { self == .light ? .light : self == .dark ? .dark : nil }
     }
 
@@ -16,6 +16,7 @@ final class AppSettings {
     var skipBack: Double { didSet { defaults.set(skipBack, forKey: "skipBack") } }
     var skipForward: Double { didSet { defaults.set(skipForward, forKey: "skipForward") } }
     var appearance: Appearance { didSet { defaults.set(appearance.rawValue, forKey: "appearance") } }
+    var language: AppLanguage { didSet { AppLanguage.chosen = language } }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -24,6 +25,7 @@ final class AppSettings {
         skipBack = defaults.double(forKey: "skipBack")
         skipForward = defaults.double(forKey: "skipForward")
         appearance = Appearance(rawValue: defaults.string(forKey: "appearance") ?? "") ?? .system
+        language = AppLanguage.chosen
     }
 
     static let speeds: [Float] = [0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.5]

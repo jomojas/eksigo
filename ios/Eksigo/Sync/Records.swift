@@ -69,7 +69,7 @@ nonisolated struct Word: Codable, Hashable, Identifiable, Sendable {
 
     enum Level: String, CaseIterable, Sendable {
         case new, learning, familiar, known
-        var label: String { rawValue.capitalized }
+        var label: String { L(rawValue.capitalized) }
     }
 }
 

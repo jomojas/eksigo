@@ -21,14 +21,14 @@ struct UpNextView: View {
             List {
                 if let e = center.episode {
                     Section {
-                        row(e, subtitle: "\(e.showTitle) · \(Stats.length(max(60, center.duration - center.position))) left") {
+                        row(e, subtitle: L("%@ · %@ left", e.showTitle, Stats.length(max(60, center.duration - center.position)))) {
                             Image(systemName: center.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 15))
                                 .foregroundStyle(Theme.inkSubtle).frame(width: 30)
                         }
                         .contentShape(Rectangle())
                         .onTapGesture { center.togglePlayPause() }
                         .accessibilityAddTraits(.isButton)
-                        .accessibilityHint(center.isPlaying ? "Pauses" : "Plays")
+                        .accessibilityHint(L(center.isPlaying ? "Pauses" : "Plays"))
                     } header: { header("Now playing") }
                 }
                 Section {
@@ -54,7 +54,7 @@ struct UpNextView: View {
                     }
                     .onMove { center.moveQueue(from: $0, to: $1) }
                 } header: {
-                    header(center.queue.isEmpty ? "Then" : "Then · \(plural(center.queue.count, "episode")), \(Stats.length(center.queueSeconds))")
+                    header(center.queue.isEmpty ? "Then" : L("Then · %@, %@", plural(center.queue.count, "episode"), Stats.length(center.queueSeconds)))
                 } footer: {
                     Text("Hold and drag to reorder. Each episode leaves the list when it starts. When the list is empty, playback stops after the current episode.")
                         .font(Theme.text(12)).foregroundStyle(Theme.inkSubtle).padding(.top, 6)
@@ -64,14 +64,14 @@ struct UpNextView: View {
             .scrollContentBackground(.hidden)
         }
         .canvas()
-        .navigationTitle(asPage ? "Up Next" : "")
+        .navigationTitle(asPage ? L("Up Next") : "")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { if asPage { ToolbarItem(placement: .topBarTrailing) { clearButton } } }
         .alert("Clear Up Next?", isPresented: $confirmClear) {
             Button("Cancel", role: .cancel) {}
             Button("Clear", role: .destructive) { center.clearQueue() }
         } message: {
-            Text("This removes \(plural(center.queue.count, "episode")) from Up Next.")
+            Text(L("This removes %@ from Up Next.", plural(center.queue.count, "episode")))
         }
     }
 
@@ -82,7 +82,7 @@ struct UpNextView: View {
     }
 
     private func header(_ text: String) -> some View {
-        Text(text).font(Theme.text(13, .medium)).tracking(0.3).foregroundStyle(Theme.inkSubtle).textCase(nil)
+        Text(L(text)).font(Theme.text(13, .medium)).tracking(0.3).foregroundStyle(Theme.inkSubtle).textCase(nil)
     }
 
     private func row<T: View>(_ e: PodcastEpisode, subtitle: String, @ViewBuilder trailing: () -> T) -> some View {
