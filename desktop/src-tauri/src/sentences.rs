@@ -107,7 +107,9 @@ pub fn split(words: &[Word]) -> Vec<Sentence> {
 /// Splits a too-long sentence at the clause end nearest its middle, or else its longest pause, repeatedly.
 fn break_long(words: Vec<Word>) -> Vec<Vec<Word>> {
     let dur = words.last().map(|l| l.end_ms - words[0].start_ms).unwrap_or(0);
-    if words.len() <= MAX_WORDS && dur <= MAX_MS || words.len() < 2 * MIN_WORDS {
+    // Each part keeps at least MIN_WORDS, so there must be room for a cut between them: six slow words over
+    // 14 seconds have none and stay whole.
+    if words.len() <= MAX_WORDS && dur <= MAX_MS || words.len() <= 2 * MIN_WORDS {
         return vec![words];
     }
     let mid = words.len() as f64 / 2.0;
@@ -116,11 +118,10 @@ fn break_long(words: Vec<Word>) -> Vec<Vec<Word>> {
         .clone()
         .filter(|&i| ends_clause(&words[i - 1].text))
         .min_by(|&a, &b| (a as f64 - mid).abs().total_cmp(&(b as f64 - mid).abs()))
-        .unwrap_or_else(|| {
-            candidates
-                .max_by_key(|&i| (words[i].start_ms - words[i - 1].end_ms, -((i as f64 - mid).abs() as i64)))
-                .unwrap()
-        });
+        .or_else(|| candidates.max_by_key(|&i| (words[i].start_ms - words[i - 1].end_ms, -((i as f64 - mid).abs() as i64))));
+    let Some(at) = at else {
+        return vec![words];
+    };
     let mut words = words;
     let rest = words.split_off(at);
     let mut out = break_long(words);
@@ -236,5 +237,18 @@ mod tests {
         w[5].start_ms = w[4].end_ms - 100;
         let s = split(&w);
         assert!(s[0].end_ms <= s[1].start_ms);
+    }
+
+    /// Six slow words over more than 14 seconds (speech under music) used to crash the transcription for good.
+    #[test]
+    fn six_slow_words_stay_one_sentence() {
+        let w: Vec<Word> = ["so", "we", "were", "just", "waiting", "there"]
+            .iter()
+            .enumerate()
+            .map(|(i, t)| Word { start_ms: i as i64 * 3_000, end_ms: i as i64 * 3_000 + 200, text: t.to_string() })
+            .collect();
+        assert_eq!(break_long(w.clone()), vec![w]);
+        let seven: Vec<Word> = (0..7).map(|i| Word { start_ms: i * 3_000, end_ms: i * 3_000 + 200, text: "word".into() }).collect();
+        assert_eq!(break_long(seven).iter().map(Vec::len).collect::<Vec<_>>(), [3, 4]);
     }
 }
