@@ -19,8 +19,7 @@ struct MiniPlayer: View {
             } else {
                 row(e)
                     .padding(.leading, 8).padding(.trailing, 6).padding(.vertical, 6)
-                    .background(Theme.surface2, in: RoundedRectangle(cornerRadius: 12))
-                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.hairlineStrong))
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     .padding(.horizontal, 8).padding(.bottom, 8)
             }
         }
@@ -61,6 +60,7 @@ struct NowPlayingView: View {
     @State private var showShow: PodcastShow?
     @State private var scrolled = false
     @State private var route = RouteName.current()
+    @State private var tint: UIColor?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -71,7 +71,7 @@ struct NowPlayingView: View {
                 GeometryReader { g in
                     ScrollView {
                         VStack(alignment: .leading, spacing: 0) {
-                            top(e, side: min(g.size.width - 56, g.size.height * 0.42))
+                            top(e, side: min(g.size.width - 72, g.size.height - 400))
                                 .frame(minHeight: g.size.height)
                             details(e)
                         }
@@ -84,7 +84,17 @@ struct NowPlayingView: View {
                 }
             }
         }
-        .canvas()
+        .background(CoverBackdrop(tint: tint).ignoresSafeArea())
+        // White on the cover's colour, whatever the phone's appearance.
+        .environment(\.colorScheme, .dark)
+        .environment(\.groupFill, .white.opacity(0.13))
+        .preferredColorScheme(.dark)
+        .task(id: center.episode?.key) {
+            guard let e = center.episode else { return }
+            let urls = [e.artworkUrl, e.showArtworkUrl].compactMap { $0 }
+            let t = await CoverCache.shared.tint(urls)
+            withAnimation(.easeOut(duration: 0.4)) { tint = t }
+        }
         .sheet(isPresented: $showUpNext) {
             UpNextView().presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
         }
@@ -102,53 +112,65 @@ struct NowPlayingView: View {
     // MARK: The first screen
 
     private func top(_ e: PodcastEpisode, side: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 22) {
-            Artwork(episode: e, size: side, radius: 16).frame(maxWidth: .infinity)
-            VStack(alignment: .leading, spacing: 10) {
-                Text(e.title).font(Theme.display(22)).tracking(-0.4).foregroundStyle(Theme.ink).lineLimit(3)
+        // Fixed gaps from the design, top to bottom: cover 22, title 26, progress 22, controls 22, Up Next 26,
+        // control row 20. The title row has the same height on every episode (the missed pill sits on its right),
+        // so nothing moves between episodes; spare height goes under the control row.
+        VStack(alignment: .leading, spacing: 0) {
+            Artwork(episode: e, size: side, radius: 16)
+                .shadow(color: .black.opacity(0.35), radius: 24, y: 14)
+                .frame(maxWidth: .infinity)
+                .padding(.top, 22)
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(e.title).font(Theme.display(21)).foregroundStyle(Theme.ink).lineLimit(2)
+                    Text([e.showTitle, e.published?.formatted(.dateTime.day().month(.abbreviated))].compactMap { $0 }.joined(separator: " · "))
+                        .font(Theme.text(17)).foregroundStyle(Theme.inkSubtle).lineLimit(1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 let missed = missedHere(e)
                 if !missed.isEmpty {
                     Button { playMissed(missed) } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "headphones").font(.system(size: 13, weight: .medium))
-                            Text(plural(missed.count, "missed sentence"))
-                            Text("· Play").foregroundStyle(Theme.inkSubtle)
+                        HStack(spacing: 6) {
+                            Image(systemName: "ear").font(.system(size: 14, weight: .semibold))
+                            Text("\(missed.count) missed")
                         }
-                        .font(Theme.text(13, .medium)).foregroundStyle(Theme.ink)
-                        .padding(.leading, 10).padding(.trailing, 12).frame(height: 34)
-                        .background(Theme.surface2, in: Capsule()).overlay(Capsule().strokeBorder(Theme.hairlineStrong))
-                        .frame(minHeight: 44)
+                        .font(Theme.text(13, .semibold)).foregroundStyle(Theme.ink)
+                        .padding(.horizontal, 12).frame(height: 32)
+                        .background(.white.opacity(0.16), in: Capsule())
+                        .frame(minHeight: 44, alignment: .top)
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Play \(plural(missed.count, "missed sentence"))")
                     .disabled(!missed.contains(where: center.playable))
                 }
             }
-            scrubber
-            controls
-            Spacer(minLength: 8)
+            .padding(.top, 26)
+            scrubber.padding(.top, 22)
+            controls.padding(.top, 22 - 10)  // the buttons' tap areas are taller than their glyphs
             if let next = center.queue.first {
                 Button { showUpNext = true } label: {
                     HStack(spacing: 10) {
-                        Artwork(episode: next, size: 36, radius: 6)
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("Up next").font(Theme.text(11, .medium)).foregroundStyle(Theme.inkSubtle)
-                            Text(next.title).font(Theme.text(14, .medium)).foregroundStyle(Theme.ink).lineLimit(1)
+                        Artwork(episode: next, size: 40, radius: 8)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("UP NEXT · \(center.queue.count)").font(Theme.text(11, .semibold)).tracking(0.3).foregroundStyle(Theme.inkSubtle)
+                            Text(next.title).font(Theme.text(15, .semibold)).foregroundStyle(Theme.ink).lineLimit(1)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.inkTertiary)
                     }
-                    .padding(.leading, 8).padding(.trailing, 12).frame(height: 52)
-                    .background(Theme.surface1, in: RoundedRectangle(cornerRadius: 12))
-                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.hairline))
+                    .padding(.horizontal, 12).frame(height: 60)
+                    .background(.white.opacity(0.13), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Up next: \(next.title)")
                 .padding(.horizontal, -12)
+                .padding(.top, 26 - 10)
             }
-            controlRow(e).padding(.horizontal, -16).padding(.bottom, 8)
+            controlRow(e).padding(.horizontal, -16).padding(.top, 20).padding(.bottom, 8)
+            Spacer(minLength: 0)
         }
-        .padding(.top, 6)
     }
 
     private var scrubber: some View {
@@ -163,6 +185,7 @@ struct NowPlayingView: View {
             .tint(Theme.ink)
             .accessibilityLabel("Position")
             .accessibilityValue(Stats.clock(value))
+            .overlay(alignment: .bottomLeading) { missedMarks }
             HStack {
                 Text(Stats.clock(value))
                 Spacer()
@@ -179,7 +202,13 @@ struct NowPlayingView: View {
             }
             .frame(width: 56, height: 56)
             Spacer()
-            BigPlayButton(playing: center.isPlaying, size: 76) { center.togglePlayPause() }
+            Button { center.togglePlayPause() } label: {
+                Image(systemName: center.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 50))
+                    .foregroundStyle(Theme.ink).frame(width: 76, height: 76).contentShape(Rectangle())
+                    .contentTransition(.symbolEffect(.replace))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(center.isPlaying ? "Pause" : "Play")
             Spacer()
             IconButton(symbol: "goforward.\(Int(center.settings.skipForward))", label: "Forward \(Int(center.settings.skipForward)) seconds", size: 30) {
                 center.skip(center.settings.skipForward)
@@ -294,22 +323,39 @@ struct NowPlayingView: View {
         HStack(spacing: 12) {
             Artwork(episode: e, size: 44)
             VStack(alignment: .leading, spacing: 3) {
-                Text(e.title).font(Theme.text(15, .medium)).foregroundStyle(Theme.ink).lineLimit(1)
+                Text(e.title).font(Theme.text(15, .semibold)).foregroundStyle(Theme.ink).lineLimit(1)
                 Text("\(Stats.clock(center.position)) · −\(Stats.clock(max(0, center.duration - center.position)))")
-                    .font(Theme.mono(12)).foregroundStyle(Theme.inkSubtle)
+                    .font(Theme.mono(13)).foregroundStyle(Theme.inkSubtle)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            BigPlayButton(playing: center.isPlaying, size: 40) { center.togglePlayPause() }
+            IconButton(symbol: center.isPlaying ? "pause.fill" : "play.fill", label: center.isPlaying ? "Pause" : "Play", size: 24) {
+                center.togglePlayPause()
+            }
         }
-        .padding(10)
-        .background(Theme.surface1, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.hairline))
+        .padding(.leading, 10).padding(.trailing, 6).padding(.vertical, 8)
+        .glassCapsule()
         .padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 10)
-        .background(Theme.canvas)
         .transition(.move(edge: .top).combined(with: .opacity))
     }
 
     // MARK: Helpers
+
+    /// Where this episode's missed sentences are, as small yellow marks under the time bar.
+    @ViewBuilder private var missedMarks: some View {
+        if let e = center.episode, center.duration > 0 {
+            let marks = missedHere(e).map { Double($0.startMs) / 1000 / center.duration }.filter { $0 >= 0 && $0 <= 1 }
+            if !marks.isEmpty {
+                GeometryReader { g in
+                    ForEach(Array(marks.enumerated()), id: \.offset) { _, m in
+                        Capsule().fill(Color(hex: 0xFFD60A)).frame(width: 3, height: 7)
+                            .position(x: 2 + (g.size.width - 4) * m, y: g.size.height + 4)
+                    }
+                }
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+            }
+        }
+    }
 
     private func missedHere(_ e: PodcastEpisode) -> [Missed] {
         store.missed.filter { $0.ref.key == e.key }.sorted { $0.idx < $1.idx }
@@ -409,4 +455,19 @@ struct RoutePicker: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: AVRoutePickerView, context: Context) {}
+}
+
+/// The player's background: the cover's colour, from a lighter top to near-black, so white text always reads.
+struct CoverBackdrop: View {
+    var tint: UIColor?
+    var body: some View {
+        let base = tint ?? UIColor(white: 0.35, alpha: 1)
+        LinearGradient(colors: [shade(base, 0.7), shade(base, 0.4), shade(base, 0.16)], startPoint: .top, endPoint: .bottom)
+    }
+
+    private func shade(_ c: UIColor, _ brightness: CGFloat) -> Color {
+        var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        c.getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+        return Color(hue: h, saturation: min(0.85, s * 1.15), brightness: min(b, brightness))
+    }
 }

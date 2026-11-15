@@ -6,7 +6,7 @@ struct LargeTitle: View {
     let text: String
     init(_ text: String) { self.text = text }
     var body: some View {
-        Text(text).font(Theme.display(32)).tracking(-0.9).foregroundStyle(Theme.ink)
+        Text(text).font(Theme.display(34)).tracking(0.37).foregroundStyle(Theme.ink)
             .accessibilityAddTraits(.isHeader)
     }
 }
@@ -28,11 +28,10 @@ struct Block<Content: View, Trailing: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
-                Eyebrow(title).accessibilityAddTraits(.isHeader)
+                Text(title).font(Theme.display(22)).tracking(0.35).foregroundStyle(Theme.ink).accessibilityAddTraits(.isHeader)
                 Spacer(minLength: 8)
-                trailing.font(Theme.text(13, .medium)).foregroundStyle(Theme.inkSubtle)
+                trailing.font(Theme.text(17)).foregroundStyle(Theme.primary)
             }
-            .padding(.horizontal, 4)
             content
         }
     }
@@ -54,21 +53,26 @@ extension Block {
     }
 }
 
+extension EnvironmentValues {
+    /// The fill of grouped rows and cards. The player, on its cover colour, uses a see-through white instead of grey.
+    @Entry var groupFill: Color = Theme.surface1
+}
+
 /// Rows in one rounded box, with a hairline between them.
 struct RowGroup<Content: View>: View {
+    @Environment(\.groupFill) private var fill
     @ViewBuilder var content: Content
     var body: some View {
         VStack(spacing: 0) {
             Group(subviews: content) { rows in
                 ForEach(Array(rows.enumerated()), id: \.offset) { i, row in
                     row
-                    if i < rows.count - 1 { Rectangle().fill(Theme.hairline).frame(height: 1) }
+                    if i < rows.count - 1 { Rectangle().fill(Theme.hairline).frame(height: 0.5).padding(.leading, 16) }
                 }
             }
         }
-        .background(Theme.surface1)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.hairline))
+        .background(fill)
+        .clipShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
     }
 }
 
@@ -85,18 +89,18 @@ struct Row<Leading: View, Trailing: View>: View {
         HStack(spacing: 12) {
             leading
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(Theme.text(15, .medium)).foregroundStyle(titleColor).lineLimit(1)
+                Text(title).font(Theme.text(17)).foregroundStyle(titleColor).lineLimit(1)
                 if let subtitle, !subtitle.isEmpty {
-                    Text(subtitle).font(Theme.text(13)).foregroundStyle(Theme.inkSubtle).lineLimit(2)
+                    Text(subtitle).font(Theme.text(14)).foregroundStyle(Theme.inkSubtle).lineLimit(2)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             trailing
             if chevron {
-                Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.inkTertiary)
+                Image(systemName: "chevron.right").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.inkTertiary)
             }
         }
-        .padding(.horizontal, 12).padding(.vertical, 10)
+        .padding(.horizontal, 16).padding(.vertical, 11)
         .frame(minHeight: 52)
         .contentShape(Rectangle())
     }
@@ -118,29 +122,29 @@ extension Row where Leading == EmptyView {
 struct RowValue: View {
     let text: String
     init(_ text: String) { self.text = text }
-    var body: some View { Text(text).font(Theme.text(15)).foregroundStyle(Theme.inkSubtle).lineLimit(1) }
+    var body: some View { Text(text).font(Theme.text(17)).foregroundStyle(Theme.inkSubtle).lineLimit(1) }
 }
 
 /// A small square with an icon, at the start of a row.
 struct IconTile: View {
     let symbol: String
-    init(_ symbol: String) { self.symbol = symbol }
+    var color: Color
+    init(_ symbol: String, color: Color = Color(uiColor: .systemGray)) { self.symbol = symbol; self.color = color }
     var body: some View {
-        Image(systemName: symbol).font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.inkMuted)
+        Image(systemName: symbol).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
             .frame(width: 30, height: 30)
-            .background(Theme.surface3, in: RoundedRectangle(cornerRadius: 7))
-            .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Theme.hairline))
+            .background(color, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             .accessibilityHidden(true)
     }
 }
 
 struct CardModifier: ViewModifier {
     var padding: CGFloat = 16
+    @Environment(\.groupFill) private var fill
     func body(content: Content) -> some View {
         content.padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.surface1, in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.hairline))
+            .background(fill, in: RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
     }
 }
 
@@ -175,23 +179,22 @@ struct EksButtonStyle: ButtonStyle {
 
     fileprivate func styled(_ configuration: Configuration) -> some View {
         configuration.label
-            .font(Theme.text(small ? 13 : 15, .medium))
+            .font(Theme.text(small ? 15 : 17, .semibold))
             .lineLimit(1)
-            .padding(.horizontal, small ? 12 : 16)
+            .padding(.horizontal, small ? 14 : 20)
             .frame(maxWidth: block ? .infinity : nil)
-            .frame(height: height ?? (small ? 32 : 44))
+            .frame(height: height ?? (small ? 34 : 50))
             .foregroundStyle(foreground)
-            .background(background, in: RoundedRectangle(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(border))
+            .background(background, in: Capsule())
             .opacity(configuration.isPressed ? 0.7 : 1)
-            .contentShape(RoundedRectangle(cornerRadius: 8))
+            .contentShape(Capsule())
     }
 
     private var foreground: Color {
         switch kind {
         case .primary: Theme.onPrimary
-        case .secondary: Theme.ink
-        case .ghost: Theme.inkSubtle
+        case .secondary: Theme.primary
+        case .ghost: Theme.primary
         case .inverse: Theme.canvas
         }
     }
@@ -199,16 +202,7 @@ struct EksButtonStyle: ButtonStyle {
     private var background: Color {
         switch kind {
         case .primary: Theme.primary
-        case .secondary: Theme.surface2
-        case .ghost: .clear
-        case .inverse: Theme.ink
-        }
-    }
-
-    private var border: Color {
-        switch kind {
-        case .primary: Theme.primary
-        case .secondary: Theme.hairlineStrong
+        case .secondary: Theme.primarySoft
         case .ghost: .clear
         case .inverse: Theme.ink
         }
@@ -230,11 +224,10 @@ struct RoundButton: View {
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: symbol).font(.system(size: size * 0.33, weight: .semibold))
-                .foregroundStyle(Theme.ink)
-                .frame(width: size, height: size)
+            Image(systemName: symbol).font(.system(size: size * 0.36, weight: .semibold))
+                .foregroundStyle(Theme.primary)
+                .frame(width: size * 0.82, height: size * 0.82)
                 .background(Theme.surface2, in: Circle())
-                .overlay(Circle().strokeBorder(Theme.hairlineStrong))
                 .frame(width: max(size, 44), height: max(size, 44))
                 .contentShape(Circle())
         }
@@ -251,9 +244,9 @@ struct BigPlayButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: playing ? "pause.fill" : "play.fill").font(.system(size: size * 0.38))
-                .foregroundStyle(Theme.canvas)
+                .foregroundStyle(.white)
                 .frame(width: size, height: size)
-                .background(Theme.ink, in: Circle())
+                .background(Theme.primary, in: Circle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(playing ? "Pause" : "Play")
@@ -287,21 +280,20 @@ struct Badge<Content: View>: View {
     @ViewBuilder var content: Content
     var body: some View {
         HStack(spacing: 6) { content }
-            .font(Theme.text(12, .medium)).foregroundStyle(Theme.inkMuted)
+            .font(Theme.text(12, .semibold)).foregroundStyle(Theme.inkSubtle)
             .padding(.horizontal, 8).frame(height: 22)
             .background(Theme.surface2, in: Capsule())
-            .overlay(Capsule().strokeBorder(Theme.hairlineStrong))
     }
 }
 
 struct Track: View {
     var value: Double
     var height: CGFloat = 4
-    var fill: Color = Theme.inkMuted
+    var fill: Color = Theme.primary
     var body: some View {
         GeometryReader { g in
             ZStack(alignment: .leading) {
-                Capsule().fill(Theme.hairline)
+                Capsule().fill(Theme.surface3)
                 Capsule().fill(fill).frame(width: g.size.width * min(max(value, 0), 1))
             }
         }
@@ -317,11 +309,10 @@ struct Chip: View {
     var action: () -> Void
     var body: some View {
         Button(action: action) {
-            Text(text).font(Theme.text(13, .medium)).lineLimit(1)
-                .foregroundStyle(on ? Theme.ink : Theme.inkSubtle)
-                .padding(.horizontal, 12).frame(height: 32)
-                .background(on ? Theme.surface3 : Theme.surface1, in: Capsule())
-                .overlay(Capsule().strokeBorder(on ? Theme.hairlineTertiary : Theme.hairlineStrong))
+            Text(text).font(Theme.text(15, on ? .semibold : .medium)).lineLimit(1)
+                .foregroundStyle(on ? Theme.canvas : Theme.ink)
+                .padding(.horizontal, 14).frame(height: 34)
+                .background(on ? Theme.ink : Theme.surface2, in: Capsule())
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(on ? .isSelected : [])
@@ -334,7 +325,7 @@ struct ChipRow<Value: Hashable>: View {
     @Binding var selection: Value
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
+            HStack(spacing: 8) {
                 ForEach(items, id: \.0) { value, label in
                     Chip(text: label, on: value == selection) { selection = value }
                 }
@@ -350,16 +341,17 @@ struct Segmented<Value: Hashable>: View {
     let items: [(Value, String)]
     @Binding var selection: Value
     var label: String = ""
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         HStack(spacing: 2) {
             ForEach(items, id: \.0) { value, text in
                 let on = value == selection
                 Button { selection = value } label: {
-                    Text(text).font(Theme.text(13, .medium)).foregroundStyle(on ? Theme.ink : Theme.inkSubtle)
+                    Text(text).font(Theme.text(14, on ? .semibold : .medium)).foregroundStyle(Theme.ink)
                         .frame(maxWidth: .infinity).frame(height: 30)
-                        .background(on ? Theme.surface3 : .clear, in: RoundedRectangle(cornerRadius: 7))
-                        .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(on ? Theme.hairlineStrong : .clear))
+                        .background(on ? (scheme == .dark ? Color.white.opacity(0.28) : Color.white) : .clear, in: Capsule())
+                        .shadow(color: .black.opacity(on ? 0.12 : 0), radius: 4, y: 1)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -367,8 +359,7 @@ struct Segmented<Value: Hashable>: View {
             }
         }
         .padding(2)
-        .background(Theme.surface2, in: RoundedRectangle(cornerRadius: 9))
-        .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Theme.hairline))
+        .background(scheme == .dark ? Color.white.opacity(0.12) : Theme.surface2, in: Capsule())
         .accessibilityElement(children: .contain)
         .accessibilityLabel(label)
     }
@@ -379,22 +370,19 @@ struct Cells: View {
     let items: [(String, String)]
     var small = false
     var body: some View {
-        HStack(spacing: 1) {
+        HStack(spacing: 10) {
             ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(item.0).font(Theme.display(small ? 20 : 24)).tracking(-0.5).foregroundStyle(Theme.ink)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(item.0).font(Theme.display(small ? 20 : 26)).foregroundStyle(Theme.ink)
                         .lineLimit(1).minimumScaleFactor(0.6)
-                    Text(item.1).font(Theme.text(12)).foregroundStyle(Theme.inkSubtle).lineLimit(1)
+                    Text(item.1).font(Theme.text(13)).foregroundStyle(Theme.inkSubtle).lineLimit(1)
                 }
-                .padding(small ? 12 : 14)
+                .padding(14)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Theme.surface1)
+                .background(Theme.surface1, in: RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
                 .accessibilityElement(children: .combine)
             }
         }
-        .background(Theme.hairline)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.hairline))
     }
 }
 
@@ -413,7 +401,7 @@ struct MissedWordsText: View {
             a.foregroundColor = isMarked ? (wrong ? Theme.error : marked) : color
             if isMarked {
                 a.backgroundColor = wrong ? Theme.errorFill : Theme.missFill
-                if !wrong { a.underlineStyle = Text.LineStyle(pattern: .dash, color: Theme.hairlineTertiary) }
+                if wrong { a.strikethroughStyle = Text.LineStyle(pattern: .solid, color: Theme.error) }
             }
             out += a
         }
@@ -426,7 +414,7 @@ struct Note: View {
     let text: String
     init(_ text: String) { self.text = text }
     var body: some View {
-        Text(text).font(Theme.text(12)).lineSpacing(3).foregroundStyle(Theme.inkSubtle).padding(.horizontal, 4)
+        Text(text).font(Theme.text(13)).lineSpacing(2).foregroundStyle(Theme.inkSubtle).padding(.horizontal, 4)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
@@ -442,14 +430,54 @@ struct NavBar<Trailing: View>: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            IconButton(symbol: close ? "chevron.down" : "chevron.left", label: close ? "Close" : "Back", size: 20, action: onBack)
-            Text(title).font(quiet ? Theme.text(13, .medium) : Theme.text(16, .semibold))
+            GlassCircleButton(symbol: close ? "chevron.down" : "chevron.left", label: close ? "Close" : "Back", action: onBack)
+            Text(title).font(quiet ? Theme.text(13, .semibold) : Theme.text(17, .semibold))
                 .foregroundStyle(quiet ? Theme.inkSubtle : Theme.ink).lineLimit(1)
                 .frame(maxWidth: .infinity)
             trailing.frame(minWidth: 44)
         }
-        .padding(.horizontal, 8)
-        .frame(height: 44)
+        .padding(.horizontal, 16)
+        .frame(height: 52)
+    }
+}
+
+/// A round glass button for a bar the system doesn't draw (the players, a card session). On iOS 26 it is Liquid
+/// Glass; before that, a thin material.
+struct GlassCircleButton: View {
+    let symbol: String
+    let label: String
+    var tint: Color? = nil
+    var action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbol).font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(tint ?? Theme.ink)
+                .frame(width: 44, height: 44)
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .glassCircle()
+        .accessibilityLabel(label)
+    }
+}
+
+extension View {
+    /// Liquid Glass in a circle from iOS 26, a material before.
+    @ViewBuilder func glassCircle() -> some View {
+        if #available(iOS 26.0, *) {
+            glassEffect(.regular.interactive(), in: Circle())
+        } else {
+            background(.ultraThinMaterial, in: Circle())
+        }
+    }
+
+    /// Liquid Glass in a capsule from iOS 26, a material before.
+    @ViewBuilder func glassCapsule() -> some View {
+        if #available(iOS 26.0, *) {
+            glassEffect(.regular.interactive(), in: Capsule())
+        } else {
+            background(.ultraThinMaterial, in: Capsule())
+        }
     }
 }
 
@@ -472,8 +500,7 @@ struct Page<Content: View, Trailing: View>: View {
         }
         .canvas()
         .navigationTitle(title)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(Theme.canvas, for: .navigationBar)
+        .navigationBarTitleDisplayMode(title.isEmpty ? .inline : .large)
         .toolbar { ToolbarItem(placement: .topBarTrailing) { trailing } }
     }
 }
@@ -483,5 +510,25 @@ extension Page where Trailing == EmptyView {
         self.title = title
         trailing = EmptyView()
         self.content = content()
+    }
+}
+
+/// An episode as a big cover with its title and a line under it (Up Next on Listen).
+struct CoverTile: View {
+    let episode: PodcastEpisode
+    var size: CGFloat = 150
+    var subtitle: String = ""
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Artwork(episode: episode, size: size, radius: 12)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(episode.title).font(Theme.text(14, .medium)).foregroundStyle(Theme.ink).lineLimit(1)
+                if !subtitle.isEmpty {
+                    Text(subtitle).font(Theme.text(13)).foregroundStyle(Theme.inkSubtle).lineLimit(1)
+                }
+            }
+        }
+        .frame(width: size, alignment: .leading)
+        .contentShape(Rectangle())
     }
 }

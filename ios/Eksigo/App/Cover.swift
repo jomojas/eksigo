@@ -64,7 +64,44 @@ final class CoverCache {
         return URLSession(configuration: c)
     }()
 
+    private var tints: [URL: UIColor] = [:]
+
     private init() { memory.countLimit = 300 }
+
+    /// The cover's average colour, for the player's background.
+    func tint(_ urls: [URL]) async -> UIColor? {
+        for url in urls { if let t = tints[url] { return t } }
+        for url in urls {
+            guard let image = await image(url) else { continue }
+            let t = await Task.detached(priority: .userInitiated) { Self.average(image) }.value
+            if let t { tints[url] = t; return t }
+        }
+        return nil
+    }
+
+    nonisolated private static func average(_ image: UIImage) -> UIColor? {
+        guard let cg = image.cgImage else { return nil }
+        // Drawn into a context of a known layout (RGBA, 8 bits each), so the bytes are read the right way round.
+        var px = [UInt8](repeating: 0, count: 8 * 8 * 4)
+        guard let ctx = CGContext(data: &px, width: 8, height: 8, bitsPerComponent: 8, bytesPerRow: 32,
+                                  space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else { return nil }
+        ctx.interpolationQuality = .medium
+        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: 8, height: 8))
+        let bpr = 32
+        let p = px
+        // The most colourful of the 64 pixels weighs more, so a cover with a bright patch on white isn't grey.
+        var r = 0.0, g = 0.0, b = 0.0, w = 0.0
+        for y in 0..<8 {
+            for x in 0..<8 {
+                let i = y * bpr + x * 4
+                let pr = Double(p[i]) / 255, pg = Double(p[i + 1]) / 255, pb = Double(p[i + 2]) / 255
+                let sat = max(pr, pg, pb) - min(pr, pg, pb)
+                let weight = 0.15 + sat * sat * 4
+                r += pr * weight; g += pg * weight; b += pb * weight; w += weight
+            }
+        }
+        return UIColor(red: r / w, green: g / w, blue: b / w, alpha: 1)
+    }
 
     /// The first of `urls` already in memory.
     func cached(_ urls: [URL]) -> UIImage? {

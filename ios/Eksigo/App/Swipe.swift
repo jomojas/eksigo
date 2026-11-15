@@ -4,8 +4,8 @@ import SwiftUI
 struct SwipeAction: Identifiable {
     let title: String
     let symbol: String
-    var background: Color = Theme.surface3
-    var foreground: Color = Theme.ink
+    var background: Color = Theme.primary
+    var foreground: Color = .white
     let run: () -> Void
     var id: String { title }
 }
@@ -14,6 +14,7 @@ struct SwipeAction: Identifiable {
 /// they show closes them. VoiceOver gets the same actions from the rotor.
 struct Swipeable<Content: View>: View {
     let actions: [SwipeAction]
+    var background: Color = Theme.surface1
     @ViewBuilder var content: Content
     @State private var offset: CGFloat = 0
     @State private var settled: CGFloat = 0
@@ -45,7 +46,7 @@ struct Swipeable<Content: View>: View {
             .accessibilityHidden(true)
 
             content
-                .background(Theme.surface1)
+                .background(background)
                 // A sideways drag mustn't end as a tap on the row (it would open it).
                 .disabled(dragging == true || settled < 0)
                 .overlay {
@@ -57,23 +58,20 @@ struct Swipeable<Content: View>: View {
                 .offset(x: offset)
         }
         .clipped()
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 16)
-                .onChanged { v in
-                    // Decided once per drag: sideways moves the row, up and down is left to the scroll view.
-                    if dragging == nil { dragging = abs(v.translation.width) > abs(v.translation.height) * 1.4 }
-                    guard dragging == true else { return }
-                    let x = settled + v.translation.width
-                    offset = x < -total ? -total + (x + total) / 4 : min(0, x)
-                }
-                .onEnded { v in
-                    defer { dragging = nil }
-                    guard dragging == true else { return }
-                    let open = settled + v.predictedEndTranslation.width < -total / 2
-                    withAnimation(.snappy(duration: 0.25)) { offset = open ? -total : 0 }
-                    settled = open ? -total : 0
-                }
-        )
+        // A UIKit pan that starts only for a sideways move, so an up-and-down drag is the scroll view's from the
+        // first touch (a SwiftUI drag gesture here held the scroll back).
+        .gesture(SidewaysPan(
+            began: { dragging = true },
+            changed: { dx in
+                let x = settled + dx
+                offset = x < -total ? -total + (x + total) / 4 : min(0, x)
+            },
+            ended: { predicted in
+                defer { dragging = nil }
+                let open = settled + predicted < -total / 2
+                withAnimation(.snappy(duration: 0.25)) { offset = open ? -total : 0 }
+                settled = open ? -total : 0
+            }))
         .accessibilityActions {
             ForEach(actions) { a in Button(a.title, action: a.run) }
         }
@@ -82,5 +80,39 @@ struct Swipeable<Content: View>: View {
     private func close() {
         withAnimation(.snappy(duration: 0.25)) { offset = 0 }
         settled = 0
+    }
+}
+
+/// A pan that begins only when the finger moves more sideways than up or down.
+struct SidewaysPan: UIGestureRecognizerRepresentable {
+    var began: () -> Void
+    var changed: (CGFloat) -> Void
+    /// Where the move would end, with its speed.
+    var ended: (CGFloat) -> Void
+
+    func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator { Coordinator() }
+
+    func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
+        let g = UIPanGestureRecognizer()
+        g.delegate = context.coordinator
+        return g
+    }
+
+    func handleUIGestureRecognizerAction(_ g: UIPanGestureRecognizer, context: Context) {
+        let dx = g.translation(in: g.view).x
+        switch g.state {
+        case .began: began(); changed(dx)
+        case .changed: changed(dx)
+        case .ended, .cancelled, .failed: ended(dx + g.velocity(in: g.view).x * 0.2)
+        default: break
+        }
+    }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
+            guard let pan = g as? UIPanGestureRecognizer else { return true }
+            let v = pan.velocity(in: pan.view)
+            return abs(v.x) > abs(v.y) * 1.4
+        }
     }
 }
