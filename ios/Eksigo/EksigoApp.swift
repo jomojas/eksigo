@@ -73,6 +73,8 @@ final class AppUI {
     var showPlayer = false
     var showMissed = false
     var showReview = false
+    /// The next review practises ahead of time (nothing was due).
+    var reviewAhead = false
     /// The Welcome page, on first launch only.
     var welcomed = UserDefaults.standard.bool(forKey: "welcomed") {
         didSet { UserDefaults.standard.set(welcomed, forKey: "welcomed") }

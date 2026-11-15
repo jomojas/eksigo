@@ -102,13 +102,25 @@ pub struct Item {
     pub next: [i64; 4],
 }
 
-/// The note, else the first line of the dictionary meaning.
+/// The note, else the first line of the dictionary meaning. A phrase's meaning has a line per word, each starting
+/// with that word ("itchy: a. 痒的"): those lines are joined without the words, so a choice never shows English.
 fn answer_of(w: &SavedWord) -> String {
     let note = w.note.trim();
     if !note.is_empty() {
         return note.to_string();
     }
-    w.meaning.lines().next().unwrap_or("").trim().to_string()
+    let words: Vec<String> = w.text.split_whitespace().map(|t| t.to_lowercase()).collect();
+    let part = |line: &str| -> Option<String> {
+        let (head, rest) = line.split_once(": ")?;
+        let head = head.trim().to_lowercase();
+        (!head.contains(' ') && words.contains(&head)).then(|| rest.trim().to_string())
+    };
+    let mut lines = w.meaning.lines().map(str::trim).filter(|l| !l.is_empty());
+    let Some(first) = lines.next() else { return String::new() };
+    match part(first) {
+        Some(p) => std::iter::once(p).chain(lines.map_while(|l| part(l))).collect::<Vec<_>>().join(" · "),
+        None => first.to_string(),
+    }
 }
 
 /// A small random generator, enough for shuffling choices.
@@ -354,6 +366,20 @@ mod tests {
             }
         }
         db
+    }
+
+    #[test]
+    fn a_phrase_answer_leaves_out_the_english_words() {
+        let mut w = SavedWord {
+            id: 1, text: String::new(), headword: String::new(), ipa: String::new(), meaning: String::new(), note: String::new(),
+            explanation: String::new(), added_at: 0, level: "new".into(), due_at: None, reviews: 0, contexts: vec![],
+        };
+        w.text = "itchy jumper".into();
+        w.meaning = "itchy: a. 渴望的, 痒的\njumper: n. 跳跃者, 工作服".into();
+        assert_eq!(answer_of(&w), "a. 渴望的, 痒的 · n. 跳跃者, 工作服");
+        w.text = "residents".into();
+        w.meaning = "n. 居民, 居住者\na. 居留的".into();
+        assert_eq!(answer_of(&w), "n. 居民, 居住者");
     }
 
     #[test]

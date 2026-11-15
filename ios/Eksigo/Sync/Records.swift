@@ -41,11 +41,25 @@ nonisolated struct Word: Codable, Hashable, Identifiable, Sendable {
 
     var level_: Level { Level(rawValue: level) ?? .new }
 
-    /// What the review shows as the answer: the learner's note, else the first line of the meaning.
+    /// What the review shows as the answer: the learner's note, else the first line of the meaning. A phrase's meaning
+    /// has a line per word, each starting with that word ("itchy: a. 痒的"): those lines are joined without the words,
+    /// so a choice never shows English (the desktop's `answer_of`).
     var answer: String {
         let n = note.trimmingCharacters(in: .whitespacesAndNewlines)
         if !n.isEmpty { return n }
-        return meaning.split(separator: "\n").first.map { $0.trimmingCharacters(in: .whitespaces) } ?? ""
+        let parts = Set(text.split(whereSeparator: \.isWhitespace).map { $0.lowercased() })
+        func part(_ line: String) -> String? {
+            guard let r = line.range(of: ": ") else { return nil }
+            let head = line[..<r.lowerBound].trimmingCharacters(in: .whitespaces).lowercased()
+            guard !head.contains(" "), parts.contains(head) else { return nil }
+            return line[r.upperBound...].trimmingCharacters(in: .whitespaces)
+        }
+        let lines = meaning.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        guard let first = lines.first else { return "" }
+        guard let p = part(first) else { return first }
+        var out = [p]
+        for line in lines.dropFirst() { guard let q = part(line) else { break }; out.append(q) }
+        return out.joined(separator: " · ")
     }
 
     var firstMeaning: String { meaning.split(separator: "\n").first.map(String.init) ?? "" }

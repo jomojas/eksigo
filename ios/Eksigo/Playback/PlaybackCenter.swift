@@ -311,16 +311,18 @@ final class PlaybackCenter {
     /// Said in the player when a sentence can't be played (no connection, or the file is gone).
     private(set) var missedProblem: String?
 
-    /// Can this sentence play here? Not when the phone's copy of the episode isn't the file the computer dictated.
+    /// Can this sentence play here? Yes whenever the episode has a web address.
     func playable(_ m: Missed) -> Bool { source(for: m) != nil }
 
-    /// The audio for a missed sentence: the download when it's the same file, else the stream.
+    /// The audio for a missed sentence: the download when it's the same file as the computer's, else the stream from
+    /// the same address the computer downloaded.
     func source(for m: Missed) -> URL? {
         guard let ref = m.ref.episodeValue else { return nil }
         if let record = Store.existingRecord(key: ref.key, in: context), let file = localFile(record) {
-            if let want = m.bytes, want > 0, let have = record.fileBytes, have != want { return nil }
-            return file
+            let same = (m.bytes ?? 0) <= 0 || record.fileBytes == nil || record.fileBytes == m.bytes
+            if same { return file }
         }
+        guard let scheme = ref.audioUrl.scheme?.lowercased(), scheme == "http" || scheme == "https" else { return nil }
         return ref.audioUrl
     }
 

@@ -58,6 +58,14 @@ nonisolated enum PracticeRules {
         return (Array(due) + Array(fresh)).compactMap { item($0, all: words, now: now, random: &random) }
     }
 
+    /// Nothing is due: the words that come back soonest, then new words past today's limit, for practice ahead of time.
+    static func ahead(words: [Word], now: Int, random: inout some RandomNumberGenerator) -> [Item] {
+        let soon = words.filter { $0.level == "learning" || $0.level == "familiar" }
+            .sorted { (($0.dueAt ?? 0), $0.addedAt) < (($1.dueAt ?? 0), $1.addedAt) }
+        let fresh = words.filter { $0.level == "new" }.sorted { ($0.addedAt, $0.text) < ($1.addedAt, $1.text) }
+        return (soon + fresh).prefix(perSession).compactMap { item($0, all: words, now: now, random: &random) }
+    }
+
     static func item(_ word: Word, all: [Word], now: Int, random: inout some RandomNumberGenerator) -> Item? {
         // The sentence practised longest ago (or never), the newest first among those.
         guard let context = word.contexts.min(by: { a, b in

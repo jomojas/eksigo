@@ -58,6 +58,12 @@ struct ReviewView: View {
                         .background(.white, in: Capsule())
                 }
                 .buttonStyle(.plain)
+                } else if words.contains(where: { $0.level != "known" }) {
+                    Button { ui.reviewAhead = true; ui.showReview = true } label: {
+                        Label("Review ahead", systemImage: "forward.fill")
+                    }
+                    .buttonStyle(.eks(.secondary, small: true))
+                    .accessibilityHint("Practises the words that come back soonest")
                 }
             }
         }
@@ -178,7 +184,8 @@ struct ReviewSessionView: View {
                     dismiss()
                     if listen {
                         center.startMissed(MissedGroup.groups(store.missed).flatMap(\.items))
-                        Task { try? await Task.sleep(for: .milliseconds(400)); ui.showMissed = true }
+                        // Opens the player only when a sentence could start, never an empty screen.
+                        if center.mode == .missed { Task { try? await Task.sleep(for: .milliseconds(400)); ui.showMissed = true } }
                     }
                 }
             } else if let item = queue[safe: pos] {
@@ -214,6 +221,8 @@ struct ReviewSessionView: View {
         let now = Int(Date.now.timeIntervalSince1970)
         queue = PracticeRules.queue(words: store.words, reviews: store.reviews, now: now,
                                     today: Int(Calendar.current.startOfDay(for: .now).timeIntervalSince1970), random: &rng)
+        if queue.isEmpty && ui.reviewAhead { queue = PracticeRules.ahead(words: store.words, now: now, random: &rng) }
+        ui.reviewAhead = false
         loaded = true
         started = .now
         cardShown()
@@ -448,6 +457,7 @@ private struct DoneView: View {
     let seconds: Int
     var close: (_ listen: Bool) -> Void
     @Environment(RecordStore.self) private var store
+    @Environment(PlaybackCenter.self) private var center
 
     var body: some View {
         let again = results.filter(\.again).count
@@ -478,7 +488,7 @@ private struct DoneView: View {
             }
             VStack(spacing: 8) {
                 Button("Done") { close(false) }.buttonStyle(.eks(.primary, block: true, height: 52))
-                if !store.missed.isEmpty {
+                if store.missed.contains(where: center.playable) {
                     Button("Listen to the missed sentences") { close(true) }.buttonStyle(.eks(.ghost, block: true))
                 }
             }
