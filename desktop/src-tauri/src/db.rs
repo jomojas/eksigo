@@ -227,6 +227,9 @@ const MIGRATIONS: &[&str] = &[
         send       INTEGER NOT NULL,
         PRIMARY KEY (attempt_id, idx)
     );",
+    // 16: missed sentences sent again after being taken off the phone went with their old time, so the server
+    // kept the deletion. Sending them all once more, with the time of sending (sync.rs `changes`), mends that.
+    "UPDATE sync_sent SET hash = '' WHERE kind = 'missed';",
 ];
 
 pub struct Db(pub Mutex<Connection>);

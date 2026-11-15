@@ -170,6 +170,8 @@ struct ReviewSessionView: View {
     @State private var started = Date.now
     @State private var done = false
     @State private var loaded = false
+    /// The sentences' files are checked: until then the cards wait, so each is asked the right way.
+    @State private var ready = false
     @State private var results: [(word: String, from: Word.Level, to: Word.Level, again: Bool)] = []
     @State private var againCount: [String: Int] = [:]
     @State private var slow = false
@@ -192,7 +194,13 @@ struct ReviewSessionView: View {
                     .accessibilityLabel("More")
                 }
                 Track(value: Double(pos) / Double(max(queue.count, 1))).padding(.horizontal, 20)
-                card(item).id(item.id)
+                if ready {
+                    card(item).id(item.id)
+                } else {
+                    Spacer()
+                    ProgressView().frame(maxWidth: .infinity)
+                    Spacer()
+                }
             } else if loaded {
                 NavBar(close: true, onBack: { dismiss() })
                 VStack(alignment: .leading, spacing: 12) {
@@ -217,15 +225,21 @@ struct ReviewSessionView: View {
         if queue.isEmpty && ui.reviewAhead { queue = PracticeRules.ahead(words: store.words, now: now, random: &rng) }
         ui.reviewAhead = false
         loaded = true
-        started = .now
-        cardShown()
+        Task {
+            // Which sentences play here decides each card, so the files are checked before the first one.
+            await clips.prepare(queue.map(\.context))
+            for i in queue.indices { queue[i].heard = clips.canPlay(queue[i].context) }
+            ready = true
+            started = .now
+            cardShown()
+        }
     }
 
     private func cardShown() {
         shownAt = .now
         showing = false
         picked = nil
-        if let item = queue[safe: pos] { clips.play(item.context, rate: slow ? 0.7 : 1) }
+        if let item = queue[safe: pos], item.heard { clips.play(item.context, rate: slow ? 0.7 : 1) }
     }
 
     @ViewBuilder private func card(_ item: PracticeRules.Item) -> some View {
@@ -289,6 +303,7 @@ struct ReviewSessionView: View {
         } else {
             Eyebrow("What does it mean here?")
             Text(item.word.text).font(Theme.display(30)).tracking(-0.7).foregroundStyle(Theme.ink)
+            Pronunciation(ipa: item.word.ipa)
             Text("“\(item.context.sentence)”").font(Theme.text(16)).foregroundStyle(Theme.inkMuted)
         }
         playButtons(item)
@@ -343,19 +358,27 @@ struct ReviewSessionView: View {
     }
 
     @ViewBuilder private func pickCard(_ item: PracticeRules.Item) -> some View {
-        Eyebrow("New word · what does it mean here?")
+        Eyebrow(item.word.level == "new" ? (item.heard ? "New word · what does it mean here?" : "New word · what does it mean?")
+                                         : "What does it mean?")
         HStack(spacing: 10) {
-            Text(item.word.text).font(Theme.display(30)).tracking(-0.7).foregroundStyle(Theme.ink).frame(maxWidth: .infinity, alignment: .leading)
-            if clips.canPlay(item.context) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(item.word.text).font(Theme.display(30)).tracking(-0.7).foregroundStyle(Theme.ink)
+                Pronunciation(ipa: item.word.ipa)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            if item.heard && clips.canPlay(item.context) {
                 RoundButton(symbol: "speaker.wave.2", label: "Play the sentence", size: 44) { clips.play(item.context, rate: slow ? 0.7 : 1) }
             }
         }
-        if let gap = item.gap {
-            Text(MissedWordsText.attributed([("“" + (gap[0].count > 50 ? "…" + gap[0].suffix(40) : gap[0]), false), (gap[1], true),
-                                             (gap[2] + "”", false)], color: Theme.inkMuted))
-                .font(Theme.text(16)).lineSpacing(4)
-        } else {
-            Text("“\(item.context.sentence)”").font(Theme.text(16)).foregroundStyle(Theme.inkMuted)
+        // A sentence that can't be heard here isn't shown: the word and its meanings are the question.
+        if item.heard {
+            if let gap = item.gap {
+                Text(MissedWordsText.attributed([("“" + (gap[0].count > 50 ? "…" + gap[0].suffix(40) : gap[0]), false), (gap[1], true),
+                                                 (gap[2] + "”", false)], color: Theme.inkMuted))
+                    .font(Theme.text(16)).lineSpacing(4)
+            } else {
+                Text("“\(item.context.sentence)”").font(Theme.text(16)).foregroundStyle(Theme.inkMuted)
+            }
         }
         VStack(spacing: 8) {
             ForEach(Array(item.choices.enumerated()), id: \.offset) { i, choice in
@@ -403,6 +426,7 @@ struct ReviewSessionView: View {
             if let w = store.word(item.word.key) {
                 var rng = SystemRandomNumberGenerator()
                 again = PracticeRules.item(w, all: store.words, now: Int(Date.now.timeIntervalSince1970), random: &rng) ?? item
+                again.heard = clips.canPlay(again.context)
             }
             queue.append(again)
         }
@@ -500,6 +524,18 @@ extension Word.Level {
         case .learning: Color(uiColor: .systemOrange)
         case .familiar: Color(uiColor: .systemGreen)
         case .known: Theme.primary
+        }
+    }
+}
+
+/// How a word sounds, in the dictionary's phonetic letters, under the word on a card.
+private struct Pronunciation: View {
+    let ipa: String
+
+    var body: some View {
+        if !ipa.isEmpty {
+            Text(ipa).font(Theme.mono(14)).foregroundStyle(Theme.inkSubtle)
+                .accessibilityLabel("Pronunciation \(ipa)")
         }
     }
 }

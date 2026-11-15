@@ -59,6 +59,30 @@ final class ClipPlayer {
         }
     }
 
+    /// Checks, all at once, which of these sentences' episodes serve the computer's file here, so a review knows
+    /// before it starts which sentences it can play. No answer counts as can't: the card then doesn't need the sound.
+    func prepare(_ contexts: [WordContext]) async {
+        var wanted: [String: Int64] = [:]
+        for c in contexts where canPlay(c) {
+            guard let address = c.audioUrl, let url = URL(string: address), let want = c.bytes, want > 0, checked[address] == nil else { continue }
+            if let d = center?.download(of: episode(url)), d.bytes == want { continue }
+            wanted[address] = want
+        }
+        guard !wanted.isEmpty else { return }
+        let sizes = await withTaskGroup(of: (String, Int64?).self) { group in
+            for address in wanted.keys {
+                group.addTask { (address, await Self.size(of: URL(string: address)!)) }
+            }
+            var out: [String: Int64?] = [:]
+            for await (address, size) in group { out[address] = size }
+            return out
+        }
+        for (address, size) in sizes {
+            if let size { checked[address] = size == wanted[address] }
+            if size != wanted[address] { otherFile.insert(address) }
+        }
+    }
+
     private func refuse(_ address: String) {
         stop()
         otherFile.insert(address)

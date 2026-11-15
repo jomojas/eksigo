@@ -42,8 +42,11 @@ nonisolated enum PracticeRules {
         var choices: [String]
         /// Seconds until the word comes back for Again, Hard, Good and Easy.
         var next: [Int]
-        /// How it's asked: "pick" for a new word when there are choices, otherwise "recall".
-        var mode: String { word.level == "new" && choices.count == 4 ? "pick" : "recall" }
+        /// The sentence plays on this phone (the computer's own file). Set once the files are checked.
+        var heard = true
+        /// How it's asked: "pick" (choose the meaning) for a new word, or for any word whose sentence can't be heard
+        /// here, when there are choices; otherwise "recall", the sentence with a gap.
+        var mode: String { (word.level == "new" || !heard) && choices.count == 4 ? "pick" : "recall" }
     }
 
     /// Today's session.
