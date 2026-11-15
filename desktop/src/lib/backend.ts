@@ -195,6 +195,21 @@ export type Answer = {
   comparison: Comparison | null;
 };
 
+/** A sentence to hear again: one with mistakes in the latest attempt at an episode, as chosen for the phone. */
+export type MissedSentence = {
+  itemId: number;
+  attemptId: number;
+  title: string;
+  source: string;
+  artworkUrl: string | null;
+  /** The audio on this computer. */
+  path: string;
+  startMs: number;
+  endMs: number;
+  answeredAt: number;
+  answer: Answer;
+};
+
 /** An attempt, its answers, the sentences flagged for the review, and those that go to the phone (null when this
  * attempt's can't: an older attempt, or the learner's own file). */
 export type Session = { attempt: Attempt; answers: Answer[]; flagged: number[]; toPhone?: number[] | null };
@@ -498,6 +513,7 @@ export const backend = {
     call<void>("dictation_position", { attemptId, position, seconds }, () => sample.savePosition(attemptId, position, seconds)),
   finishDictation: (attemptId: number) => call<Summary>("dictation_finish", { attemptId }, () => sample.finishDictation(attemptId)),
   session: (attemptId: number) => call<Session>("dictation_session", { attemptId }, () => sample.session(attemptId)),
+  missedSentences: () => call<MissedSentence[]>("missed_sentences", {}, () => sample.missedSentences()),
   toPhone: (attemptId: number, idx: number, send: boolean) =>
     call<number[] | null>("dictation_to_phone", { attemptId, idx, send }, () => sample.toPhone(attemptId, idx, send)),
   flag: (attemptId: number, idx: number, on: boolean) => call<void>("dictation_flag", { attemptId, idx, on }, () => sample.flag(attemptId, idx, on)),
