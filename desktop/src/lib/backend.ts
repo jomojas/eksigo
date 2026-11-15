@@ -195,8 +195,9 @@ export type Answer = {
   comparison: Comparison | null;
 };
 
-/** An attempt, its answers, and the sentences flagged for the review. */
-export type Session = { attempt: Attempt; answers: Answer[]; flagged: number[] };
+/** An attempt, its answers, the sentences flagged for the review, and those that go to the phone (null when this
+ * attempt's can't: an older attempt, or the learner's own file). */
+export type Session = { attempt: Attempt; answers: Answer[]; flagged: number[]; toPhone?: number[] | null };
 
 export type Summary = {
   attempt: Attempt;
@@ -497,6 +498,8 @@ export const backend = {
     call<void>("dictation_position", { attemptId, position, seconds }, () => sample.savePosition(attemptId, position, seconds)),
   finishDictation: (attemptId: number) => call<Summary>("dictation_finish", { attemptId }, () => sample.finishDictation(attemptId)),
   session: (attemptId: number) => call<Session>("dictation_session", { attemptId }, () => sample.session(attemptId)),
+  toPhone: (attemptId: number, idx: number, send: boolean) =>
+    call<number[] | null>("dictation_to_phone", { attemptId, idx, send }, () => sample.toPhone(attemptId, idx, send)),
   flag: (attemptId: number, idx: number, on: boolean) => call<void>("dictation_flag", { attemptId, idx, on }, () => sample.flag(attemptId, idx, on)),
   summary: (attemptId: number) => call<Summary>("dictation_summary", { attemptId }, () => sample.summary(attemptId)),
   attempts: (itemId: number) => call<Summary[]>("dictation_attempts", { itemId }, () => sample.attempts(itemId)),

@@ -233,6 +233,8 @@ const notFound = (what: string) => new Error(`That ${what} isn't in the sample d
 const attempts: Attempt[] = [];
 const answers = new Map<number, Map<number, Answer>>();
 const flags = new Map<number, Set<number>>();
+/** Which sentences the learner chose to send to the phone, or keep here (sample.toPhone). */
+const phonePicks = new Map<number, Map<number, boolean>>();
 // A few saved words, so My words and practice have something to show in a browser. Their episode isn't
 // in the sample Library, so practice reads them with the computer's voice.
 const SEED_WORDS: [string, string, number][] = [
@@ -790,7 +792,14 @@ export const sample = {
 
   session(attemptId: number): Session {
     const a = attemptById(attemptId);
-    return { attempt: { ...a }, answers: [...(answers.get(a.id)?.values() ?? [])].sort((x, y) => x.idx - y.idx), flagged: flaggedOf(a.id) };
+    const list = [...(answers.get(a.id)?.values() ?? [])].sort((x, y) => x.idx - y.idx);
+    const flagged = flaggedOf(a.id);
+    // As the desktop decides (dictation.rs TO_PHONE): the learner's pick, else flags and real mistakes, not spelling slips.
+    const toPhone = list
+      .filter((n) => (n.kind === "typed" && n.credit < n.total) || flagged.includes(n.idx))
+      .filter((n) => phonePicks.get(a.id)?.get(n.idx) ?? (flagged.includes(n.idx) || n.credit + n.spelling * 0.5 < n.total))
+      .map((n) => n.idx);
+    return { attempt: { ...a }, answers: list, flagged, toPhone };
   },
 
   // Word practice, with fixed intervals instead of FSRS.
@@ -990,6 +999,13 @@ export const sample = {
     const i = savedWords.findIndex((x) => x.id === id);
     if (i >= 0) savedWords.splice(i, 1);
     emit("words", null);
+  },
+
+  toPhone(attemptId: number, idx: number, send: boolean): number[] | null {
+    if (!phonePicks.has(attemptId)) phonePicks.set(attemptId, new Map());
+    phonePicks.get(attemptId)!.set(idx, send);
+    emit("practice", null);
+    return sample.session(attemptId).toPhone ?? null;
   },
 
   flag(attemptId: number, idx: number, on: boolean) {

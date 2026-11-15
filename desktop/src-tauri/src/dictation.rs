@@ -209,6 +209,46 @@ pub fn flag(conn: &Connection, attempt_id: i64, idx: i64, on: bool) -> Result<()
     Ok(())
 }
 
+/// Which answers (`n`, in attempt `a`) can go to the phone: wrong words, or flagged.
+pub const PHONE_CANDIDATE: &str = "((n.kind = 'typed' AND n.credit < n.total)
+     OR EXISTS (SELECT 1 FROM flagged f WHERE f.attempt_id = n.attempt_id AND f.idx = n.idx))";
+/// Which of those go: the learner's choice, else flagged ones and real mistakes, but not spelling slips alone
+/// (a spelling mistake counts half a word, so only slips means credit + spelling / 2 = total).
+pub const TO_PHONE: &str = "COALESCE(
+        (SELECT p.send FROM phone_picks p WHERE p.attempt_id = n.attempt_id AND p.idx = n.idx),
+        EXISTS (SELECT 1 FROM flagged f WHERE f.attempt_id = n.attempt_id AND f.idx = n.idx)
+            OR n.credit + n.spelling * 0.5 < n.total)";
+
+/// The sentences of an attempt that go to the phone, or None when none can: an older attempt (only the latest
+/// one at an episode goes) or the learner's own file (the phone can't play it).
+pub fn to_phone(conn: &Connection, attempt_id: i64) -> Result<Option<Vec<i64>>> {
+    let latest: bool = conn.query_row(
+        "SELECT i.episode_id IS NOT NULL
+                AND a.id = (SELECT id FROM attempts WHERE item_id = a.item_id ORDER BY started_at DESC, id DESC LIMIT 1)
+         FROM attempts a JOIN items i ON i.id = a.item_id WHERE a.id = ?1",
+        [attempt_id],
+        |r| r.get(0),
+    )?;
+    if !latest {
+        return Ok(None);
+    }
+    let mut st = conn.prepare(&format!(
+        "SELECT n.idx FROM answers n WHERE n.attempt_id = ?1 AND {PHONE_CANDIDATE} AND {TO_PHONE} ORDER BY n.idx"
+    ))?;
+    let rows = st.query_map([attempt_id], |r| r.get(0))?.collect::<rusqlite::Result<_>>()?;
+    Ok(Some(rows))
+}
+
+/// The learner's choice: sentence `idx` goes to the phone, or doesn't.
+pub fn send_to_phone(conn: &Connection, attempt_id: i64, idx: i64, send: bool) -> Result<()> {
+    conn.execute(
+        "INSERT INTO phone_picks (attempt_id, idx, send) VALUES (?1, ?2, ?3)
+         ON CONFLICT (attempt_id, idx) DO UPDATE SET send = excluded.send",
+        params![attempt_id, idx, send],
+    )?;
+    Ok(())
+}
+
 /// The sentences flagged in an attempt.
 pub fn flagged(conn: &Connection, attempt_id: i64) -> Result<Vec<i64>> {
     let mut st = conn.prepare("SELECT idx FROM flagged WHERE attempt_id = ?1 ORDER BY idx")?;
@@ -389,6 +429,37 @@ mod tests {
             }
         }
         db
+    }
+
+    #[test]
+    fn real_mistakes_go_to_the_phone_and_spelling_slips_stay_unless_sent() {
+        let db = setup();
+        let c = db.conn();
+        let a = start(&c, 1, false).unwrap();
+        answer(&c, a.id, 0, Kind::Typed, "hello their", 1, 5).unwrap();
+        assert_eq!(to_phone(&c, a.id).unwrap(), None, "the learner's own file can't play on the phone");
+
+        c.execute_batch(
+            "INSERT INTO shows (id, feed_url, title) VALUES (1, 'https://f/rss', 'Show');
+             INSERT INTO episodes (id, show_id, guid, title, audio_url) VALUES (1, 1, 'g', 'Ep', 'https://f/1.mp3');
+             UPDATE items SET episode_id = 1, own_file = 0 WHERE id = 1;",
+        )
+        .unwrap();
+        answer(&c, a.id, 2, Kind::Typed, "Buy them now.", 1, 5).unwrap();
+        answer(&c, a.id, 3, Kind::Typed, "Bakc to the show.", 1, 5).unwrap();
+        let slip = answers(&c, a.id).unwrap().into_iter().find(|x| x.idx == 3).unwrap();
+        assert_eq!(slip.spelling, 1, "the test needs a spelling slip");
+        assert_eq!(to_phone(&c, a.id).unwrap(), Some(vec![0]), "a wrong word goes; a correct sentence and a slip don't");
+
+        send_to_phone(&c, a.id, 3, true).unwrap();
+        send_to_phone(&c, a.id, 0, false).unwrap();
+        flag(&c, a.id, 2, true).unwrap();
+        assert_eq!(to_phone(&c, a.id).unwrap(), Some(vec![2, 3]), "the learner's choices win; a flagged sentence goes");
+
+        finish(&c, a.id).unwrap();
+        let b = start(&c, 1, true).unwrap();
+        assert_eq!(to_phone(&c, a.id).unwrap(), None, "only the latest attempt goes");
+        assert_eq!(to_phone(&c, b.id).unwrap(), Some(vec![]));
     }
 
     #[test]
