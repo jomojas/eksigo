@@ -197,7 +197,7 @@ extension WordContext: LenientDecodable {
         WordContext(audioUrl: J.os(j, "audioUrl"), title: J.os(j, "title"), source: J.os(j, "source"), idx: J.i(j, "idx"),
                     sentence: J.s(j, "sentence"), typed: J.s(j, "typed"), startMs: J.i(j, "startMs"), endMs: J.i(j, "endMs"),
                     sentenceStartMs: J.i(j, "sentenceStartMs"), sentenceEndMs: J.i(j, "sentenceEndMs"),
-                    addedAt: J.i(j, "addedAt"), practisedAt: J.oi(j, "practisedAt"))
+                    addedAt: J.i(j, "addedAt"), practisedAt: J.oi(j, "practisedAt"), bytes: J.i64(j, "bytes"))
     }
 }
 
