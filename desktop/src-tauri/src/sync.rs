@@ -94,7 +94,8 @@ fn words(conn: &Connection) -> Result<Vec<Record>> {
         .collect::<rusqlite::Result<Vec<_>>>()?;
     let mut ctx = conn.prepare(
         "SELECT COALESCE(e.audio_url, c.audio_url), COALESCE(i.title, c.title), COALESCE(i.source, c.source), c.idx, c.sentence,
-                c.typed, c.start_ms, c.end_ms, c.sentence_start_ms, c.sentence_end_ms, c.added_at, c.practised_at
+                c.typed, c.start_ms, c.end_ms, c.sentence_start_ms, c.sentence_end_ms, c.added_at, c.practised_at,
+                CASE WHEN e.id IS NOT NULL THEN i.bytes END
          FROM word_contexts c LEFT JOIN items i ON i.id = c.item_id LEFT JOIN episodes e ON e.id = i.episode_id
          WHERE c.word_id = ?1 ORDER BY c.added_at, c.idx, c.sentence",
     )?;
@@ -102,7 +103,7 @@ fn words(conn: &Connection) -> Result<Vec<Record>> {
     for (id, mut data, changed) in rows {
         let contexts = ctx
             .query_map([id], |r| {
-                Ok(json!({
+                let mut c = json!({
                     "audioUrl": r.get::<_, Option<String>>(0)?,
                     "title": r.get::<_, Option<String>>(1)?,
                     "source": r.get::<_, Option<String>>(2)?,
@@ -115,7 +116,13 @@ fn words(conn: &Connection) -> Result<Vec<Record>> {
                     "sentenceEndMs": r.get::<_, i64>(9)?,
                     "addedAt": r.get::<_, i64>(10)?,
                     "practisedAt": r.get::<_, Option<i64>>(11)?,
-                }))
+                });
+                // The size of the file this computer has: the phone plays the sentence only from the same file.
+                // Left out when unknown, so a word from elsewhere comes back unchanged.
+                if let Some(b) = r.get::<_, Option<i64>>(12)? {
+                    c["bytes"] = json!(b);
+                }
+                Ok(c)
             })?
             .collect::<rusqlite::Result<Vec<_>>>()?;
         data["contexts"] = Value::Array(contexts);

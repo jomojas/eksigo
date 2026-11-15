@@ -501,6 +501,7 @@ struct EpisodeView: View {
     @Environment(RecordStore.self) private var store
     @Environment(AppUI.self) private var ui
     @State private var expanded = false
+    @State private var showMissed = false
 
     var body: some View {
         let missed = store.missed.filter { $0.ref.key == episode.key }.sorted { $0.idx < $1.idx }
@@ -529,19 +530,17 @@ struct EpisodeView: View {
                                   ("\(missed.count)", "Missed"),
                                   (Stats.short(practice.seconds), relativeDay(Date(timeIntervalSince1970: TimeInterval(practice.updatedAt))).capFirst)])
                     if !missed.isEmpty {
-                        let playable = missed.filter(center.playable)
-                        Button {
-                            center.startMissed(missed)
-                            ui.showMissed = true
-                        } label: {
+                        Button { showMissed = true } label: {
                             RowGroup {
-                                Row(title: "Play the \(missed.count) missed sentence\(missed.count == 1 ? "" : "s")",
-                                    subtitle: playable.isEmpty ? "No web address for this episode: text only" : "The same file as on the computer",
-                                    chevron: true, leading: { IconTile("headphones") }, trailing: { EmptyView() })
+                                Row(title: "The \(missed.count) missed sentence\(missed.count == 1 ? "" : "s")",
+                                    subtitle: "The sentences and what you typed",
+                                    chevron: true, leading: { IconTile("text.alignleft") }, trailing: { EmptyView() })
                             }
                         }
                         .buttonStyle(.plain)
-                        .disabled(playable.isEmpty)
+                        .sheet(isPresented: $showMissed) {
+                            NavigationStack { MissedListView(asPage: false, only: missed[0].audioUrl) }
+                        }
                     }
                 }
             }

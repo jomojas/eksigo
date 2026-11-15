@@ -13,7 +13,7 @@ struct MiniPlayer: View {
     }
 
     var body: some View {
-        if let e = center.episode, center.mode != .missed {
+        if let e = center.episode {
             if Self.isTabAccessory {
                 row(e).padding(.horizontal, 10)
             } else {
@@ -57,6 +57,8 @@ struct NowPlayingView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var scrub: Double?
     @State private var showUpNext = false
+    /// The episode (its audio address) whose missed sentences are open.
+    @State private var missedList: String?
     @State private var showShow: PodcastShow?
     @State private var scrolled = false
     @State private var route = RouteName.current()
@@ -98,6 +100,9 @@ struct NowPlayingView: View {
         .sheet(isPresented: $showUpNext) {
             UpNextView().presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
         }
+        .sheet(isPresented: Binding(get: { missedList != nil }, set: { if !$0 { missedList = nil } })) {
+            NavigationStack { MissedListView(asPage: false, only: missedList) }
+        }
         .sheet(item: $showShow) { show in
             NavigationStack {
                 ShowView(show: show)
@@ -129,9 +134,9 @@ struct NowPlayingView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 let missed = missedHere(e)
                 if !missed.isEmpty {
-                    Button { playMissed(missed) } label: {
+                    Button { missedList = missed[0].audioUrl } label: {
                         HStack(spacing: 6) {
-                            Image(systemName: "ear").font(.system(size: 14, weight: .semibold))
+                            Image(systemName: "text.alignleft").font(.system(size: 14, weight: .semibold))
                             Text("\(missed.count) missed")
                         }
                         .font(Theme.text(13, .semibold)).foregroundStyle(Theme.ink)
@@ -141,8 +146,7 @@ struct NowPlayingView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Play \(plural(missed.count, "missed sentence"))")
-                    .disabled(!missed.contains(where: center.playable))
+                    .accessibilityLabel("Read \(plural(missed.count, "missed sentence"))")
                 }
             }
             .padding(.top, 26)
@@ -185,7 +189,6 @@ struct NowPlayingView: View {
             .tint(Theme.ink)
             .accessibilityLabel("Position")
             .accessibilityValue(Stats.clock(value))
-            .overlay(alignment: .bottomLeading) { missedMarks }
             HStack {
                 Text(Stats.clock(value))
                 Spacer()
@@ -290,15 +293,14 @@ struct NowPlayingView: View {
             let missed = missedHere(e)
             if !missed.isEmpty {
                 Block("Missed on your computer") {
-                    Button { playMissed(missed) } label: {
+                    Button { missedList = missed[0].audioUrl } label: {
                         RowGroup {
                             Row(title: plural(missed.count, "sentence") + " you missed",
-                                subtitle: missed.contains(where: center.playable) ? "Each played \(center.settings.repeats == 1 ? "once" : center.settings.repeats == 2 ? "twice" : "\(center.settings.repeats) times"), then the text" : "No web address for this episode: text only",
-                                chevron: true, leading: { IconTile("headphones") }, trailing: { EmptyView() })
+                                subtitle: "The sentences and what you typed",
+                                chevron: true, leading: { IconTile("text.alignleft") }, trailing: { EmptyView() })
                         }
                     }
                     .buttonStyle(.plain)
-                    .disabled(!missed.contains(where: center.playable))
                 }
             }
             if !e.summary.isEmpty {
@@ -340,35 +342,8 @@ struct NowPlayingView: View {
 
     // MARK: Helpers
 
-    /// Where this episode's missed sentences are, as small yellow marks under the time bar.
-    @ViewBuilder private var missedMarks: some View {
-        if let e = center.episode, center.duration > 0 {
-            let marks = missedHere(e).map { Double($0.startMs) / 1000 / center.duration }.filter { $0 >= 0 && $0 <= 1 }
-            if !marks.isEmpty {
-                GeometryReader { g in
-                    ForEach(Array(marks.enumerated()), id: \.offset) { _, m in
-                        Capsule().fill(Color(hex: 0xFFD60A)).frame(width: 3, height: 7)
-                            .position(x: 2 + (g.size.width - 4) * m, y: g.size.height + 4)
-                    }
-                }
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-            }
-        }
-    }
-
     private func missedHere(_ e: PodcastEpisode) -> [Missed] {
         store.missed.filter { $0.ref.key == e.key }.sorted { $0.idx < $1.idx }
-    }
-
-    /// The missed-sentences player opens over the tabs, so this one closes first.
-    private func playMissed(_ missed: [Missed]) {
-        dismiss()
-        Task {
-            try? await Task.sleep(for: .milliseconds(450))
-            center.startMissed(missed)
-            ui.showMissed = true
-        }
     }
 
     private func downloadText(_ e: PodcastEpisode) -> String {

@@ -4,12 +4,11 @@ import Network
 import SwiftData
 import os
 
-/// Everything that plays: podcast episodes (stream or download, speed, skip, resume, sleep timer) and the missed
-/// sentences from the computer, one by one, each played a few times (design P03). Owns downloads, the lock screen and
-/// the headphone commands. Listening time counts for today, and each episode's latest listen is synced.
+/// Everything that plays: podcast episodes (stream or download, speed, skip, resume, sleep timer). Owns downloads, the
+/// lock screen and the headphone commands. Listening time counts for today, and each episode's latest listen is synced.
 @Observable
 final class PlaybackCenter {
-    enum Mode: Equatable { case none, episode, missed }
+    enum Mode: Equatable { case none, episode }
 
     private(set) var mode: Mode = .none
     /// The episode in the mini player.
@@ -49,19 +48,15 @@ final class PlaybackCenter {
         configureRemoteCommands()
         restoreLast()
         network.pathUpdateHandler = { [weak self] path in
-            let wifi = path.status == .satisfied && path.usesInterfaceType(.wifi) && !path.isExpensive
             let online = path.status == .satisfied
             Task { @MainActor in
-                self?.onWiFi = wifi
                 self?.online = online
-                self?.downloadMissedEpisodes()
             }
         }
         network.start(queue: .main)
     }
 
     @ObservationIgnored private let network = NWPathMonitor()
-    private var onWiFi = false
     private(set) var online = true
 
     var rate: Float { settings.speed }
@@ -70,7 +65,6 @@ final class PlaybackCenter {
 
     /// Plays an episode from where it was left (or from `at`). It leaves Up Next if it was there.
     func play(_ episode: PodcastEpisode, at time: Double? = nil, saveCurrent: Bool = true) {
-        if mode == .missed { endMissed() }
         let record = Store.record(for: episode, in: context)
         removeFromQueue(episode.key)
         if self.episode?.key != episode.key {
@@ -98,7 +92,6 @@ final class PlaybackCenter {
 
     func togglePlayPause() {
         switch mode {
-        case .missed: missedTogglePlay()
         case .episode: isPlaying ? pause() : resume()
         case .none: if episode != nil { resume() }
         }
@@ -107,7 +100,6 @@ final class PlaybackCenter {
     func pause() {
         player.pause()
         isPlaying = false
-        if mode == .missed { missed?.waiting?.cancel() }
         saveProgress(force: true)
         store.flush()
         updateNowPlaying()
@@ -116,7 +108,6 @@ final class PlaybackCenter {
 
     func resume() {
         guard let episode else { return }
-        if mode == .missed { endMissed() }
         mode = .episode
         let record = Store.record(for: episode, in: context)
         let url = localFile(record) ?? episode.audioUrl
@@ -283,207 +274,6 @@ final class PlaybackCenter {
         UserDefaults.standard.set(try? JSONEncoder().encode(queue), forKey: "upNext")
     }
 
-    // MARK: Missed sentences
-
-    /// The missed-sentences player (design P03): one sentence at a time, each played `settings.repeats` times.
-    @Observable
-    final class MissedSession {
-        let items: [Missed]
-        var index: Int
-        /// Plays of the current sentence finished.
-        var plays = 0
-        var playing = false
-        /// The text is shown (after the first play, by the setting, or when asked).
-        var revealed = false
-        var rate: Float = 1
-        var finishedAll = false
-        @ObservationIgnored var waiting: Task<Void, Never>?
-
-        init(items: [Missed], index: Int) {
-            self.items = items
-            self.index = index
-        }
-
-        var current: Missed? { items.indices.contains(index) ? items[index] : nil }
-    }
-
-    private(set) var missed: MissedSession?
-    /// Said in the player when a sentence can't be played (no connection, or the file is gone).
-    private(set) var missedProblem: String?
-
-    /// Can this sentence play here? Yes whenever the episode has a web address.
-    func playable(_ m: Missed) -> Bool { source(for: m) != nil }
-
-    /// The audio for a missed sentence: the download when it's the same file as the computer's, else the stream from
-    /// the same address the computer downloaded.
-    func source(for m: Missed) -> URL? {
-        guard let ref = m.ref.episodeValue else { return nil }
-        if let record = Store.existingRecord(key: ref.key, in: context), let file = localFile(record) {
-            let same = (m.bytes ?? 0) <= 0 || record.fileBytes == nil || record.fileBytes == m.bytes
-            if same { return file }
-        }
-        guard let scheme = ref.audioUrl.scheme?.lowercased(), scheme == "http" || scheme == "https" else { return nil }
-        return ref.audioUrl
-    }
-
-    func startMissed(_ items: [Missed], at index: Int = 0) {
-        let playableItems = items.filter(playable)
-        guard !playableItems.isEmpty else { return }
-        if mode == .episode, isPlaying {
-            player.pause()
-            saveProgress(force: true)
-        }
-        isPlaying = false
-        let start = items.indices.contains(index) ? playableItems.firstIndex(of: items[index]) ?? 0 : 0
-        let session = MissedSession(items: playableItems, index: start)
-        session.rate = 1
-        missed = session
-        mode = .missed
-        activate()
-        playCurrent(fresh: true)
-    }
-
-    func endMissed() {
-        missed?.waiting?.cancel()
-        clearBoundary()
-        player.pause()
-        missed = nil
-        if mode == .missed { mode = episode == nil ? .none : .episode }
-        isPlaying = false
-        lastTick = nil
-        // The episode plays from where it was the next time it's resumed.
-        loadedURL = nil
-        updateNowPlaying()
-        store.flush()
-        onPause?()
-    }
-
-    func missedNext() { moveMissed(by: 1) }
-    func missedPrevious() { moveMissed(by: -1) }
-
-    func missedReplay() {
-        guard let s = missed else { return }
-        s.waiting?.cancel()
-        s.plays = max(0, min(s.plays, settings.repeats - 1))
-        s.finishedAll = false
-        playCurrent(fresh: false)
-    }
-
-    func missedJump(to index: Int) {
-        guard let s = missed, s.items.indices.contains(index) else { return }
-        s.waiting?.cancel()
-        s.index = index
-        s.finishedAll = false
-        playCurrent(fresh: true)
-    }
-
-    func missedSetRate(_ r: Float) {
-        guard let s = missed else { return }
-        s.rate = r
-        if s.playing { player.rate = r }
-    }
-
-    func missedReveal() { missed?.revealed.toggle() }
-
-    /// `isPlaying` is the playlist running, also in the quiet between two plays.
-    private func missedTogglePlay() {
-        guard let s = missed else { return }
-        if isPlaying {
-            player.pause()
-            s.playing = false
-            isPlaying = false
-            s.waiting?.cancel()
-            store.flush()
-            updateNowPlaying()
-        } else if s.finishedAll {
-            missedJump(to: 0)
-        } else {
-            playCurrent(fresh: false)
-        }
-    }
-
-    private func moveMissed(by step: Int) {
-        guard let s = missed else { return }
-        s.waiting?.cancel()
-        let i = s.index + step
-        guard s.items.indices.contains(i) else {
-            if step > 0 { finishMissed() }
-            return
-        }
-        s.index = i
-        s.finishedAll = false
-        playCurrent(fresh: true)
-    }
-
-    private func finishMissed() {
-        guard let s = missed else { return }
-        s.finishedAll = true
-        s.playing = false
-        isPlaying = false
-        clearBoundary()
-        player.pause()
-        store.flush()
-        updateNowPlaying()
-        onPause?()
-    }
-
-    private func playCurrent(fresh: Bool) {
-        guard let s = missed, let m = s.current, let url = source(for: m) else { return finishMissed() }
-        if fresh {
-            s.plays = 0
-            s.revealed = settings.showText == .always
-        }
-        load(url, at: Double(m.startMs) / 1000)
-        clearBoundary()
-        boundary = player.addBoundaryTimeObserver(forTimes: [NSValue(time: CMTime(value: CMTimeValue(m.endMs), timescale: 1000))], queue: .main) { [weak self] in
-            MainActor.assumeIsolated { self?.sentenceEnded() }
-        }
-        player.playImmediately(atRate: s.rate)
-        s.playing = true
-        isPlaying = true
-        lastTick = nil
-        missedProblem = nil
-        updateNowPlaying()
-        watch(s, index: s.index)
-        // Episodes downloaded later play from the file the next time.
-        if let ref = m.ref.episodeValue { downloadIfWanted(ref) }
-    }
-
-    /// A sentence that hasn't started after a while doesn't play: its text is shown, and the player says why.
-    private func watch(_ s: MissedSession, index: Int) {
-        let item = player.currentItem
-        Task {
-            try? await Task.sleep(for: .seconds(8))
-            guard missed === s, s.index == index, s.playing, s.plays == 0, player.currentItem === item,
-                  player.timeControlStatus != .playing else { return }
-            s.revealed = true
-            missedProblem = online
-                ? "This sentence couldn't be played: the episode's file can't be reached. Its text is shown instead."
-                : "No connection, and the episode isn't downloaded. Its text is shown instead."
-        }
-    }
-
-    private func sentenceEnded() {
-        guard let s = missed, s.playing else { return }
-        player.pause()
-        s.playing = false
-        s.plays += 1
-        if settings.showText == .afterPlay { s.revealed = true }
-        let more = s.plays < settings.repeats
-        s.waiting = Task {
-            try? await Task.sleep(for: .seconds(settings.gap))
-            guard !Task.isCancelled, self.missed === s else { return }
-            if more { self.playCurrent(fresh: false) } else { self.moveMissed(by: 1) }
-        }
-        isPlaying = true  // still "playing" the playlist, between plays
-        updateNowPlaying()
-    }
-
-    private func clearBoundary() {
-        if let boundary { player.removeTimeObserver(boundary) }
-        boundary = nil
-    }
-
     // MARK: Downloads
 
     static var downloadsDir: URL { URL.applicationSupportDirectory.appending(path: "downloads", directoryHint: .isDirectory) }
@@ -562,6 +352,12 @@ final class PlaybackCenter {
         Store.existingRecord(key: episode.key, in: context).flatMap(localFile)
     }
 
+    /// The download and its size, when the episode is on the phone.
+    func download(of episode: PodcastEpisode) -> (url: URL, bytes: Int64?)? {
+        guard let record = Store.existingRecord(key: episode.key, in: context), let url = localFile(record) else { return nil }
+        return (url, record.fileBytes)
+    }
+
     func isDownloaded(_ episode: PodcastEpisode) -> Bool {
         _ = downloadsChanged
         return Store.existingRecord(key: episode.key, in: context).flatMap(localFile) != nil
@@ -586,22 +382,6 @@ final class PlaybackCenter {
         return b > 0 ? ByteCountFormatter.string(fromByteCount: b, countStyle: .file) : "None"
     }
 
-    private var downloadAllowed: Bool { online && (onWiFi || !settings.wifiOnly) }
-
-    private func downloadIfWanted(_ episode: PodcastEpisode) {
-        guard settings.downloadMissed, downloadAllowed else { return }
-        download(episode, asked: false)
-    }
-
-    /// The episodes with missed sentences, downloaded by themselves (setting on) so they play without a connection.
-    func downloadMissedEpisodes() {
-        guard settings.downloadMissed, downloadAllowed else { return }
-        var seen = Set<String>()
-        for m in store.missed where seen.insert(m.audioUrl).inserted {
-            if let e = m.ref.episodeValue { download(e, asked: false) }
-        }
-    }
-
     // MARK: System
 
     private func activate() {
@@ -624,7 +404,7 @@ final class PlaybackCenter {
             let ended = (note.object as AnyObject?).map(ObjectIdentifier.init)
             MainActor.assumeIsolated {
                 guard let self, let item = self.player.currentItem, ended == ObjectIdentifier(item) else { return }
-                if self.mode == .episode { self.finished() } else if self.mode == .missed { self.sentenceEnded() }
+                if self.mode == .episode { self.finished() }
             }
         }
         center.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] note in
@@ -641,10 +421,10 @@ final class PlaybackCenter {
     }
 
     func pauseAll() {
-        if mode == .missed { if isPlaying { missedTogglePlay() } } else if isPlaying { pause() }
+        if isPlaying { pause() }
     }
 
-    /// Episodes: ±15/30 s like any podcast app. Missed sentences: next and previous sentence.
+    /// ±15/30 s like any podcast app.
     private func configureRemoteCommands() {
         let c = MPRemoteCommandCenter.shared()
         c.togglePlayPauseCommand.addTarget { [weak self] _ in self?.togglePlayPause(); return .success }
@@ -656,12 +436,12 @@ final class PlaybackCenter {
         c.pauseCommand.addTarget { [weak self] _ in self?.pauseAll(); return .success }
         c.nextTrackCommand.addTarget { [weak self] _ in
             guard let self else { return .commandFailed }
-            if self.mode == .missed { self.missedNext() } else { self.skip(self.settings.skipForward) }
+            self.skip(self.settings.skipForward)
             return .success
         }
         c.previousTrackCommand.addTarget { [weak self] _ in
             guard let self else { return .commandFailed }
-            if self.mode == .missed { self.missedPrevious() } else { self.skip(-self.settings.skipBack) }
+            self.skip(-self.settings.skipBack)
             return .success
         }
         c.skipForwardCommand.preferredIntervals = [NSNumber(value: settings.skipForward)]
@@ -685,19 +465,11 @@ final class PlaybackCenter {
 
     func updateNowPlaying() {
         let c = MPRemoteCommandCenter.shared()
-        let plain = mode != .missed
-        c.skipForwardCommand.isEnabled = plain
-        c.skipBackwardCommand.isEnabled = plain
-        c.changePlaybackPositionCommand.isEnabled = plain
+        c.skipForwardCommand.isEnabled = true
+        c.skipBackwardCommand.isEnabled = true
+        c.changePlaybackPositionCommand.isEnabled = true
         var info: [String: Any]
-        if let s = missed, let m = s.current {
-            info = [
-                MPMediaItemPropertyTitle: "Missed sentence \(s.index + 1) of \(s.items.count)",
-                MPMediaItemPropertyArtist: m.episode,
-                MPNowPlayingInfoPropertyPlaybackRate: s.playing ? Double(s.rate) : 0,
-            ]
-            loadArtwork(m.artworkUrl.flatMap(URL.init(string:)))
-        } else if let episode {
+        if let episode {
             info = [
                 MPMediaItemPropertyTitle: episode.title,
                 MPMediaItemPropertyArtist: episode.showTitle,

@@ -114,7 +114,7 @@ struct WordView: View {
                         ForEach(w.contexts, id: \.self) { c in
                             let id = "\(c.audioUrl ?? "")|\(c.idx)"
                             HStack(alignment: .top, spacing: 12) {
-                                if c.playable {
+                                if clips.canPlay(c) {
                                     RoundButton(symbol: clips.playing == id ? "stop.fill" : "play.fill", label: clips.playing == id ? "Stop" : "Play") {
                                         clips.playing == id ? clips.stop() : clips.play(c)
                                     }
@@ -345,13 +345,6 @@ struct SettingsView: View {
     var body: some View {
         @Bindable var s = settings
         Page(title: "Settings") {
-            Block("Missed sentences") {
-                RowGroup {
-                    pickerRow("Play each", selection: $s.repeats, options: [(1, "Once"), (2, "Twice"), (3, "Three times")])
-                    pickerRow("Show the text", selection: $s.showText, options: AppSettings.ShowText.allCases.map { ($0, $0.label) })
-                    pickerRow("Pause between plays", selection: $s.gap, options: [(1.0, "1 s"), (2.0, "2 s"), (3.0, "3 s"), (5.0, "5 s")])
-                }
-            }
             Block("Playback") {
                 RowGroup {
                     pickerRow("Speed", selection: $s.speed, options: AppSettings.speeds.map { ($0, $0.speedText) })
@@ -361,8 +354,6 @@ struct SettingsView: View {
             }
             Block("Downloads") {
                 RowGroup {
-                    toggleRow("Get episodes with missed sentences", subtitle: "So they play without a connection", isOn: $s.downloadMissed)
-                    toggleRow("Only on Wi-Fi", subtitle: nil, isOn: $s.wifiOnly)
                     NavigationLink(value: Route.downloads) {
                         Row(title: "Downloaded", subtitle: { let n = center.downloads().count; return "\(n) episode\(n == 1 ? "" : "s")" }(), chevron: true, leading: { EmptyView() }, trailing: {
                             RowValue(center.downloadedText)
@@ -378,7 +369,6 @@ struct SettingsView: View {
                 }
             }
         }
-        .onChange(of: settings.downloadMissed) { center.downloadMissedEpisodes() }
     }
 
     private func pickerRow<V: Hashable>(_ title: String, selection: Binding<V>, options: [(V, String)]) -> some View {
@@ -392,17 +382,6 @@ struct SettingsView: View {
         .buttonStyle(.plain)
         .accessibilityLabel("\(title), \(options.first { $0.0 == selection.wrappedValue }?.1 ?? "")")
     }
-
-    private func toggleRow(_ title: String, subtitle: String?, isOn: Binding<Bool>) -> some View {
-        Toggle(isOn: isOn) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(Theme.text(15, .medium)).foregroundStyle(Theme.ink)
-                if let subtitle { Text(subtitle).font(Theme.text(13)).foregroundStyle(Theme.inkSubtle) }
-            }
-        }
-        .tint(Theme.success)
-        .padding(.horizontal, 12).padding(.vertical, 10).frame(minHeight: 52)
-    }
 }
 
 /// Episodes downloaded on this phone; swipe to remove.
@@ -414,7 +393,7 @@ struct DownloadsView: View {
         let items = center.downloads()
         List {
             if items.isEmpty {
-                Text("Nothing downloaded. Episodes with missed sentences download by themselves on Wi-Fi.")
+                Text("Nothing downloaded. Download an episode from its page or the player to listen without a connection.")
                     .font(Theme.text(14)).foregroundStyle(Theme.inkSubtle).listRowBackground(Theme.surface1)
             }
             ForEach(items, id: \.key) { r in

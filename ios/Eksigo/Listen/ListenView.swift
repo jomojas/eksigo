@@ -123,62 +123,48 @@ struct SyncBadge: View {
     }
 }
 
-/// The missed sentences waiting from the computer: one line and Play; a tap on the text opens the list.
+/// The missed sentences waiting from the computer, to read: a tap opens them.
 private struct MissedCard: View {
     @Environment(RecordStore.self) private var store
-    @Environment(PlaybackCenter.self) private var center
-    @Environment(AppSettings.self) private var settings
-    @Environment(AppUI.self) private var ui
 
     var body: some View {
         let groups = MissedGroup.groups(store.missed)
         let all = groups.flatMap(\.items)
-        let playable = all.filter(center.playable)
-        let seconds = playable.reduce(0) { $0 + $1.seconds * Double(settings.repeats) + settings.gap * Double(settings.repeats) }
-        VStack(alignment: .leading, spacing: 14) {
-            NavigationLink(value: Route.missedList) {
+        NavigationLink(value: Route.missedList) {
+            VStack(alignment: .leading, spacing: 14) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(MissedGroup.when(groups.first?.latest ?? 0).uppercased())
                         .font(Theme.text(12, .semibold)).tracking(0.3).foregroundStyle(.white.opacity(0.8))
                     Text("\(plural(all.count, "sentence")) you missed").font(Theme.display(22)).foregroundStyle(.white)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityHint("Shows them all")
-            HStack {
-                Text(summary(minutes: Int((seconds / 60).rounded(.up)), textOnly: all.count - playable.count))
-                    .font(Theme.text(15)).foregroundStyle(.white.opacity(0.85)).lineLimit(2)
-                Spacer(minLength: 12)
-                Button {
-                    center.startMissed(all)
-                    ui.showMissed = true
-                } label: {
-                    Label("Play", systemImage: "play.fill").font(Theme.text(15, .semibold))
+                HStack {
+                    Text(from(groups)).font(Theme.text(15)).foregroundStyle(.white.opacity(0.85)).lineLimit(2)
+                    Spacer(minLength: 12)
+                    Label("Read", systemImage: "text.alignleft").font(Theme.text(15, .semibold))
                         .foregroundStyle(Theme.missedInk)
                         .padding(.horizontal, 16).frame(height: 36)
                         .background(.white, in: Capsule())
                 }
-                .buttonStyle(.plain)
-                .disabled(playable.isEmpty)
             }
-        }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
-            ZStack(alignment: .topTrailing) {
-                Theme.missedGradient
-                Circle().fill(.white.opacity(0.12)).frame(width: 130, height: 130).offset(x: 24, y: -24)
+            .padding(18)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+                ZStack(alignment: .topTrailing) {
+                    Theme.missedGradient
+                    Circle().fill(.white.opacity(0.12)).frame(width: 130, height: 130).offset(x: 24, y: -24)
+                }
             }
+            .clipShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
+            .contentShape(Rectangle())
         }
-        .clipShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
+        .buttonStyle(.plain)
+        .accessibilityHint("Shows the sentences and what you typed")
     }
 
-    private func summary(minutes: Int, textOnly: Int) -> String {
-        var s = "About \(max(1, minutes)) min"
-        if textOnly > 0 { s += " · \(textOnly) as text only" }
-        return s
+    /// "Why do we itch?", "Why do we itch? and 2 more".
+    private func from(_ groups: [MissedGroup]) -> String {
+        guard let first = groups.first?.ref.episode else { return "" }
+        return groups.count == 1 ? first : "\(first) and \(groups.count - 1) more"
     }
 }
 
@@ -190,11 +176,11 @@ private struct EmptyMissedCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             IconTile("laptopcomputer", color: Theme.primary)
-            Text(account.isSignedIn ? "Nothing missed yet" : "Your missed sentences play here")
+            Text(account.isSignedIn ? "Nothing missed yet" : "Your missed sentences come here")
                 .font(Theme.display(20)).foregroundStyle(Theme.ink)
             Text(account.isSignedIn
-                 ? "Dictate an episode on your computer. The sentences you miss come over by themselves, ready for the commute."
-                 : "Dictate an episode on your computer, then sign in with the same account here. The sentences you missed come over by themselves, ready for the commute.")
+                 ? "Dictate an episode on your computer. The sentences you miss come over by themselves, with what you typed, to read on the way."
+                 : "Dictate an episode on your computer, then sign in with the same account here. The sentences you missed come over by themselves, with what you typed, to read on the way.")
                 .font(Theme.text(15)).lineSpacing(2).foregroundStyle(Theme.inkSubtle)
             HStack(spacing: 8) {
                 if !account.isSignedIn {
