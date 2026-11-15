@@ -92,4 +92,13 @@ struct PracticeTests {
         store.flush()
         #expect(store.days.first { $0.kind == "words" }?.seconds == 12)
     }
+
+    /// The computer's file size comes with each sentence: without it the phone played an ad-inserting podcast's own
+    /// file, where the sentence is somewhere else.
+    @Test func aSentenceKeepsTheComputersFileSize() {
+        let c = WordContext.from(json: ["audioUrl": "https://example.com/a.mp3", "sentence": "I want to go.", "idx": 2,
+                                        "sentenceStartMs": 1000, "sentenceEndMs": 2000, "bytes": 25_079_747])
+        #expect(c.bytes == 25_079_747)
+        #expect(WordContext.from(json: ["sentence": "No size."]).bytes == nil)
+    }
 }
