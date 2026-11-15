@@ -793,6 +793,12 @@ fn dictation_session(db: State<Db>, attempt_id: i64) -> CmdResult<Session> {
     session(&conn, attempt).map_err(err)
 }
 
+/// The sentences with mistakes to hear again, from the latest attempt at each episode.
+#[tauri::command]
+fn missed_sentences(db: State<Db>) -> CmdResult<Vec<dictation::MissedSentence>> {
+    dictation::missed(&db.conn()).map_err(err)
+}
+
 /// Sends sentence `idx` to the phone's missed sentences, or keeps it here; returns what goes now.
 #[tauri::command]
 fn dictation_to_phone(app: AppHandle, db: State<Db>, attempt_id: i64, idx: i64, send: bool) -> CmdResult<Option<Vec<i64>>> {
@@ -1144,6 +1150,7 @@ pub fn run() {
             dictation_session,
             dictation_flag,
             dictation_to_phone,
+            missed_sentences,
             dictation_attempts,
             dictation_in_progress,
             dictionary_lookup,

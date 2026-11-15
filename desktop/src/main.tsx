@@ -15,6 +15,7 @@ import { ThemeProvider } from "./lib/theme";
 import { TranscriptsProvider } from "./lib/transcripts";
 import { DictationScreen } from "./pages/Dictation";
 import { ListenScreen } from "./pages/Listen";
+import { MissedScreen } from "./pages/Missed";
 import { ReviewScreen } from "./pages/Review";
 import { EpisodeScreen } from "./pages/Episode";
 import { Library } from "./pages/Library";
@@ -32,6 +33,7 @@ const router = createHashRouter([
     children: [
       { index: true, element: <Navigate to="/today" replace /> },
       { path: "today", element: <Today /> },
+      { path: "missed", element: <MissedScreen /> },
       { path: "podcasts", element: <Podcasts /> },
       { path: "podcasts/show/:showId", element: <ShowScreen /> },
       { path: "podcasts/episode/:episodeId", element: <EpisodeScreen from="podcasts" /> },
