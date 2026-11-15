@@ -57,6 +57,19 @@ export function Review({
   const shown = rows.filter((i) => filter === "all" || (filter === "flagged" ? flagged.has(i) : mistaken(i)));
   const counts = { all: rows.length, flagged: rows.filter((i) => flagged.has(i)).length, mistakes: rows.filter(mistaken).length };
   const finished = s.attempt.finishedAt !== null;
+  // Which sentences go to the phone's missed sentences: the desktop decides (spelling slips stay), the learner changes it.
+  const [toPhone, setToPhone] = useState<Set<number> | null>(null);
+  useEffect(() => {
+    const load = () => backend.session(s.attempt.id).then((x) => setToPhone(x.toPhone ? new Set(x.toPhone) : null), () => {});
+    load();
+    return on("practice", load);
+  }, [s.attempt.id]);
+  const sendable = (i: number) => {
+    const a = answers.get(i);
+    return !!a && (mistaken(i) || (flagged.has(i) && a.kind !== "ad"));
+  };
+  const sendToPhone = (i: number, send: boolean) =>
+    backend.toPhone(s.attempt.id, i, send).then((x) => setToPhone(x ? new Set(x) : null), () => {});
   const player = usePlayer(item.path);
   const [playing, setPlaying] = useState<number | null>(null);
   const playRow = (i: number) => {
@@ -176,6 +189,12 @@ export function Review({
           Select words in the original to look them up{ai?.using ? <> · <Kbd keys="?" /> asks about a sentence</> : ""}. <span className="w w-missing">Boxed</span> words were missed, <span className="w w-wrong">red</span> ones wrong,{" "}
           <span className="w w-spelling">underlined</span> ones misspelled (half a word).
           {s.ads > 0 && ` ${plural(s.ads, "sentence")} skipped as ads.`}
+          {toPhone && rows.some(sendable) && (
+            <>
+              {" "}
+              <Icon name="headphones" size={11} /> {plural(toPhone.size, "sentence")} go{toPhone.size === 1 ? "es" : ""} to your phone's missed sentences. Spelling slips stay here unless you send them.
+            </>
+          )}
         </span>
       </div>
       <div className="panel selectable" style={{ overflow: "hidden" }}>
@@ -248,6 +267,19 @@ export function Review({
                     {plural(a.plays, "play")}
                     {a.plays > maxPlays && ` · ${a.plays - maxPlays} over`}
                   </span>
+                )}
+                {toPhone && sendable(i) && (
+                  <button
+                    type="button"
+                    className={`btn btn-xs${toPhone.has(i) ? "" : " btn-ghost"}`}
+                    aria-pressed={toPhone.has(i)}
+                    title={toPhone.has(i) ? "Goes to your phone's missed sentences. Click to keep it here." : "Send to your phone's missed sentences"}
+                    onClick={() => sendToPhone(i, !toPhone.has(i))}
+                    style={{ marginTop: 2, gap: 4 }}
+                  >
+                    <Icon name={toPhone.has(i) ? "check" : "headphones"} size={11} />
+                    {toPhone.has(i) ? "On phone" : "To phone"}
+                  </button>
                 )}
               </span>
               {open.has(i) && (
