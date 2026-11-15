@@ -14,6 +14,18 @@ struct PracticeTests {
                                     sentenceStartMs: 1000, sentenceEndMs: 4000)])
     }
 
+    @Test func aPhraseAnswerLeavesOutTheEnglishWords() {
+        #expect(Self.word("itchy jumper", meaning: "itchy: a. 渴望的, 痒的\njumper: n. 跳跃者, 工作服").answer == "a. 渴望的, 痒的 · n. 跳跃者, 工作服")
+        #expect(Self.word("residents", meaning: "n. 居民, 居住者\na. 居留的").answer == "n. 居民, 居住者")
+    }
+
+    @Test func reviewingAheadTakesTheSoonestWordsFirst() {
+        var rng = SystemRandomNumberGenerator()
+        let words = [Self.word("later", level: "familiar", due: Self.now + 9000), Self.word("soon", level: "learning", due: Self.now + 100),
+                     Self.word("fresh"), Self.word("done", level: "known", due: Self.now + 50)]
+        #expect(PracticeRules.ahead(words: words, now: Self.now, random: &rng).map(\.word.text) == ["soon", "later", "fresh"])
+    }
+
     @Test func wordsAreFoundInTheirSentence() {
         #expect(PracticeRules.split("People were likely to follow through.", "follow through") == ["People were likely to ", "follow through", "."])
         #expect(PracticeRules.split("Well, honestly", "well honestly") == ["", "Well, honestly", ""])

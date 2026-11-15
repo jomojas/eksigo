@@ -293,7 +293,7 @@ struct NowPlayingView: View {
                     Button { playMissed(missed) } label: {
                         RowGroup {
                             Row(title: plural(missed.count, "sentence") + " you missed",
-                                subtitle: missed.contains(where: center.playable) ? "Each played \(center.settings.repeats == 1 ? "once" : center.settings.repeats == 2 ? "twice" : "\(center.settings.repeats) times"), then the text" : "This phone's copy isn't the computer's file: text only",
+                                subtitle: missed.contains(where: center.playable) ? "Each played \(center.settings.repeats == 1 ? "once" : center.settings.repeats == 2 ? "twice" : "\(center.settings.repeats) times"), then the text" : "No web address for this episode: text only",
                                 chevron: true, leading: { IconTile("headphones") }, trailing: { EmptyView() })
                         }
                     }

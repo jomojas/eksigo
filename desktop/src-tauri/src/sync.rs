@@ -148,7 +148,9 @@ fn reviews(conn: &Connection) -> Result<Vec<Record>> {
 }
 
 /// The episode a podcast item came from: what the phone needs to find and play it.
-const EPISODE: &str = "e.audio_url, s.feed_url, e.guid, e.title, s.title, COALESCE(e.artwork_url, s.artwork_url), e.audio_bytes";
+/// `bytes` is the size of the file this computer dictated (the feed's own figure is often rounded), so the phone can
+/// tell whether its download is the same file.
+const EPISODE: &str = "e.audio_url, s.feed_url, e.guid, e.title, s.title, COALESCE(e.artwork_url, s.artwork_url), COALESCE(i.bytes, e.audio_bytes)";
 
 fn episode_json(r: &rusqlite::Row, from: usize) -> rusqlite::Result<Value> {
     Ok(json!({

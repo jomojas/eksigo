@@ -536,7 +536,7 @@ struct EpisodeView: View {
                         } label: {
                             RowGroup {
                                 Row(title: "Play the \(missed.count) missed sentence\(missed.count == 1 ? "" : "s")",
-                                    subtitle: playable.isEmpty ? "This phone's copy isn't the computer's file: text only" : "The same file as on the computer",
+                                    subtitle: playable.isEmpty ? "No web address for this episode: text only" : "The same file as on the computer",
                                     chevron: true, leading: { IconTile("headphones") }, trailing: { EmptyView() })
                             }
                         }
