@@ -180,14 +180,7 @@ struct ReviewSessionView: View {
         VStack(spacing: 0) {
             if done {
                 NavBar(close: true, onBack: { dismiss() })
-                DoneView(results: results, seconds: Int(Date.now.timeIntervalSince(started))) { listen in
-                    dismiss()
-                    if listen {
-                        center.startMissed(MissedGroup.groups(store.missed).flatMap(\.items))
-                        // Opens the player only when a sentence could start, never an empty screen.
-                        if center.mode == .missed { Task { try? await Task.sleep(for: .milliseconds(400)); ui.showMissed = true } }
-                    }
-                }
+                DoneView(results: results, seconds: Int(Date.now.timeIntervalSince(started))) { dismiss() }
             } else if let item = queue[safe: pos] {
                 NavBar(title: "\(pos + 1) of \(queue.count)", close: true, onBack: end) {
                     Menu {
@@ -303,7 +296,7 @@ struct ReviewSessionView: View {
     }
 
     @ViewBuilder private func playButtons(_ item: PracticeRules.Item) -> some View {
-        if item.context.playable {
+        if clips.canPlay(item.context) {
             HStack(spacing: 10) {
                 Button { clips.play(item.context, rate: slow ? 0.7 : 1) } label: { Label("Play the sentence", systemImage: "speaker.wave.2") }
                     .buttonStyle(.eks(.secondary))
@@ -314,6 +307,8 @@ struct ReviewSessionView: View {
                     .buttonStyle(.eks(slow ? .secondary : .ghost))
                     .accessibilityLabel(slow ? "Normal speed" : "Slower")
             }
+        } else if item.context.playable {
+            Note("This podcast puts different ads in each download, so the sentence would play at the wrong spot here. Hear it on your computer.")
         } else {
             Note("This sentence is from your own audio on the computer, so it can't play here.")
         }
@@ -351,7 +346,7 @@ struct ReviewSessionView: View {
         Eyebrow("New word · what does it mean here?")
         HStack(spacing: 10) {
             Text(item.word.text).font(Theme.display(30)).tracking(-0.7).foregroundStyle(Theme.ink).frame(maxWidth: .infinity, alignment: .leading)
-            if item.context.playable {
+            if clips.canPlay(item.context) {
                 RoundButton(symbol: "speaker.wave.2", label: "Play the sentence", size: 44) { clips.play(item.context, rate: slow ? 0.7 : 1) }
             }
         }
@@ -455,9 +450,8 @@ struct MeaningBlock: View {
 private struct DoneView: View {
     let results: [(word: String, from: Word.Level, to: Word.Level, again: Bool)]
     let seconds: Int
-    var close: (_ listen: Bool) -> Void
+    var close: () -> Void
     @Environment(RecordStore.self) private var store
-    @Environment(PlaybackCenter.self) private var center
 
     var body: some View {
         let again = results.filter(\.again).count
@@ -487,10 +481,7 @@ private struct DoneView: View {
                 .padding(.horizontal, 24).padding(.top, 24).padding(.bottom, 24)
             }
             VStack(spacing: 8) {
-                Button("Done") { close(false) }.buttonStyle(.eks(.primary, block: true, height: 52))
-                if store.missed.contains(where: center.playable) {
-                    Button("Listen to the missed sentences") { close(true) }.buttonStyle(.eks(.ghost, block: true))
-                }
+                Button("Done") { close() }.buttonStyle(.eks(.primary, block: true, height: 52))
             }
             .padding(.horizontal, 24).padding(.bottom, 16)
         }

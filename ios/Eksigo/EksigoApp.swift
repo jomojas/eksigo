@@ -55,7 +55,6 @@ struct EksigoApp: App {
             case .active:
                 Task { await account.refresh() }
                 syncer.now()
-                center.downloadMissedEpisodes()
             case .background:
                 center.saveProgress()
                 store.flush()
@@ -71,7 +70,6 @@ struct EksigoApp: App {
 final class AppUI {
     var tab: Tab = .listen
     var showPlayer = false
-    var showMissed = false
     var showReview = false
     /// The next review practises ahead of time (nothing was due).
     var reviewAhead = false
@@ -136,7 +134,6 @@ enum DebugLaunch {
         case "me": ui.tab = .me
         default: break
         }
-        if d.bool(forKey: "openMissed") { ui.showMissed = true }
         if d.bool(forKey: "openReview") { ui.showReview = true }
     }
 }

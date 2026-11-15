@@ -22,7 +22,6 @@ struct RootView: View {
             }
         }
         .fullScreenCover(isPresented: $ui.showPlayer) { NowPlayingView() }
-        .fullScreenCover(isPresented: $ui.showMissed, onDismiss: { if center.mode == .missed { center.endMissed() } }) { MissedPlayerView() }
         .fullScreenCover(isPresented: $ui.showReview) { ReviewSessionView() }
         .alert("Something went wrong", isPresented: Binding(get: { center.error != nil }, set: { if !$0 { center.error = nil } })) {
             Button("OK", role: .cancel) {}
@@ -47,7 +46,7 @@ struct RootView: View {
         }
     }
 
-    private var hasMiniPlayer: Bool { center.episode != nil && center.mode != .missed }
+    private var hasMiniPlayer: Bool { center.episode != nil }
 }
 
 private extension View {

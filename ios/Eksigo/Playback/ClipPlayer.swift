@@ -1,7 +1,7 @@
 import AVFoundation
 
-/// Plays one stretch of an episode: a word's sentence in review and on the word's page. The episode in the mini player
-/// pauses first. The word itself is said by the phone's voice.
+/// Plays one stretch of an episode: a word's sentence in review and on the word's page, only from the computer's own
+/// file. The episode in the mini player pauses first. The word itself is said by the phone's voice.
 @Observable
 final class ClipPlayer {
     private(set) var playing: String?
@@ -25,14 +25,57 @@ final class ClipPlayer {
         playing = id
     }
 
+    /// Episodes (by address) whose file here isn't the computer's: an ad-inserting podcast serves another file, where
+    /// the sentence is somewhere else, so it isn't played at all.
+    private(set) var otherFile: Set<String> = []
+    /// Addresses checked: true when they serve the computer's file.
+    @ObservationIgnored private var checked: [String: Bool] = [:]
+
+    /// The sentence can play here, as far as is known yet.
+    func canPlay(_ context: WordContext) -> Bool { context.playable && !otherFile.contains(context.audioUrl ?? "") }
+
+    /// Plays a word's sentence from the same file the computer had: the download when its size matches, else the
+    /// stream once its size is checked. A different file isn't played; `otherFile` tells the screen.
     func play(_ context: WordContext, rate: Float = 1) {
-        guard context.playable, let url = context.audioUrl.flatMap(URL.init(string:)) else { return }
-        play(local(url) ?? url, from: context.sentenceStartMs, to: context.sentenceEndMs, rate: rate, id: "\(context.audioUrl ?? "")|\(context.idx)")
+        guard canPlay(context), let address = context.audioUrl, let url = URL(string: address) else { return }
+        let id = "\(address)|\(context.idx)"
+        let (start, end) = (context.sentenceStartMs, context.sentenceEndMs)
+        guard let want = context.bytes, want > 0 else {
+            // A computer that doesn't send sizes yet: as before.
+            return play(center?.download(of: episode(url))?.url ?? url, from: start, to: end, rate: rate, id: id)
+        }
+        if let d = center?.download(of: episode(url)), d.bytes == want {
+            return play(d.url, from: start, to: end, rate: rate, id: id)
+        }
+        if let same = checked[address] {
+            return same ? play(url, from: start, to: end, rate: rate, id: id) : refuse(address)
+        }
+        Task {
+            let size = await Self.size(of: url)
+            // Unknown (no connection, a server that won't say): try it rather than refuse.
+            let same = size.map { $0 == want } ?? true
+            if size != nil { checked[address] = same }
+            same ? play(url, from: start, to: end, rate: rate, id: id) : refuse(address)
+        }
     }
 
-    /// The download, when the episode is on the phone.
-    private func local(_ url: URL) -> URL? {
-        center?.localURL(PodcastEpisode(audioUrl: url, title: "", summary: "", showTitle: ""))
+    private func refuse(_ address: String) {
+        stop()
+        otherFile.insert(address)
+    }
+
+    private func episode(_ url: URL) -> PodcastEpisode { PodcastEpisode(audioUrl: url, title: "", summary: "", showTitle: "") }
+
+    /// The size of the file an address serves now, from its first byte's answer.
+    nonisolated static func size(of url: URL) async -> Int64? {
+        var request = URLRequest(url: url, timeoutInterval: 8)
+        request.setValue("bytes=0-0", forHTTPHeaderField: "Range")
+        guard let (_, response) = try? await URLSession.shared.data(for: request), let http = response as? HTTPURLResponse else { return nil }
+        if http.statusCode == 206, let range = http.value(forHTTPHeaderField: "Content-Range"),
+           let total = range.split(separator: "/").last.flatMap({ Int64($0) }) {
+            return total
+        }
+        return http.statusCode == 200 && http.expectedContentLength > 0 ? http.expectedContentLength : nil
     }
 
     func say(_ text: String) {

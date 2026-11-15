@@ -66,12 +66,12 @@ struct WelcomeView: View {
         VStack(alignment: .leading, spacing: 24) {
             CoverFan().frame(maxWidth: .infinity).padding(.top, 12)
             VStack(alignment: .leading, spacing: 12) {
-                Text("Listen, then hear\nwhat you missed.").font(Theme.display(34)).foregroundStyle(Theme.ink)
-                Text("Dictate on your computer. Then, on your phone, hear the sentences you missed, review your words and keep listening.")
+                Text("Listen, then see\nwhat you missed.").font(Theme.display(34)).foregroundStyle(Theme.ink)
+                Text("Dictate on your computer. Then, on your phone, read the sentences you missed, review your words and keep listening.")
                     .font(Theme.text(17)).lineSpacing(2).foregroundStyle(Theme.inkSubtle)
             }
             VStack(alignment: .leading, spacing: 12) {
-                welcomeLine("ear", Theme.missedInk, "Last night's missed sentences, back to back")
+                welcomeLine("text.alignleft", Theme.missedInk, "Last night's missed sentences, with what you typed")
                 welcomeLine("rectangle.stack.fill", Color(uiColor: .systemOrange), "Words due today, each with its sentence")
                 welcomeLine("safari.fill", Color(uiColor: .systemBlue), "Podcasts for learners")
             }

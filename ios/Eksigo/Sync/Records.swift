@@ -15,6 +15,8 @@ nonisolated struct WordContext: Codable, Hashable, Sendable {
     var sentenceEndMs: Int = 0
     var addedAt: Int = 0
     var practisedAt: Int?
+    /// The size of the computer's file of the episode: the sentence plays only from that same file.
+    var bytes: Int64?
 
     /// The sentence can be played: it comes from a podcast episode, with times.
     var playable: Bool { audioUrl.flatMap(URL.init(string:)) != nil && sentenceEndMs > sentenceStartMs }

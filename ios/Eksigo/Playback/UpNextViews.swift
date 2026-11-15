@@ -19,7 +19,7 @@ struct UpNextView: View {
                 .padding(.horizontal, 16).padding(.top, 20).padding(.bottom, 4)
             }
             List {
-                if let e = center.episode, center.mode != .missed {
+                if let e = center.episode {
                     Section {
                         row(e, subtitle: "\(e.showTitle) · \(Stats.length(max(60, center.duration - center.position))) left") {
                             Image(systemName: center.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 15))
