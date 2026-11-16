@@ -9,6 +9,7 @@ import { aiProblem, backend, type AiMessage, type AiProblem, type AiStatus, type
 import { useMeaningLanguage } from "../lib/words";
 import { Icon, type IconName } from "./Icon";
 import { Kbd } from "./Shell";
+import { t } from "../lib/i18n";
 
 export const REASONS: Record<Reason, { label: string; many: string; icon: IconName | null }> = {
   newWord: { label: "New word", many: "New words", icon: "book" },
@@ -23,12 +24,12 @@ export function ReasonTag({ reason, many = false }: { reason: Reason; many?: boo
   return (
     <span className="tag">
       {r.icon && <Icon name={r.icon} size={11} stroke={1.8} />}
-      {many ? r.many : r.label}
+      {t(many ? r.many : r.label)}
     </span>
   );
 }
 
-export const sourceName = (ai: AiStatus | undefined) => (ai?.using === "chatgpt" ? "ChatGPT plan" : (ai?.key?.name ?? ""));
+export const sourceName = (ai: AiStatus | undefined) => (ai?.using === "chatgpt" ? t("ChatGPT plan") : (ai?.key?.name ?? ""));
 
 export function AiSource({ ai, children }: { ai: AiStatus | undefined; children?: ReactNode }) {
   return (
@@ -50,13 +51,13 @@ export function AiProblemLine({ problem, onRetry, onLeave }: { problem: AiProble
       </span>
       {problem.kind === "limit" ? (
         <button type="button" className="btn btn-sm" onClick={() => backend.manageUsage()}>
-          Manage usage
+          {t("Manage usage")}
           <Icon name="external" size={12} />
         </button>
       ) : problem.kind === "failed" ? (
         onRetry && (
           <button type="button" className="btn btn-sm btn-ghost" onClick={onRetry}>
-            Try again
+            {t("Try again")}
           </button>
         )
       ) : (
@@ -68,7 +69,7 @@ export function AiProblemLine({ problem, onRetry, onLeave }: { problem: AiProble
             navigate(SETTINGS_AI);
           }}
         >
-          Settings › AI
+          {t("Settings › AI")}
         </button>
       )}
     </div>
@@ -151,16 +152,16 @@ export function AskPanel({
       );
   };
 
-  const label = `Ask about sentence ${idx + 1}`;
+  const label = t("Ask about sentence {n}", { n: idx + 1 });
   if (ai && !ai.using)
     return (
-      <div className={docked ? "ask ask-docked ask-off" : "ask ask-off"} role="region" aria-label="AI not set up">
+      <div className={docked ? "ask ask-docked ask-off" : "ask ask-off"} role="region" aria-label={t("AI not set up")}>
         <div style={{ flexGrow: 1 }}>
-          <div className="account-row-t">Ask the AI about this sentence</div>
-          <div className="account-row-h">Why you missed it, what it means, the grammar, or your own question. Connect ChatGPT Plus or your own API key once, in Settings › AI.</div>
+          <div className="account-row-t">{t("Ask the AI about this sentence")}</div>
+          <div className="account-row-h">{t("Why you missed it, what it means, the grammar, or your own question. Connect ChatGPT Plus or your own API key once, in Settings › AI.")}</div>
         </div>
         <button type="button" className="btn btn-sm" onClick={() => navigate(SETTINGS_AI)}>
-          Set up AI
+          {t("Set up AI")}
         </button>
       </div>
     );
@@ -174,19 +175,19 @@ export function AskPanel({
     <div className={docked ? "ask ask-docked" : "ask"} role="region" aria-label={label}>
       <div className="ask-head">
         <span className="h2" style={{ fontSize: 13 }}>
-          {docked ? `Ask about sentence ${idx + 1}` : "Ask about this sentence"}
+          {docked ? label : t("Ask about this sentence")}
         </span>
         {!docked && <AiSource ai={ai} />}
         <span style={{ flexGrow: 1 }} />
-        {!docked && <span className="ai-source">The sentence{attemptId !== null ? ", what you typed," : ""} and the sentences around it are sent</span>}
-        <button type="button" className="btn btn-ghost ask-close" aria-label="Close" onClick={onClose}>
+        {!docked && <span className="ai-source">{t(attemptId !== null ? "The sentence, what you typed, and the sentences around it are sent" : "The sentence and the sentences around it are sent")}</span>}
+        <button type="button" className="btn btn-ghost ask-close" aria-label={t("Close")} onClick={onClose}>
           <Icon name="x" size={13} />
         </button>
       </div>
       <div className="ask-thread" ref={thread} aria-live="polite">
         {empty && (
           <div className="lookup-sub" style={{ fontSize: 13 }}>
-            Ask anything about sentence {idx + 1}: {mistakes ? "why you missed it, " : ""}what it means, the grammar. In any language.
+            {t(mistakes ? "Ask anything about sentence {n}: why you missed it, what it means, the grammar. In any language." : "Ask anything about sentence {n}: what it means, the grammar. In any language.", { n: idx + 1 })}
           </div>
         )}
         {messages?.map((m) => (
@@ -206,7 +207,7 @@ export function AskPanel({
               <AiProblemLine problem={pending.problem} onRetry={() => send(pending.why ? "" : pending.question, pending.why)} />
             ) : pending.why ? (
               <div role="status" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                <span className="lookup-sub">Working out why…</span>
+                <span className="lookup-sub">{t("Working out why…")}</span>
                 <div className="skel" style={{ width: "86%" }} />
                 <div className="skel" style={{ width: "64%" }} />
               </div>
@@ -224,7 +225,7 @@ export function AskPanel({
           <div className="ask-chips">
             {chips.map((c) => (
               <button key={c} type="button" className="ask-chip" disabled={busy} onClick={() => send(c === WHY ? "" : c, c === WHY)}>
-                {c}
+                {t(c)}
               </button>
             ))}
           </div>
@@ -248,11 +249,11 @@ export function AskPanel({
                 onClose();
               }
             }}
-            placeholder={messages?.length ? "Ask a follow-up…" : "Ask about this sentence…"}
+            placeholder={t(messages?.length ? "Ask a follow-up…" : "Ask about this sentence…")}
             aria-label={label}
           />
           {!docked && <Kbd keys="Enter" />}
-          <button type="submit" className="btn btn-sm btn-primary" style={{ height: 26, padding: "0 8px" }} aria-label="Send" disabled={!input.trim() || busy}>
+          <button type="submit" className="btn btn-sm btn-primary" style={{ height: 26, padding: "0 8px" }} aria-label={t("Send")} disabled={!input.trim() || busy}>
             <Icon name="send" size={12} stroke={2} />
           </button>
         </form>
@@ -264,7 +265,7 @@ export function AskPanel({
 function Exchange({ question, children }: { question: string; children: ReactNode }) {
   return (
     <>
-      <div className="ask-me">{question}</div>
+      <div className="ask-me">{t(question)}</div>
       <div className="ask-ai">{children}</div>
     </>
   );
@@ -307,7 +308,7 @@ function ReasonCard({ item: w, onPlaySlowly, save }: { item: WhyItem; onPlaySlow
         saved ? (
           <span className="flag-label" style={{ color: "var(--semantic-success)", whiteSpace: "nowrap" }}>
             <Icon name="check" size={14} />
-            In My words
+            {t("In My words")}
           </span>
         ) : (
           <button
@@ -322,13 +323,13 @@ function ReasonCard({ item: w, onPlaySlowly, save }: { item: WhyItem; onPlaySlow
             }
           >
             <Icon name="plus" size={12} />
-            Add to My words
+            {t("Add to My words")}
           </button>
         )
       ) : (w.reason === "soundsDifferent" || w.reason === "didntCatch") && onPlaySlowly ? (
         <button type="button" className="btn btn-sm" onClick={onPlaySlowly}>
           <Icon name="play" size={11} />
-          Play at 0.7×
+          {t("Play at 0.7×")}
         </button>
       ) : (
         <span />

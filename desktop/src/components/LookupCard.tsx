@@ -14,6 +14,7 @@ import { firstLine, speak, useMeaningLanguage } from "../lib/words";
 import { AiProblemLine, AiSource } from "./Ask";
 import { Icon } from "./Icon";
 import { Kbd } from "./Shell";
+import { t } from "../lib/i18n";
 
 export type Selection = {
   itemId: number;
@@ -255,16 +256,16 @@ export function LookupCard({
         </div>
         {dictionary && result?.whole && entry && entry.headword !== result.query && <div className="lookup-sub">from “{result.query}”</div>}
         {dictionary && result?.whole && entry?.ipa && <div className="lookup-sub mono">{entry.ipa}</div>}
-        {dictionary && result && !result.whole && !single && <div className="lookup-sub">Not in the dictionary as a phrase · each word</div>}
+        {dictionary && result && !result.whole && !single && <div className="lookup-sub">{t("Not in the dictionary as a phrase · each word")}</div>}
       </div>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
         <button type="button" className="btn btn-sm" onClick={asSaid} disabled={!path || times.length === 0}>
           <Icon name="play" size={11} />
-          As said in the episode
+          {t("As said in the episode")}
         </button>
-        <button type="button" className="btn btn-sm btn-ghost" onClick={() => speak(sel.text)} title="Read by your computer's voice">
+        <button type="button" className="btn btn-sm btn-ghost" onClick={() => speak(sel.text)} title={t("Read by your computer's voice")}>
           <Icon name="speaker" size={14} />
-          Slow voice
+          {t("Slow voice")}
         </button>
       </div>
 
@@ -280,11 +281,12 @@ export function LookupCard({
           {machine.state === "done" ? (
             <div className="lookup-translation">{machine.text}</div>
           ) : machine.state === "loading" ? (
-            <div className="lookup-sub">{translatorWarm ? "Translating…" : "Translating… the first one takes a few seconds"}</div>
+            <div className="lookup-sub">{t(translatorWarm ? "Translating…" : "Translating… the first one takes a few seconds")}</div>
           ) : (
             <div className="lookup-sub">
-              The translator is downloading{translatorProgress ? ` · ${Math.round((translatorProgress.received / translatorProgress.total) * 100)}%` : ""}. The
-              translation shows here when it's ready.
+              {translatorProgress
+                ? t("The translator is downloading · {pct}%. The translation shows here when it's ready.", { pct: Math.round((translatorProgress.received / translatorProgress.total) * 100) })
+                : t("The translator is downloading. The translation shows here when it's ready.")}
             </div>
           )}
         </div>
@@ -292,13 +294,13 @@ export function LookupCard({
       {dictionary && result.whole && entry && <Meaning entry={entry} />}
       {dictionary && !result.whole && entry && (
         <div className="lookup-found">
-          <div className="lookup-sub">Phrase inside</div>
+          <div className="lookup-sub">{t("Phrase inside")}</div>
           <b>{entry.headword}</b>
           <span>{firstLine(entry.meaning)}</span>
         </div>
       )}
       {dictionary && single && !entry && (
-        <div className="lookup-sub">{aiExplains ? "Not in the dictionary · explained by AI" : "Not in the dictionary. Add it with your own note."}</div>
+        <div className="lookup-sub">{t(aiExplains ? "Not in the dictionary · explained by AI" : "Not in the dictionary. Add it with your own note.")}</div>
       )}
       {dictionary && result.words.length > 0 && (
         <div>
@@ -315,7 +317,7 @@ export function LookupCard({
                     {firstLine(w.entry.meaning)}
                   </>
                 ) : (
-                  <span style={{ color: "var(--ink-tertiary)" }}>not found</span>
+                  <span style={{ color: "var(--ink-tertiary)" }}>{t("not found")}</span>
                 )}
               </span>
             </div>
@@ -325,9 +327,9 @@ export function LookupCard({
 
       {result && !translated && (!dictionary || !result.whole || !entry) && !savedId && !aiExplains && (
         <label className="lookup-note">
-          Your note
+          {t("Your note")}
           <span className="input">
-            <input type="text" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Your own meaning, in any language" />
+            <input type="text" value={note} onChange={(e) => setNote(e.target.value)} placeholder={t("Your own meaning, in any language")} />
           </span>
         </label>
       )}
@@ -335,7 +337,7 @@ export function LookupCard({
       {result && usingAi && explaining && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingTop: 12, borderTop: "1px solid var(--hairline)" }} aria-live="polite">
           <div style={{ display: "flex", alignItems: "center" }}>
-            <span className="eyebrow">In this sentence</span>
+            <span className="eyebrow">{t("In this sentence")}</span>
             <span style={{ flexGrow: 1 }} />
             <AiSource ai={ai} />
           </div>
@@ -356,7 +358,7 @@ export function LookupCard({
                   <span className="caret" aria-hidden="true" />
                 </div>
               ) : (
-                <div className="lookup-sub">Explaining…</div>
+                <div className="lookup-sub">{t("Explaining…")}</div>
               )}
             </div>
           )}
@@ -368,8 +370,8 @@ export function LookupCard({
                 if (question.trim()) ask(question.trim());
               }}
             >
-              <input type="text" value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="Ask about these words…" aria-label="Ask about these words" />
-              <button type="submit" className="btn btn-sm btn-ghost" style={{ height: 24, padding: "0 6px" }} aria-label="Send" disabled={!question.trim() || busy}>
+              <input type="text" value={question} onChange={(e) => setQuestion(e.target.value)} placeholder={t("Ask about these words…")} aria-label={t("Ask about these words")} />
+              <button type="submit" className="btn btn-sm btn-ghost" style={{ height: 24, padding: "0 6px" }} aria-label={t("Send")} disabled={!question.trim() || busy}>
                 <Icon name="send" size={12} stroke={2} />
               </button>
             </form>
@@ -381,33 +383,33 @@ export function LookupCard({
         {savedId ? (
           <span className="flag-label" style={{ color: "var(--semantic-success)" }}>
             <Icon name="check" size={14} />
-            In My words
+            {t("In My words")}
           </span>
         ) : (
           <button type="button" className="btn btn-sm btn-primary" onClick={save} disabled={!result || machine?.state === "loading"}>
             <Icon name="plus" size={13} />
-            Add to My words <Kbd keys="A" />
+            {t("Add to My words")} <Kbd keys="A" />
           </button>
         )}
         {result && usingAi && !explaining && (
           <button type="button" className="btn btn-sm btn-ghost" style={{ color: "var(--ink)" }} onClick={() => ask(null)}>
-            Explain in this sentence <Kbd keys="E" />
+            {t("Explain in this sentence")} <Kbd keys="E" />
           </button>
         )}
         {result && ai && !usingAi && (
           <button
             type="button"
             className="btn btn-sm btn-ghost"
-            title="Explaining words in their sentence needs AI"
+            title={t("Explaining words in their sentence needs AI")}
             onClick={() => {
               onClose();
               navigate(SETTINGS_AI);
             }}
           >
-            Set up AI to explain
+            {t("Set up AI to explain")}
           </button>
         )}
-        {!savedId && talk.length > 0 && <span className="lookup-sub">The explanation is saved with it.</span>}
+        {!savedId && talk.length > 0 && <span className="lookup-sub">{t("The explanation is saved with it.")}</span>}
       </div>
       {dictionary && result?.source && <div className="lookup-credit">Meanings: {result.source}</div>}
     </div>

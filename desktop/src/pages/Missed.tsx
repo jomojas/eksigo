@@ -11,6 +11,7 @@ import { Kbd, Page } from "../components/Shell";
 import { backend, on, type MissedSentence } from "../lib/backend";
 import { clock, plural } from "../lib/format";
 import { usePlayer } from "../lib/playback";
+import { t } from "../lib/i18n";
 
 /** Plays before the text shows. */
 const PLAYS = 2;
@@ -133,7 +134,7 @@ export function MissedScreen() {
   if (items === null) {
     return (
       <Page crumbs={crumbs}>
-        <div className="page">Opening…</div>
+        <div className="page">{t("Opening…")}</div>
       </Page>
     );
   }
@@ -142,11 +143,11 @@ export function MissedScreen() {
     return (
       <Page crumbs={crumbs}>
         <div className="page" style={{ maxWidth: 640, gap: 12 }}>
-          <h1 className="h1">Nothing to hear again</h1>
-          <p className="muted">Sentences you get wrong while dictating come here, so you can hear them again with what you typed.</p>
+          <h1 className="h1">{t("Nothing to hear again")}</h1>
+          <p className="muted">{t("Sentences you get wrong while dictating come here, so you can hear them again with what you typed.")}</p>
           <div>
             <button type="button" className="btn" onClick={() => navigate("/today")}>
-              Back to Today
+              {t("Back to Today")}
             </button>
           </div>
         </div>
@@ -161,8 +162,8 @@ export function MissedScreen() {
           <span className="missed-done-icon" aria-hidden>
             <Icon name="check" size={22} />
           </span>
-          <h1 className="h1">All {plural(items.length, "sentence")} heard</h1>
-          <p className="muted">They stay here until you dictate the episode again.</p>
+          <h1 className="h1">{t("All {n} heard", { n: plural(items.length, "sentence") })}</h1>
+          <p className="muted">{t("They stay here until you dictate the episode again.")}</p>
           <div style={{ display: "flex", gap: 8 }}>
             <button
               type="button"
@@ -172,10 +173,10 @@ export function MissedScreen() {
                 setPos(0);
               }}
             >
-              Hear them again
+              {t("Hear them again")}
             </button>
             <button type="button" className="btn" onClick={() => navigate("/today")}>
-              Back to Today
+              {t("Back to Today")}
             </button>
           </div>
         </div>
@@ -190,7 +191,7 @@ export function MissedScreen() {
       <div className="page" style={{ maxWidth: 760, gap: 22 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <span className="mono" style={{ fontSize: 12, color: "var(--ink-subtle)" }}>
-            {pos + 1} of {items.length}
+            {t("{a} of {b}", { a: pos + 1, b: items.length })}
           </span>
           <div className="track" style={{ flexGrow: 1 }}>
             <div className="fill" style={{ width: `${Math.round(((pos + 1) / items.length) * 100)}%` }} />
@@ -204,27 +205,27 @@ export function MissedScreen() {
               {cur.title}
             </div>
             <div className="ell" style={{ fontSize: 12, color: "var(--ink-subtle)", marginTop: 2 }}>
-              {cur.source} · sentence {a.idx + 1} · {clock(cur.startMs / 1000)}
+              {t(cur.source)} · {t("sentence {n}", { n: a.idx + 1 })} · {clock(cur.startMs / 1000)}
             </div>
           </div>
         </div>
 
         <section className="panel" aria-live="polite" style={{ padding: 22, display: "flex", flexDirection: "column", gap: 16, minHeight: 170 }}>
-          <div className="eyebrow">The sentence</div>
+          <div className="eyebrow">{t("The sentence")}</div>
           {shown ? (
             <div style={{ fontSize: 18, lineHeight: 1.6 }}>{a.comparison ? <MarkedText words={a.comparison.original} /> : a.original}</div>
           ) : (
             <div className="muted" style={{ fontSize: 14 }}>
               {player.error
-                ? `Couldn't play it: ${player.error}`
+                ? t("Couldn't play it: {error}", { error: player.error })
                 : plays === 0
-                  ? "Listen. The text shows after the second play."
-                  : "Once more…"}
+                  ? t("Listen. The text shows after the second play.")
+                  : t("Once more…")}
             </div>
           )}
           {shown && (
             <>
-              <div className="eyebrow">You typed</div>
+              <div className="eyebrow">{t("You typed")}</div>
               <div style={{ fontSize: 15, lineHeight: 1.6, color: "var(--ink-muted)" }}>
                 {a.comparison?.typed.length ? <MarkedText words={a.comparison.typed} /> : <span className="muted">(nothing typed)</span>}
               </div>
@@ -233,12 +234,12 @@ export function MissedScreen() {
         </section>
 
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <button type="button" className="btn" onClick={() => go(pos - 1)} disabled={pos === 0} aria-label="Previous sentence">
+          <button type="button" className="btn" onClick={() => go(pos - 1)} disabled={pos === 0} aria-label={t("Previous sentence")}>
             <Icon name="back" size={13} />
           </button>
           <button type="button" className="btn" onClick={playNow}>
             <Icon name={player.playing ? "speaker" : "replay"} size={13} />
-            {player.playing ? "Playing…" : "Play again"}
+            {t(player.playing ? "Playing…" : "Play again")}
             <Kbd keys="Space" />
           </button>
           <button type="button" className={slow ? "btn" : "btn btn-ghost"} aria-pressed={slow} onClick={() => setSlow((v) => !v)}>
@@ -247,13 +248,13 @@ export function MissedScreen() {
           {!shown && (
             <button type="button" className="btn btn-ghost" onClick={() => setShown(true)}>
               <Icon name="eye" size={13} />
-              Show text
+              {t("Show text")}
               <Kbd keys="S" />
             </button>
           )}
           <span style={{ flexGrow: 1 }} />
           <button type="button" className="btn btn-primary" onClick={() => go(pos + 1)}>
-            {pos + 1 === items.length ? "Finish" : "Next"}
+            {t(pos + 1 === items.length ? "Finish" : "Next")}
             <Kbd keys="Enter" />
           </button>
         </div>

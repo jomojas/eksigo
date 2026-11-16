@@ -1,10 +1,8 @@
 import SwiftData
 import SwiftUI
 
-/// The Listen tab (design P26, P10): last night's missed sentences, the episode to continue, Up Next, new episodes.
+/// The Listen tab (design P26): the episode to continue, Up Next, new episodes. The missed sentences are in Review.
 struct ListenView: View {
-    @Environment(RecordStore.self) private var store
-    @Environment(Account.self) private var account
     @Environment(PlaybackCenter.self) private var center
     @Environment(AppUI.self) private var ui
     @Query(filter: #Predicate<EpisodeRecord> { $0.lastPlayedAt != nil }, sort: \EpisodeRecord.lastPlayedAt, order: .reverse)
@@ -15,11 +13,6 @@ struct ListenView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
-                if !store.missed.isEmpty {
-                    MissedCard()
-                } else {
-                    EmptyMissedCard()
-                }
                 if let r = continuing, let e = r.episode {
                     Block("Continue") { ContinueCard(record: r, episode: e) }
                 }
@@ -123,78 +116,6 @@ struct SyncBadge: View {
     }
 }
 
-/// The missed sentences waiting from the computer, to read: a tap opens them.
-private struct MissedCard: View {
-    @Environment(RecordStore.self) private var store
-
-    var body: some View {
-        let groups = MissedGroup.groups(store.missed)
-        let all = groups.flatMap(\.items)
-        NavigationLink(value: Route.missedList) {
-            VStack(alignment: .leading, spacing: 14) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(MissedGroup.when(groups.first?.latest ?? 0).uppercased())
-                        .font(Theme.text(12, .semibold)).tracking(0.3).foregroundStyle(.white.opacity(0.8))
-                    Text("\(plural(all.count, "sentence")) you missed").font(Theme.display(22)).foregroundStyle(.white)
-                }
-                HStack {
-                    Text(from(groups)).font(Theme.text(15)).foregroundStyle(.white.opacity(0.85)).lineLimit(2)
-                    Spacer(minLength: 12)
-                    Label("Read", systemImage: "text.alignleft").font(Theme.text(15, .semibold))
-                        .foregroundStyle(Theme.missedInk)
-                        .padding(.horizontal, 16).frame(height: 36)
-                        .background(.white, in: Capsule())
-                }
-            }
-            .padding(18)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background {
-                ZStack(alignment: .topTrailing) {
-                    Theme.missedGradient
-                    Circle().fill(.white.opacity(0.12)).frame(width: 130, height: 130).offset(x: 24, y: -24)
-                }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityHint("Shows the sentences and what you typed")
-    }
-
-    /// "Why do we itch?", "Why do we itch? and 2 more".
-    private func from(_ groups: [MissedGroup]) -> String {
-        guard let first = groups.first?.ref.episode else { return "" }
-        return groups.count == 1 ? first : "\(first) and \(groups.count - 1) more"
-    }
-}
-
-/// Signed out, or nothing missed yet (design P10).
-private struct EmptyMissedCard: View {
-    @Environment(Account.self) private var account
-    @Environment(\.openURL) private var openURL
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            IconTile("laptopcomputer", color: Theme.primary)
-            Text(account.isSignedIn ? "Nothing missed yet" : "Your missed sentences come here")
-                .font(Theme.display(20)).foregroundStyle(Theme.ink)
-            Text(account.isSignedIn
-                 ? "Dictate an episode on your computer. The sentences you miss come over by themselves, with what you typed, to read on the way."
-                 : "Dictate an episode on your computer, then sign in with the same account here. The sentences you missed come over by themselves, with what you typed, to read on the way.")
-                .font(Theme.text(15)).lineSpacing(2).foregroundStyle(Theme.inkSubtle)
-            HStack(spacing: 8) {
-                if !account.isSignedIn {
-                    NavigationLink(value: Route.account) { Text("Sign in") }.buttonStyle(.eks(.primary, small: true))
-                }
-                Button("Get the desktop app") { openURL(URL(string: "https://eksigo.com")!) }.buttonStyle(.eks(.ghost, small: true))
-            }
-        }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.primarySoft, in: RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
-    }
-}
-
 /// The episode left in the middle: a big cover, its title, and how much is left.
 private struct ContinueCard: View {
     let record: EpisodeRecord
@@ -216,10 +137,10 @@ private struct ContinueCard: View {
                         .multilineTextAlignment(.leading)
                     HStack(spacing: 10) {
                         Button { current ? center.togglePlayPause() : center.play(episode) } label: {
-                            Label("\(left) left", systemImage: playing ? "pause.fill" : "play.fill").font(Theme.text(14, .semibold))
+                            Label(L("%@ left", left), systemImage: playing ? "pause.fill" : "play.fill").font(Theme.text(14, .semibold))
                         }
                         .buttonStyle(.eks(.secondary, small: true, height: 32))
-                        .accessibilityLabel(playing ? "Pause, \(left) left" : "Resume, \(left) left")
+                        .accessibilityLabel(L(playing ? "Pause, %@ left" : "Resume, %@ left", left))
                         Track(value: record.duration > 0 ? min(1, position / record.duration) : 0)
                     }
                     .padding(.top, 8)
@@ -327,10 +248,10 @@ struct EpisodeRowContent: View {
     private func subtitle(_ r: EpisodeRecord?) -> String {
         var parts: [String] = []
         if showArt { parts.append(episode.showTitle) }
-        if !showArt, let d = episode.published { parts.append(d.formatted(.dateTime.day().month(.abbreviated))) }
+        if !showArt, let d = episode.published { parts.append(d.formatted(Date.FormatStyle(locale: AppLanguage.locale).day().month(.abbreviated))) }
         if let d = episode.duration, d > 0 { parts.append(Stats.length(d)) }
-        if r?.played == true { parts.append("played") }
-        else if let r, r.position > 30, r.duration > 0 { parts.append("\(Stats.length(r.duration - r.position)) left") }
+        if r?.played == true { parts.append(L("played")) }
+        else if let r, r.position > 30, r.duration > 0 { parts.append(L("%@ left", Stats.length(r.duration - r.position))) }
         else if showArt, let d = episode.published { parts.append(relativeDay(d)) }
         return parts.joined(separator: " · ")
     }
@@ -343,13 +264,13 @@ struct EpisodeRowContent: View {
             Image(systemName: "checkmark").font(.system(size: 16, weight: .medium)).foregroundStyle(Theme.inkSubtle)
                 .frame(width: 44, height: 44).accessibilityLabel("Played")
         } else {
-            RoundButton(symbol: "play.fill", label: "Play \(episode.title)") { center.play(episode) }
+            RoundButton(symbol: "play.fill", label: L("Play %@", episode.title)) { center.play(episode) }
         }
     }
 }
 
 func relativeDay(_ date: Date) -> String {
-    if Calendar.current.isDateInToday(date) { return "today" }
-    if Calendar.current.isDateInYesterday(date) { return "yesterday" }
-    return date.formatted(.dateTime.day().month(.abbreviated))
+    if Calendar.current.isDateInToday(date) { return L("today") }
+    if Calendar.current.isDateInYesterday(date) { return L("yesterday") }
+    return date.formatted(Date.FormatStyle(locale: AppLanguage.locale).day().month(.abbreviated))
 }

@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from "react";
 import { backend, on, type Account, type Provider } from "./backend";
+import { t } from "./i18n";
 
 export type AccountState = {
   /** undefined until the stored account has been read. */
@@ -81,7 +82,7 @@ export async function deleteAccount() {
   set({ account: null });
 }
 
-export const providerName = (p: string) => (p === "apple" ? "Apple" : p === "google" ? "Google" : "a developer sign-in");
+export const providerName = (p: string) => (p === "apple" ? "Apple" : p === "google" ? "Google" : t("a developer sign-in"));
 
 /** The name to show: the name, else the e-mail, else a stand-in (Apple may share neither). */
-export const displayName = (a: Account) => a.name || a.email?.split("@")[0] || "Your account";
+export const displayName = (a: Account) => a.name || a.email?.split("@")[0] || t("Your account");

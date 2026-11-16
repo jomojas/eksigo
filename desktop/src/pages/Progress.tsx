@@ -8,12 +8,13 @@ import { backend, on, type Progress as Data } from "../lib/backend";
 type DayDetail = Data["days"][number];
 import { percent } from "../lib/dictation";
 import { plural, practised } from "../lib/format";
+import { t, locale } from "../lib/i18n";
 
 const DAY = 86_400_000;
 const dateOf = (day: string) => new Date(`${day}T12:00`);
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-const longDay = (day: string) => dateOf(day).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
-const shortDay = (day: string) => dateOf(day).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+const longDay = (day: string) => dateOf(day).toLocaleDateString(locale(), { weekday: "short", day: "numeric", month: "short" });
+const shortDay = (day: string) => dateOf(day).toLocaleDateString(locale(), { day: "numeric", month: "short" });
 
 function useProgress(): Data | null {
   const [data, setData] = useState<Data | null>(null);
@@ -28,18 +29,18 @@ function useProgress(): Data | null {
 
 /** "up 6", "down 3", "same as last month"; points, not percent of percent. */
 function change(now: number | null, before: number | null): string {
-  if (now == null) return "no dictation yet";
-  if (before == null) return "first month";
+  if (now == null) return t("no dictation yet");
+  if (before == null) return t("first month");
   const d = Math.round(now * 100) - Math.round(before * 100);
-  return d > 0 ? `up ${d}` : d < 0 ? `down ${-d}` : "same as last month";
+  return d > 0 ? t("up {n}", { n: d }) : d < 0 ? t("down {n}", { n: -d }) : t("same as last month");
 }
 
 /** Total time, for the year grid's heading. */
 function yearTotal(seconds: number): string {
   const h = seconds / 3600;
-  if (h >= 10) return `${plural(Math.round(h), "hour")} in the last year`;
-  if (h >= 1) return `${practised(seconds)} in the last year`;
-  return `${plural(Math.round(seconds / 60), "minute")} in the last year`;
+  if (h >= 10) return t("{time} in the last year", { time: plural(Math.round(h), "hour") });
+  if (h >= 1) return t("{time} in the last year", { time: practised(seconds) });
+  return t("{time} in the last year", { time: plural(Math.round(seconds / 60), "minute") });
 }
 
 /** How dark a day's square is: 0 for nothing, then under 15 minutes, under 30, under an hour, an hour or more. */
@@ -54,7 +55,7 @@ function level(d: DayDetail | undefined): number {
 
 /** "Thu 12 Nov · 25 min". */
 function describe(d: DayDetail | undefined, day: string): string {
-  return `${longDay(day)} · ${d ? practised(d.seconds) : "0 min"}`;
+  return `${longDay(day)} · ${practised(d ? d.seconds : 0)}`;
 }
 
 function YearGrid({ data }: { data: Data }) {
@@ -65,7 +66,7 @@ function YearGrid({ data }: { data: Data }) {
   // A month's name sits over the column holding its first day.
   const months: { col: number; name: string }[] = [];
   cells.forEach((day, i) => {
-    if (day.endsWith("-01") && i / 7 < 51) months.push({ col: Math.floor(i / 7), name: dateOf(day).toLocaleDateString("en-GB", { month: "short" }) });
+    if (day.endsWith("-01") && i / 7 < 51) months.push({ col: Math.floor(i / 7), name: dateOf(day).toLocaleDateString(locale(), { month: "short" }) });
   });
   const [hover, setHover] = useState<string | null>(null);
   const [pinned, setPinned] = useState<string | null>(null);
@@ -92,18 +93,18 @@ function YearGrid({ data }: { data: Data }) {
           ))}
         </div>
         <div className="year-weekdays mono" aria-hidden="true">
-          <span>Mon</span>
+          <span>{t("Mon")}</span>
           <span />
-          <span>Wed</span>
+          <span>{t("Wed")}</span>
           <span />
-          <span>Fri</span>
+          <span>{t("Fri")}</span>
           <span />
-          <span>Sun</span>
+          <span>{t("Sun")}</span>
         </div>
         <div
           className="year-days"
           role="img"
-          aria-label={`Practice on ${plural(practisedDays, "day")} in the last year, ${practised(data.yearSeconds)} in all`}
+          aria-label={t("Practice on {days} in the last year, {time} in all", { days: plural(practisedDays, "day"), time: practised(data.yearSeconds) })}
           onMouseLeave={() => setHover(null)}
         >
           {cells.map((day) =>
@@ -123,12 +124,12 @@ function YearGrid({ data }: { data: Data }) {
         </div>
       </div>
       <div className="year-legend">
-        <span style={{ flexGrow: 1 }}>Each square is a day. Darker means more minutes.</span>
-        Less
+        <span style={{ flexGrow: 1 }}>{t("Each square is a day. Darker means more minutes.")}</span>
+        {t("Less")}
         {[0, 1, 2, 3, 4].map((l) => (
           <span key={l} className="year-day" data-level={l} aria-hidden="true" />
         ))}
-        More
+        {t("More")}
       </div>
     </section>
   );
@@ -180,19 +181,19 @@ function AccuracyChart({ weeks }: { weeks: Data["weeks"] }) {
     <section className="panel" aria-labelledby="acc" style={{ padding: "18px 20px", flex: "1.3 1 360px", minWidth: 0 }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
         <h2 id="acc" className="h2" style={{ flexGrow: 1 }}>
-          Accuracy, last 12 weeks
+          {t("Accuracy, last 12 weeks")}
         </h2>
         {shown != null && (
           <span className="muted" style={{ fontSize: 12 }} aria-live="polite">
-            Week of {shortDay(weeks[shown].start)} ·{" "}
-            {weeks[shown].accuracy == null ? "no dictation" : `${percent(weeks[shown].accuracy)} · ${plural(weeks[shown].sentences, "sentence")}`}
+            {t("Week of {day}", { day: shortDay(weeks[shown].start) })} ·{" "}
+            {weeks[shown].accuracy == null ? t("no dictation") : `${percent(weeks[shown].accuracy)} · ${plural(weeks[shown].sentences, "sentence")}`}
           </span>
         )}
       </div>
       <div ref={ref} style={{ position: "relative" }}>
         {values.length === 0 ? (
           <div className="muted" style={{ height: H, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>
-            Dictate a few sentences and your accuracy shows here, week by week.
+            {t("Dictate a few sentences and your accuracy shows here, week by week.")}
           </div>
         ) : (
           width > 0 && (
@@ -200,7 +201,7 @@ function AccuracyChart({ weeks }: { weeks: Data["weeks"] }) {
               width={width}
               height={H}
               role="img"
-              aria-label={values.length > 1 ? `Accuracy went from ${percent(first)} to ${percent(last)}` : `Accuracy ${percent(last)}`}
+              aria-label={values.length > 1 ? t("Accuracy went from {a} to {b}", { a: percent(first), b: percent(last) }) : t("Accuracy {a}", { a: percent(last) })}
               onMouseLeave={() => setHover(null)}
               onMouseMove={(e) => {
                 const r = e.currentTarget.getBoundingClientRect();
@@ -236,7 +237,7 @@ function AccuracyChart({ weeks }: { weeks: Data["weeks"] }) {
                   fontSize={11}
                   fontFamily="var(--font-mono)"
                 >
-                  {i === weeks.length - 1 ? "This week" : shortDay(weeks[i].start)}
+                  {i === weeks.length - 1 ? t("This week") : shortDay(weeks[i].start)}
                 </text>
               ))}
             </svg>
@@ -252,19 +253,19 @@ export function Progress() {
   return (
     <Page crumbs={["Progress"]}>
       <div className="page" style={{ gap: 22 }}>
-        <h1 className="h1">Progress</h1>
+        <h1 className="h1">{t("Progress")}</h1>
         <div className="cells progress-cells">
           <div className="cell">
             <div className="big">{data ? plural(data.streak, "day") : "—"}</div>
-            <div className="small">Current streak{data ? ` · best ${data.bestStreak}` : ""}</div>
+            <div className="small">{data ? t("Current streak · best {n}", { n: data.bestStreak }) : t("Current streak")}</div>
           </div>
           <div className="cell">
             <div className="big">{data ? practised(data.weekSeconds) : "—"}</div>
-            <div className="small">This week</div>
+            <div className="small">{t("This week")}</div>
           </div>
           <div className="cell">
             <div className="big">{data ? percent(data.monthAccuracy) : "—"}</div>
-            <div className="small">Accuracy this month{data ? ` · ${change(data.monthAccuracy, data.lastMonthAccuracy)}` : ""}</div>
+            <div className="small">{t("Accuracy this month")}{data ? ` · ${change(data.monthAccuracy, data.lastMonthAccuracy)}` : ""}</div>
           </div>
           <div className="cell">
             <div className="big">
@@ -273,7 +274,7 @@ export function Progress() {
                 <span style={{ fontSize: 14, color: "var(--ink-subtle)", fontWeight: 500 }}> / {data.wordsTotal}</span>
               )}
             </div>
-            <div className="small">Words known</div>
+            <div className="small">{t("Words known")}</div>
           </div>
         </div>
 
@@ -285,13 +286,12 @@ export function Progress() {
             <section className="panel" aria-labelledby="miss" style={{ padding: "18px 20px", flex: "1 1 260px", display: "flex", flexDirection: "column", gap: 10 }}>
               <div style={{ display: "flex", alignItems: "center" }}>
                 <h2 id="miss" className="h2" style={{ flexGrow: 1 }}>
-                  What you mishear most
+                  {t("What you mishear most")}
                 </h2>
-                <span className="badge badge-next">Later</span>
+                <span className="badge badge-next">{t("Later")}</span>
               </div>
               <p className="muted" style={{ fontSize: 13, lineHeight: 1.5 }}>
-                Small words like <i>to</i> and <i>of</i>, words that run together, numbers: once mistakes are sorted by kind,
-                the ones you miss most will show here.
+                {t("Small words like")} <i>{t("to")}</i> {t("and")} <i>{t("of")}</i>{t(", words that run together, numbers: once mistakes are sorted by kind, the ones you miss most will show here.")}
               </p>
             </section>
           </div>

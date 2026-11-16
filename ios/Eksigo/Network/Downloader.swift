@@ -51,7 +51,7 @@ nonisolated final class Downloader: NSObject, URLSessionDownloadDelegate, @unche
         guard let job = take(downloadTask) else { return }
         do {
             if let http = downloadTask.response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-                throw APIError(status: http.statusCode, message: "Download failed (\(http.statusCode))")
+                throw APIError(status: http.statusCode, message: L("Download failed (%lld)", http.statusCode))
             }
             // The temporary file is deleted when this method returns, so move it now.
             let fm = FileManager.default

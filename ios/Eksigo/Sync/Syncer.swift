@@ -119,7 +119,7 @@ final class Syncer {
         } catch let e as APIError {
             state = .failed(e.localizedDescription)
         } catch {
-            state = .failed("Couldn't reach Eksigo. Your changes are kept here and sync when the connection is back.")
+            state = .failed(L("Couldn't reach Eksigo. Your changes are kept here and sync when the connection is back."))
         }
     }
 }
@@ -128,10 +128,10 @@ extension Date {
     /// "2 minutes ago", "yesterday, 21:40".
     var agoText: String {
         let s = Date.now.timeIntervalSince(self)
-        if s < 60 { return "just now" }
-        if s < 3600 { let m = Int(s / 60); return "\(m) minute\(m == 1 ? "" : "s") ago" }
-        if Calendar.current.isDateInToday(self) { return "today, \(formatted(date: .omitted, time: .shortened))" }
-        if Calendar.current.isDateInYesterday(self) { return "yesterday, \(formatted(date: .omitted, time: .shortened))" }
-        return formatted(.dateTime.day().month(.abbreviated))
+        if s < 60 { return L("just now") }
+        if s < 3600 { let m = Int(s / 60); return L(m, "%lld minute ago", "%lld minutes ago") }
+        if Calendar.current.isDateInToday(self) { return L("today, %@", formatted(Date.FormatStyle(date: .omitted, time: .shortened, locale: AppLanguage.locale))) }
+        if Calendar.current.isDateInYesterday(self) { return L("yesterday, %@", formatted(Date.FormatStyle(date: .omitted, time: .shortened, locale: AppLanguage.locale))) }
+        return formatted(Date.FormatStyle(locale: AppLanguage.locale).day().month(.abbreviated))
     }
 }

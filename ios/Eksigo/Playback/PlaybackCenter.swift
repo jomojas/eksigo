@@ -314,7 +314,7 @@ final class PlaybackCenter {
             } catch {
                 log.error("download failed: \(error.localizedDescription)")
                 if asked {
-                    self.error = "Couldn't download “\(episode.title)”: \(error.localizedDescription)"
+                    self.error = L("Couldn't download “%@”: %@", episode.title, error.localizedDescription)
                 } else {
                     failedAuto.insert(key)
                 }
@@ -379,7 +379,7 @@ final class PlaybackCenter {
     /// "1.2 GB", or "None".
     var downloadedText: String {
         let b = downloadedBytes
-        return b > 0 ? ByteCountFormatter.string(fromByteCount: b, countStyle: .file) : "None"
+        return b > 0 ? ByteCountFormatter.string(fromByteCount: b, countStyle: .file) : L("None")
     }
 
     // MARK: System

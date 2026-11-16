@@ -11,6 +11,7 @@ import { clock, nextPractice, plural } from "../lib/format";
 import { usePlayer } from "../lib/playback";
 import { firstLine, LEVELS, levelName, speak, usePracticeCounts, useWords } from "../lib/words";
 import { Kbd } from "../components/Shell";
+import { t, tn } from "../lib/i18n";
 
 export function Words() {
   const [words, loaded] = useWords();
@@ -54,7 +55,7 @@ export function Words() {
         <div className="page" style={{ flexGrow: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             <h1 className="h1" style={{ flexGrow: 1 }}>
-              My words
+              {t("My words")}
               {words.length > 0 && (
                 <span className="mono" style={{ fontSize: 13, color: "var(--ink-subtle)", marginLeft: 10, fontWeight: 400 }}>
                   {words.length}
@@ -62,39 +63,39 @@ export function Words() {
               )}
             </h1>
             <button type="button" className="btn btn-primary" disabled={toPractise === 0} onClick={() => navigate("/words/practice")}>
-              {toPractise > 0 ? `Practise ${toPractise}` : "Nothing to practise now"}
+              {toPractise > 0 ? t("Practise {n}", { n: toPractise }) : t("Nothing to practise now")}
               {toPractise > 0 && <Kbd keys="P" />}
             </button>
           </div>
           {words.length > 0 && (
-            <div className="pills" role="group" aria-label="Level" style={{ alignSelf: "flex-start" }}>
+            <div className="pills" role="group" aria-label={t("Level")} style={{ alignSelf: "flex-start" }}>
               <button type="button" className="pill" aria-pressed={level === null} onClick={() => setLevel(null)}>
-                All <span className="mono">{words.length}</span>
+                {t("All")} <span className="mono">{words.length}</span>
               </button>
               {LEVELS.map(([l, name]) => (
                 <button key={l} type="button" className="pill" aria-pressed={level === l} onClick={() => setLevel(level === l ? null : l)}>
-                  {name} <span className="mono">{words.filter((w) => w.level === l).length}</span>
+                  {t(name)} <span className="mono">{words.filter((w) => w.level === l).length}</span>
                 </button>
               ))}
             </div>
           )}
           {loaded && words.length === 0 ? (
             <div className="empty">
-              <h2 className="h2">No words saved yet</h2>
-              <p>After a dictation, select words in the review's original to look them up, then press A to add them here, with the sentence you heard them in.</p>
+              <h2 className="h2">{t("No words saved yet")}</h2>
+              <p>{t("After a dictation, select words in the review's original to look them up, then press A to add them here, with the sentence you heard them in.")}</p>
             </div>
           ) : (
             <>
               <label className="input" style={{ maxWidth: 420 }}>
                 <Icon name="search" size={14} />
-                <input type="search" placeholder="Search your words" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search your words" />
+                <input type="search" placeholder={t("Search your words")} value={query} onChange={(e) => setQuery(e.target.value)} aria-label={t("Search your words")} />
               </label>
               <div className="panel" style={{ overflow: "hidden" }} role="list">
                 <div className="th" style={{ gridTemplateColumns: "minmax(0,1fr) minmax(0,1.2fr) 84px 96px" }}>
-                  <span>Word or phrase</span>
-                  <span>Meaning</span>
-                  <span>Level</span>
-                  <span>Next</span>
+                  <span>{t("Word or phrase")}</span>
+                  <span>{t("Meaning")}</span>
+                  <span>{t("Level")}</span>
+                  <span>{t("Next practice")}</span>
                 </div>
                 {shown.map((w) => (
                   <div
@@ -112,7 +113,7 @@ export function Words() {
                     <span>{nextPractice(w.dueAt)}</span>
                   </div>
                 ))}
-                {shown.length === 0 && loaded && <div style={{ padding: 16 }}>{query ? `No words match “${query}”.` : "No words at this level."}</div>}
+                {shown.length === 0 && loaded && <div style={{ padding: 16 }}>{query ? t("No words match “{query}”.", { query }) : t("No words at this level.")}</div>}
               </div>
             </>
           )}
@@ -136,7 +137,7 @@ function Detail({ word: w }: { word: SavedWord }) {
           <h2 className="h2" style={{ fontSize: 20, flexGrow: 1 }}>
             {w.text}
           </h2>
-          <button type="button" className="btn btn-ghost btn-sm" aria-label="Read it slowly" title="Read by your computer's voice" onClick={() => speak(w.text)}>
+          <button type="button" className="btn btn-ghost btn-sm" aria-label={t("Read it slowly")} title={t("Read by your computer's voice")} onClick={() => speak(w.text)}>
             <Icon name="speaker" size={15} />
           </button>
         </div>
@@ -149,35 +150,35 @@ function Detail({ word: w }: { word: SavedWord }) {
         {w.meaning && <div style={{ fontSize: 14, lineHeight: 1.6, color: "var(--ink)", whiteSpace: "pre-line" }}>{w.meaning}</div>}
         {w.explanation && (
           <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 4 }}>
-            <span className="eyebrow">In its sentence</span>
+            <span className="eyebrow">{t("In its sentence")}</span>
             <div className="ai-text">{w.explanation}</div>
           </div>
         )}
       </div>
       <div>
         <div className="prop">
-          Level<b>{levelName(w.level)}</b>
+          {t("Level")}<b>{levelName(w.level)}</b>
         </div>
         <div className="prop">
-          Next practice<b>{w.level === "new" ? "When you practise next" : nextPractice(w.dueAt)}</b>
+          {t("Next practice")}<b>{w.level === "new" ? t("When you practise next") : nextPractice(w.dueAt)}</b>
         </div>
         <div className="prop">
-          Practised<b>{w.reviews === 0 ? "Not yet" : plural(w.reviews, "time")}</b>
+          {t("Practised")}<b>{w.reviews === 0 ? t("Not yet") : plural(w.reviews, "time")}</b>
         </div>
       </div>
       <label className="lookup-note">
-        Your note
+        {t("Your note")}
         <textarea
           className="note-box"
           rows={2}
           value={note}
-          placeholder="Your own meaning, in any language"
+          placeholder={t("Your own meaning, in any language")}
           onChange={(e) => setNote(e.target.value)}
           onBlur={saveNote}
         />
       </label>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <div className="eyebrow">Heard in {w.contexts.length === 1 ? "1 sentence" : `${w.contexts.length} sentences`}</div>
+        <div className="eyebrow">{tn(w.contexts.length, "Heard in {n} sentence", "Heard in {n} sentences")}</div>
         {w.contexts.map((c, i) => (
           <Context key={i} c={c} text={w.text} />
         ))}
@@ -189,18 +190,18 @@ function Detail({ word: w }: { word: SavedWord }) {
               Remove “{w.text}”
             </button>
             <button type="button" className="btn btn-sm btn-ghost" onClick={() => setConfirming(false)}>
-              Keep it
+              {t("Keep it")}
             </button>
           </>
         ) : (
           <>
             {w.level !== "known" && (
-              <button type="button" className="btn btn-sm" title="Known now; it comes back in a year to check" onClick={() => backend.practiceKnow(w.id)}>
-                I know this
+              <button type="button" className="btn btn-sm" title={t("Known now; it comes back in a year to check")} onClick={() => backend.practiceKnow(w.id)}>
+                {t("I know this")}
               </button>
             )}
             <button type="button" className="btn btn-sm btn-ghost" onClick={() => setConfirming(true)}>
-              Remove from My words
+              {t("Remove from My words")}
             </button>
           </>
         )}
@@ -221,8 +222,8 @@ function Context({ c, text }: { c: WordContext; text: string }) {
           type="button"
           className="btn flag-btn"
           style={{ borderRadius: 9999, color: "var(--ink-muted)", flexShrink: 0 }}
-          aria-label="Play the sentence"
-          title={c.path ? "Play the sentence" : "The episode is no longer in your library"}
+          aria-label={t("Play the sentence")}
+          title={t(c.path ? "Play the sentence" : "The episode is no longer in your library")}
           disabled={!c.path}
           onClick={() => (player.playing ? player.stop() : player.play(c.sentenceStartMs, c.sentenceEndMs, 1))}
         >
@@ -245,13 +246,13 @@ function Context({ c, text }: { c: WordContext; text: string }) {
           <button
             type="button"
             className="link-btn"
-            title="Listen from this sentence"
+            title={t("Listen from this sentence")}
             onClick={() => navigate(listenPath(c.itemId ?? 0), { state: { at: c.sentenceStartMs } })}
           >
             {c.itemTitle}
           </button>
         ) : (
-          <span>From an episode no longer in your library</span>
+          <span>{t("From an episode no longer in your library")}</span>
         )}
         <span className="mono">
           {clock(c.sentenceStartMs / 1000)}–{clock(c.sentenceEndMs / 1000)}

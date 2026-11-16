@@ -69,21 +69,21 @@ nonisolated enum Stats {
     /// "3 h 20", "41 min", "0 min".
     static func duration(_ seconds: Int) -> String {
         let m = seconds / 60
-        if m < 60 { return "\(m) min" }
-        return m % 60 == 0 ? "\(m / 60) h" : "\(m / 60) h \(String(format: "%02d", m % 60))"
+        if m < 60 { return L("%lld min", m) }
+        return m % 60 == 0 ? L("%lld h", m / 60) : L("%lld h %02lld", m / 60, m % 60)
     }
 
     /// "3 h 20" without "min" when it fits a figure box.
     static func short(_ seconds: Int) -> String {
         let m = seconds / 60
-        if m < 60 { return "\(m) m" }
-        return m % 60 == 0 ? "\(m / 60) h" : "\(m / 60) h \(String(format: "%02d", m % 60))"
+        if m < 60 { return L("%lld m", m) }
+        return m % 60 == 0 ? L("%lld h", m / 60) : L("%lld h %02lld", m / 60, m % 60)
     }
 
     /// "18 min", "1 h 4 min" for an episode's length.
     static func length(_ seconds: Double) -> String {
         let m = Int((seconds / 60).rounded())
-        return m < 60 ? "\(max(m, 1)) min" : "\(m / 60) h \(m % 60) min"
+        return m < 60 ? L("%lld min", max(m, 1)) : L("%lld h %lld min", m / 60, m % 60)
     }
 
     static func clock(_ seconds: Double) -> String {
@@ -93,7 +93,7 @@ nonisolated enum Stats {
 }
 
 /// "1 word", "3 words".
-func plural(_ n: Int, _ one: String) -> String { "\(n) \(one)\(n == 1 ? "" : "s")" }
+nonisolated func plural(_ n: Int, _ one: String) -> String { L(n, "%lld " + one, "%lld " + one + "s") }
 
 /// What the Listen tab offers from the computer: the missed sentences, grouped by episode, newest dictation first.
 nonisolated struct MissedGroup: Identifiable, Hashable {
@@ -111,12 +111,12 @@ nonisolated struct MissedGroup: Identifiable, Hashable {
     /// "From last night's dictation", "From today's dictation", "From your dictation on Tuesday".
     static func when(_ at: Int, now: Date = .now, calendar: Calendar = .current) -> String {
         let date = Date(timeIntervalSince1970: TimeInterval(at))
-        if calendar.isDate(date, inSameDayAs: now) { return "From today's dictation" }
+        if calendar.isDate(date, inSameDayAs: now) { return L("From today's dictation") }
         if let y = calendar.date(byAdding: .day, value: -1, to: now), calendar.isDate(date, inSameDayAs: y) {
-            return calendar.component(.hour, from: date) >= 17 ? "From last night's dictation" : "From yesterday's dictation"
+            return L(calendar.component(.hour, from: date) >= 17 ? "From last night's dictation" : "From yesterday's dictation")
         }
-        if now.timeIntervalSince(date) < 6 * 86400 { return "From your dictation on \(date.formatted(.dateTime.weekday(.wide)))" }
-        return "From your dictation on \(date.formatted(.dateTime.day().month(.abbreviated)))"
+        if now.timeIntervalSince(date) < 6 * 86400 { return L("From your dictation on %@", date.formatted(Date.FormatStyle(locale: AppLanguage.locale).weekday(.wide))) }
+        return L("From your dictation on %@", date.formatted(Date.FormatStyle(locale: AppLanguage.locale).day().month(.abbreviated)))
     }
 }
 

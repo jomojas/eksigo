@@ -26,7 +26,7 @@ struct WordsView: View {
             .font(Theme.text(17))
             .padding(.horizontal, 12).frame(height: 40)
             .background(Theme.surface2, in: Capsule())
-            ChipRow(items: [("all", "All"), ("due", "Due \(due.count)")] + Word.Level.allCases.map {
+            ChipRow(items: [("all", "All"), ("due", L("Due %lld", due.count))] + Word.Level.allCases.map {
                 l in (l.rawValue, "\(l.label) \(words.filter { $0.level == l.rawValue }.count)")
             }, selection: $filter)
             if words.isEmpty {
@@ -66,12 +66,12 @@ extension String {
 /// "today", "tomorrow", "in 9 days", "in 5 mo", "—" for a new word.
 func dueText(_ w: Word, now: Int = Int(Date.now.timeIntervalSince1970)) -> String {
     guard w.level != "new", let due = w.dueAt else { return "—" }
-    if due <= now { return "today" }
+    if due <= now { return L("today") }
     let date = Date(timeIntervalSince1970: TimeInterval(due))
-    if Calendar.current.isDateInToday(date) { return "today" }
-    if Calendar.current.isDateInTomorrow(date) { return "tomorrow" }
+    if Calendar.current.isDateInToday(date) { return L("today") }
+    if Calendar.current.isDateInTomorrow(date) { return L("tomorrow") }
     let days = Calendar.current.dateComponents([.day], from: Calendar.current.startOfDay(for: .now), to: Calendar.current.startOfDay(for: date)).day ?? 0
-    return days < 60 ? "in \(days) days" : days < 365 ? "in \(days / 30) mo" : "in \(days / 365) yr"
+    return days < 60 ? L("in %lld days", days) : days < 365 ? L("in %lld mo", days / 30) : L("in %lld yr", days / 365)
 }
 
 /// A word (design P18): meaning, note, its sentences to play.
@@ -109,7 +109,7 @@ struct WordView: View {
                         Text(w.explanation).font(Theme.text(14)).lineSpacing(3).foregroundStyle(Theme.inkMuted).card(padding: 14)
                     }
                 }
-                Block("Heard in · \(w.contexts.count) sentence\(w.contexts.count == 1 ? "" : "s")") {
+                Block(L(w.contexts.count, "Heard in · %lld sentence", "Heard in · %lld sentences")) {
                     RowGroup {
                         ForEach(w.contexts, id: \.self) { c in
                             let id = "\(c.audioUrl ?? "")|\(c.idx)"
@@ -145,8 +145,8 @@ struct WordView: View {
 
     private func fact(_ value: String, _ label: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(value).font(Theme.display(18)).foregroundStyle(Theme.ink).lineLimit(1).minimumScaleFactor(0.7)
-            Text(label).font(Theme.text(13)).foregroundStyle(Theme.inkSubtle)
+            Text(L(value)).font(Theme.display(18)).foregroundStyle(Theme.ink).lineLimit(1).minimumScaleFactor(0.7)
+            Text(L(label)).font(Theme.text(13)).foregroundStyle(Theme.inkSubtle)
         }
         .padding(12).frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.surface1, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
@@ -187,7 +187,7 @@ struct HistoryView: View {
                                           leading: { Artwork(url: e.artwork, size: 40) },
                                           trailing: {
                                               Image(systemName: e.phone ? "iphone" : "laptopcomputer").foregroundStyle(Theme.inkSubtle)
-                                                  .accessibilityLabel(e.phone ? "On this phone" : "On the computer")
+                                                  .accessibilityLabel(L(e.phone ? "On this phone" : "On the computer"))
                                           })
                             if let ep = e.episode {
                                 NavigationLink(value: ep) { row }.buttonStyle(.plain)
@@ -205,9 +205,9 @@ struct HistoryView: View {
         store.listens.map { l in
             let date = Date(timeIntervalSince1970: TimeInterval(l.listenedAt) / 1000)
             let detail = l.finished || (l.durationS > 0 && l.positionS / l.durationS > 0.97)
-                ? "Listened · all \(Stats.length(l.durationS))"
-                : l.durationS > 0 ? "Listened · \(Int(l.positionS / 60)) of \(Int((l.durationS / 60).rounded())) min" : "Listened"
-            return Entry(id: "l" + l.audioUrl, date: date, title: l.episode, detail: "\(detail) · \(date.formatted(date: .omitted, time: .shortened))",
+                ? L("Listened · all %@", Stats.length(l.durationS))
+                : l.durationS > 0 ? L("Listened · %lld of %lld min", Int(l.positionS / 60), Int((l.durationS / 60).rounded())) : L("Listened")
+            return Entry(id: "l" + l.audioUrl, date: date, title: l.episode, detail: "\(detail) · \(date.formatted(Date.FormatStyle(date: .omitted, time: .shortened, locale: AppLanguage.locale)))",
                          phone: true, artwork: l.artworkUrl.flatMap(URL.init(string:)), episode: l.ref.episodeValue)
         }
     }
@@ -215,7 +215,7 @@ struct HistoryView: View {
     private var dictations: [Entry] {
         store.practices.map { p in
             let date = Date(timeIntervalSince1970: TimeInterval(p.updatedAt))
-            var parts = ["Dictated", p.answered >= p.sentences ? "\(p.sentences) sentences" : "\(p.answered) of \(p.sentences) sentences"]
+            var parts = [L("Dictated"), p.answered >= p.sentences ? L(p.sentences, "%lld sentence", "%lld sentences") : L("%lld of %lld sentences", p.answered, p.sentences)]
             if p.answered > 0 { parts.append("\(Int((Double(p.accuracy) / 10).rounded()))%") }
             parts.append(Stats.duration(p.seconds))
             return Entry(id: "p\(p.audioUrl)|\(p.startedAt)", date: date, title: p.episode, detail: parts.joined(separator: " · "),
@@ -224,9 +224,9 @@ struct HistoryView: View {
     }
 
     private func dayTitle(_ d: Date) -> String {
-        if Calendar.current.isDateInToday(d) { return "Today" }
-        if Calendar.current.isDateInYesterday(d) { return "Yesterday" }
-        return d.formatted(.dateTime.weekday(.wide).day().month(.abbreviated))
+        if Calendar.current.isDateInToday(d) { return L("Today") }
+        if Calendar.current.isDateInYesterday(d) { return L("Yesterday") }
+        return d.formatted(Date.FormatStyle(locale: AppLanguage.locale).weekday(.wide).day().month(.abbreviated))
     }
 }
 
@@ -241,7 +241,7 @@ struct ProgressPage: View {
         let total = byDay.values.reduce(0, +)
         let finished = store.practices.filter { $0.answered > 0 }.sorted { $0.updatedAt < $1.updatedAt }.suffix(8)
         Page(title: "Progress") {
-            Cells(items: [("\(Stats.streak(byDay)) day\(Stats.streak(byDay) == 1 ? "" : "s")", "Streak · best \(Stats.bestStreak(byDay))"),
+            Cells(items: [(L(Stats.streak(byDay), "%lld day", "%lld days"), L("Streak · best %lld", Stats.bestStreak(byDay))),
                           (Stats.short(total), "Practised in all")])
             Block("Time per week", trailing: {
                 Text("\(Stats.duration(weeks.last ?? 0)) this week").font(Theme.mono(12)).foregroundStyle(Theme.inkSubtle)
@@ -298,7 +298,7 @@ struct ProgressPage: View {
                 }
                 .card()
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel(Word.Level.allCases.enumerated().map { "\(counts[$0.offset]) \($0.element.rawValue)" }.joined(separator: ", "))
+                .accessibilityLabel(Word.Level.allCases.enumerated().map { "\(counts[$0.offset]) \($0.element.label)" }.joined(separator: ", "))
             }
         }
     }
@@ -348,14 +348,14 @@ struct SettingsView: View {
             Block("Playback") {
                 RowGroup {
                     pickerRow("Speed", selection: $s.speed, options: AppSettings.speeds.map { ($0, $0.speedText) })
-                    pickerRow("Skip back", selection: $s.skipBack, options: [(10.0, "10 s"), (15.0, "15 s"), (30.0, "30 s")])
-                    pickerRow("Skip forward", selection: $s.skipForward, options: [(15.0, "15 s"), (30.0, "30 s"), (45.0, "45 s")])
+                    pickerRow("Skip back", selection: $s.skipBack, options: [10.0, 15, 30].map { ($0, L("%lld s", Int($0))) })
+                    pickerRow("Skip forward", selection: $s.skipForward, options: [15.0, 30, 45].map { ($0, L("%lld s", Int($0))) })
                 }
             }
             Block("Downloads") {
                 RowGroup {
                     NavigationLink(value: Route.downloads) {
-                        Row(title: "Downloaded", subtitle: { let n = center.downloads().count; return "\(n) episode\(n == 1 ? "" : "s")" }(), chevron: true, leading: { EmptyView() }, trailing: {
+                        Row(title: "Downloaded", subtitle: { let n = center.downloads().count; return L(n, "%lld episode", "%lld episodes") }(), chevron: true, leading: { EmptyView() }, trailing: {
                             RowValue(center.downloadedText)
                         })
                     }
@@ -364,6 +364,7 @@ struct SettingsView: View {
             }
             Block("General") {
                 RowGroup {
+                    pickerRow("Language", selection: $s.language, options: AppLanguage.allCases.map { ($0, $0.label) })
                     pickerRow("Appearance", selection: $s.appearance, options: AppSettings.Appearance.allCases.map { ($0, $0.label) })
                     Row("About Eksigo") { RowValue(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") }
                 }
@@ -373,14 +374,14 @@ struct SettingsView: View {
 
     private func pickerRow<V: Hashable>(_ title: String, selection: Binding<V>, options: [(V, String)]) -> some View {
         Menu {
-            Picker(title, selection: selection) {
+            Picker(L(title), selection: selection) {
                 ForEach(options, id: \.0) { Text($0.1).tag($0.0) }
             }
         } label: {
             Row(title, chevron: true) { RowValue(options.first { $0.0 == selection.wrappedValue }?.1 ?? "") }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(title), \(options.first { $0.0 == selection.wrappedValue }?.1 ?? "")")
+        .accessibilityLabel("\(L(title)), \(options.first { $0.0 == selection.wrappedValue }?.1 ?? "")")
     }
 }
 

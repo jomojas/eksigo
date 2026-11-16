@@ -10,6 +10,7 @@ import { dictationPath, useInProgress } from "../lib/dictation";
 import { clock, plural, practised, whenDay } from "../lib/format";
 import { usePracticeCounts } from "../lib/words";
 import { useMissed } from "./Missed";
+import { t, locale } from "../lib/i18n";
 
 /** Episodes heard on the phone in the last three days (design D20); empty without an account. */
 function useHeard(): Heard[] | null {
@@ -29,15 +30,17 @@ function useHeard(): Heard[] | null {
 
 const heardWhen = (ms: number) => {
   const day = whenDay(Math.floor(ms / 1000));
-  const time = new Date(ms).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-  return day === "Today" || day === "Yesterday" ? `${day.toLowerCase()}, ${time}` : day;
+  const time = new Date(ms).toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" });
+  return day === t("Today") ? t("today, {time}", { time }) : day === t("Yesterday") ? t("yesterday, {time}", { time }) : day;
 };
 
 const heardHow = (h: Heard) =>
   h.finished || (h.positionS != null && h.durationS != null && h.positionS >= h.durationS - 30)
-    ? "listened to all of it"
+    ? t("listened to all of it")
     : h.positionS != null && h.positionS > 0
-      ? `stopped at ${clock(h.positionS)}${h.durationS ? ` of ${Math.round(h.durationS / 60)} min` : ""}`
+      ? h.durationS
+        ? t("stopped at {at} of {n} min", { at: clock(h.positionS), n: Math.round(h.durationS / 60) })
+        : t("stopped at {at}", { at: clock(h.positionS) })
       : "";
 
 /** The week panel's data, kept fresh as practice happens. */
@@ -92,13 +95,12 @@ function Row({
           onAction();
         }}
       >
-        {action}
+        {t(action)}
       </button>
     </div>
   );
 }
 
-const DAY_LETTER = ["S", "M", "T", "W", "T", "F", "S"];
 const dateOf = (day: string) => new Date(`${day}T12:00`);
 
 function WeekPanel({ week, words }: { week: Week | null; words: PracticeCounts | null }) {
@@ -110,17 +112,17 @@ function WeekPanel({ week, words }: { week: Week | null; words: PracticeCounts |
   const [hover, setHover] = useState<number | null>(null);
   const shown = days[hover ?? days.length - 1];
   return (
-    <aside className="insp" aria-label="This week">
+    <aside className="insp" aria-label={t("This week")}>
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <div className="eyebrow">This week</div>
+        <div className="eyebrow">{t("This week")}</div>
         <div className="cells" style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}>
           <div className="cell">
             <div className="big">{week ? week.streak : "—"}</div>
-            <div className="small">Day streak</div>
+            <div className="small">{t("Day streak")}</div>
           </div>
           <div className="cell">
             <div className="big">{week ? practised(total) : "—"}</div>
-            <div className="small">Practised</div>
+            <div className="small">{t("Practised")}</div>
           </div>
         </div>
         <div className="week-bars" onMouseLeave={() => setHover(null)}>
@@ -137,32 +139,32 @@ function WeekPanel({ week, words }: { week: Week | null; words: PracticeCounts |
         <div className="week-days mono" aria-hidden="true">
           {days.map((d, i) => (
             <span key={d.day} data-today={i === days.length - 1 || undefined} data-on={i === hover || undefined}>
-              {DAY_LETTER[dateOf(d.day).getDay()]}
+              {dateOf(d.day).toLocaleDateString(locale(), { weekday: "narrow" })}
             </span>
           ))}
         </div>
         {shown && (
           <div className="prop" aria-live="polite" style={{ minHeight: 0 }}>
             {hover == null || hover === days.length - 1
-              ? "Today"
-              : dateOf(shown.day).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "short" })}
+              ? t("Today")
+              : dateOf(shown.day).toLocaleDateString(locale(), { weekday: "long", day: "numeric", month: "short" })}
             <b className="mono">{practised(shown.seconds)}</b>
           </div>
         )}
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        <div className="eyebrow">My words</div>
+        <div className="eyebrow">{t("My words")}</div>
         <div className="prop">
-          Due for practice<b className="mono">{words ? words.due : "—"}</b>
+          {t("Due for practice")}<b className="mono">{words ? words.due : "—"}</b>
         </div>
         <div className="prop">
-          New to start today<b className="mono">{words ? words.new : "—"}</b>
+          {t("New to start today")}<b className="mono">{words ? words.new : "—"}</b>
         </div>
         <div className="prop">
-          Started this week<b className="mono">{week ? week.wordsStarted : "—"}</b>
+          {t("Started this week")}<b className="mono">{week ? week.wordsStarted : "—"}</b>
         </div>
         <button type="button" className="btn" style={{ alignSelf: "flex-start" }} disabled={!words?.total} onClick={() => navigate("/words/practice")}>
-          {words?.total ? `Practise ${plural(words.total, "word")}` : "Nothing to practise"}
+          {words?.total ? t("Practise {n}", { n: plural(words.total, "word") }) : t("Nothing to practise")}
           {!!words?.total && <Kbd keys="P" />}
         </button>
       </div>
@@ -269,26 +271,26 @@ export function Today() {
       <div style={{ display: "flex", minHeight: "100%" }}>
         <div className="page" style={{ flexGrow: 1, minWidth: 0, gap: 28 }}>
           <div>
-            <div className="eyebrow">{new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</div>
+            <div className="eyebrow">{new Date().toLocaleDateString(locale(), { weekday: "long", day: "numeric", month: "long" })}</div>
             <h1 className="h1" style={{ marginTop: 6 }}>
-              {first ? "Pick up where you stopped" : "Nothing to continue yet"}
+              {t(first ? "Pick up where you stopped" : "Nothing to continue yet")}
             </h1>
           </div>
 
           {first && (
-            <article className="panel continue-card" aria-label="Continue" onClick={() => navigate(`/library/${first.itemId}`)}>
+            <article className="panel continue-card" aria-label={t("Continue")} onClick={() => navigate(`/library/${first.itemId}`)}>
               <Art url={first.artworkUrl} size={64} radius={8} file={first.source === "My files"} />
               <div style={{ flex: "1 1 240px", minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
-                <div className="eyebrow">Continue</div>
+                <div className="eyebrow">{t("Continue")}</div>
                 <div className="h2 ell" style={{ fontSize: 17 }}>
                   {first.title}
                 </div>
                 <div className="continue-meta">
-                  <span className="ell" style={{ minWidth: 60 }}>{first.source}</span>
+                  <span className="ell" style={{ minWidth: 60 }}>{t(first.source)}</span>
                   {first.transcriptDone && first.sentences > 0 ? (
                     <>
                       <span className="mono">
-                        {first.done} / {first.sentences} sentences
+                        {t("{a} / {b} sentences", { a: first.done, b: first.sentences })}
                       </span>
                       <div className="track" style={{ flex: "0 1 140px", minWidth: 40 }}>
                         <div className="fill" style={{ width: `${Math.round((first.done / first.sentences) * 100)}%` }} />
@@ -308,7 +310,7 @@ export function Today() {
                   navigate(dictationPath(first.itemId));
                 }}
               >
-                Resume at sentence {resumeAt}
+                {t("Resume at sentence {n}", { n: resumeAt })}
                 <Kbd keys="Enter" />
               </button>
             </article>
@@ -318,10 +320,10 @@ export function Today() {
             <section aria-labelledby="missed">
               <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
                 <h2 id="missed" className="eyebrow" style={{ flexGrow: 1 }}>
-                  Hear again · {plural(missed!.length, "missed sentence")}
+                  {t("Hear again · {n}", { n: plural(missed!.length, "missed sentence") })}
                 </h2>
                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => navigate("/missed")}>
-                  Hear all
+                  {t("Hear all")}
                   <Kbd keys="H" />
                 </button>
               </div>
@@ -344,7 +346,7 @@ export function Today() {
           {heard && heard.length > 0 && (
             <section aria-labelledby="heard">
               <h2 id="heard" className="eyebrow" style={{ marginBottom: 8 }}>
-                Heard on your iPhone
+                {t("Heard on your iPhone")}
               </h2>
               {heardError && (
                 <div className="muted" role="alert" style={{ fontSize: 12, marginBottom: 8 }}>
@@ -371,10 +373,10 @@ export function Today() {
           <section aria-labelledby="new">
             <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
               <h2 id="new" className="eyebrow" style={{ flexGrow: 1 }}>
-                New from your shows
+                {t("New from your shows")}
               </h2>
               <button type="button" className="btn btn-ghost btn-sm" onClick={() => navigate("/podcasts")}>
-                Podcasts
+                {t("Podcasts")}
               </button>
             </div>
             {error && (
@@ -399,14 +401,14 @@ export function Today() {
             )}
             {fresh && fresh.length === 0 && (
               <div className="panel today-note" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                <span style={{ flex: "1 1 240px" }}>Subscribe to shows you like, and their newest episodes appear here each day.</span>
+                <span style={{ flex: "1 1 240px" }}>{t("Subscribe to shows you like, and their newest episodes appear here each day.")}</span>
                 <button type="button" className="btn btn-sm btn-primary" onClick={() => navigate("/podcasts")}>
                   <Icon name="podcasts" />
-                  Find a podcast
+                  {t("Find a podcast")}
                 </button>
                 <button type="button" className="btn btn-sm" disabled={!inApp} onClick={() => addAudio().then((added) => added && navigate("/library", { state: { added } }))}>
                   <Icon name="plus" />
-                  Add audio
+                  {t("Add audio")}
                 </button>
               </div>
             )}

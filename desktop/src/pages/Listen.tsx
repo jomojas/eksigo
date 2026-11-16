@@ -16,6 +16,7 @@ import { useLibraryChanged } from "../lib/downloads";
 import { clock, plural } from "../lib/format";
 import { sentenceAt, SPEEDS, usePlayer } from "../lib/playback";
 import { isBusy, transcribed, useTranscript } from "../lib/transcripts";
+import { t } from "../lib/i18n";
 
 export const listenPath = (itemId: number) => `/library/${itemId}/listen`;
 
@@ -313,7 +314,7 @@ export function ListenScreen() {
   ];
   const actions = (
     <button type="button" className="btn btn-sm" onClick={() => navigate(dictationPath(itemId))}>
-      Dictate instead
+      {t("Dictate instead")}
     </button>
   );
   const busy = isBusy(status?.state);
@@ -322,8 +323,8 @@ export function ListenScreen() {
   return (
     <Page crumbs={crumbs} keys={KEYS} actions={actions}>
       <div style={{ display: "flex", minHeight: "100%" }}>
-        <section aria-label="Listen" className="page" style={{ flexGrow: 1, minWidth: 0, gap: 16, paddingTop: 20 }}>
-          {item && item.state !== "ready" && <div className="notice">This episode isn’t downloaded. Download it on its page first.</div>}
+        <section aria-label={t("Listen")} className="page" style={{ flexGrow: 1, minWidth: 0, gap: 16, paddingTop: 20 }}>
+          {item && item.state !== "ready" && <div className="notice">{t("This episode isn’t downloaded. Download it on its page first.")}</div>}
 
           {/* Stays at the top while the sentences scroll under it. */}
           <div ref={bar} style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--canvas)", padding: "12px 0", margin: "-12px 0" }}>
@@ -332,27 +333,26 @@ export function ListenScreen() {
                 type="button"
                 className="btn btn-primary"
                 onClick={toggle}
-                aria-label={player.playing ? "Pause" : "Play"}
+                aria-label={t(player.playing ? "Pause" : "Play")}
                 style={{ width: 36, height: 36, padding: 0, borderRadius: 9999 }}
                 disabled={item?.state !== "ready"}
               >
                 <Icon name={player.playing ? "pause" : "play"} size={14} stroke={player.playing ? 2.4 : 1.6} />
               </button>
-              <button type="button" className="btn btn-ghost" onClick={replay} aria-label="Replay this sentence" title="Replay this sentence (R)" style={{ width: 32, padding: 0 }}>
+              <button type="button" className="btn btn-ghost" onClick={replay} aria-label={t("Replay this sentence")} title={t("Replay this sentence (R)")} style={{ width: 32, padding: 0 }}>
                 <Icon name="replay" size={15} stroke={1.8} />
               </button>
               <div style={{ flexGrow: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 10, fontSize: 13 }}>
                   {current >= 0 ? (
                     <>
-                      <b style={{ fontWeight: 500, color: "var(--ink)" }}>Sentence {current + 1}</b>
+                      <b style={{ fontWeight: 500, color: "var(--ink)" }}>{t("Sentence {n}", { n: current + 1 })}</b>
                       <span className="mono" style={{ fontSize: 12 }}>
-                        of {sentences.length}
-                        {busy && " so far"}
+                        {t(busy ? "of {n} so far" : "of {n}", { n: sentences.length })}
                       </span>
                     </>
                   ) : (
-                    <span>{sentences.length > 0 ? `${plural(sentences.length, "sentence")}` : busy ? "Transcribing…" : ""}</span>
+                    <span>{sentences.length > 0 ? plural(sentences.length, "sentence") : busy ? t("Transcribing…") : ""}</span>
                   )}
                   <span style={{ flexGrow: 1 }} />
                   <span className="mono" style={{ fontSize: 12 }}>
@@ -372,11 +372,11 @@ export function ListenScreen() {
                     if (player.playing) playFrom(ms);
                     else setAt(ms);
                   }}
-                  aria-label="Position"
+                  aria-label={t("Position")}
                   style={{ width: "100%", background: `linear-gradient(to right, var(--ink-muted) ${durMs ? (pos / durMs) * 100 : 0}%, var(--hairline) 0)` }}
                 />
               </div>
-              <div className="seg" role="group" aria-label="Speed">
+              <div className="seg" role="group" aria-label={t("Speed")}>
                 {SPEEDS.map((s) => (
                   <button
                     key={s}
@@ -396,12 +396,12 @@ export function ListenScreen() {
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-            <h2 className="eyebrow">Sentences</h2>
+            <h2 className="eyebrow">{t("Sentences")}</h2>
             <span style={{ fontSize: 12 }}>
-              {allShown ? "Select words to look them up." : "Hidden until you show them, to test your ears first. Select words in a shown sentence to look them up."}
+              {t(allShown ? "Select words to look them up." : "Hidden until you show them, to test your ears first. Select words in a shown sentence to look them up.")}
             </span>
             <span style={{ flexGrow: 1 }} />
-            <div className="seg" role="group" aria-label="Sentences">
+            <div className="seg" role="group" aria-label={t("Sentences")}>
               <button type="button" aria-pressed={!allShown} onClick={() => setAllShown(false)}>
                 <Icon name="eye-off" size={13} />
                 &nbsp;Hidden
@@ -419,26 +419,26 @@ export function ListenScreen() {
               <span className="track" style={{ width: 120 }}>
                 <span className="fill" style={{ display: "block", width: `${Math.round(transcribed(status) * 100)}%` }} />
               </span>
-              More sentences arrive as the episode is transcribed.
+              {t("More sentences arrive as the episode is transcribed.")}
             </div>
           )}
           {status?.state === "failed" && (
             <div className="notice notice-error" role="alert">
-              <span style={{ flexGrow: 1 }}>{status.error ?? "Transcription failed."}</span>
+              <span style={{ flexGrow: 1 }}>{t(status.error ?? "Transcription failed.")}</span>
               <button type="button" className="btn btn-sm" onClick={() => backend.transcribe(itemId)}>
-                Try again
+                {t("Try again")}
               </button>
             </div>
           )}
 
           {sentences.length > 0 && (
-            <ol ref={list} className="panel listen" aria-label="Sentences">
+            <ol ref={list} className="panel listen" aria-label={t("Sentences")}>
               {sentences.map((s, i) => {
                 const on = i === current;
                 const open = isShown(i);
                 return (
                   <li key={s.idx} id={`listen-${i}`} className={on ? "lrow lrow-on" : "lrow"} aria-current={on ? "true" : undefined}>
-                    <button type="button" className="lrow-num" onClick={() => playSentence(i)} aria-label={`Play sentence ${i + 1}`} title="Play from here">
+                    <button type="button" className="lrow-num" onClick={() => playSentence(i)} aria-label={t("Play sentence {n}", { n: i + 1 })} title={t("Play from here")}>
                       {on && player.playing ? <span className="playing" aria-hidden="true"><i /><i /><i /></span> : i + 1}
                     </button>
                     <div className="lrow-body">
@@ -447,7 +447,7 @@ export function ListenScreen() {
                           <IndexedText text={s.text} />
                         </span>
                       ) : (
-                        <span className="bars" role="img" aria-label="Hidden sentence" onClick={() => playSentence(i)}>
+                        <span className="bars" role="img" aria-label={t("Hidden sentence")} onClick={() => playSentence(i)}>
                           {s.text
                             .split(/\s+/)
                             .filter(Boolean)
@@ -459,9 +459,9 @@ export function ListenScreen() {
                     </div>
                     <div className="lrow-end">
                       {on && open && ai?.using && (
-                        <button type="button" className="btn btn-sm btn-ghost peek" onClick={() => openAsk(i)} aria-label={`Ask about sentence ${i + 1}`} title="Ask the AI about this sentence (?)">
+                        <button type="button" className="btn btn-sm btn-ghost peek" onClick={() => openAsk(i)} aria-label={t("Ask about sentence {n}", { n: i + 1 })} title={t("Ask the AI about this sentence (?)")}>
                           <Icon name="chat" size={13} />
-                          Ask
+                          {t("Ask")}
                         </button>
                       )}
                       {!allShown && (
@@ -469,10 +469,10 @@ export function ListenScreen() {
                           type="button"
                           className={on && !open ? "btn btn-sm peek" : "btn btn-sm btn-ghost peek"}
                           onClick={() => toggleShown(i)}
-                          aria-label={`${open ? "Hide" : "Show"} sentence ${i + 1}`}
+                          aria-label={t(open ? "Hide sentence {n}" : "Show sentence {n}", { n: i + 1 })}
                         >
                           <Icon name={open ? "eye-off" : "eye"} size={13} />
-                          {open ? "Hide" : "Show"}
+                          {t(open ? "Hide" : "Show")}
                           {on && <Kbd keys="S" />}
                         </button>
                       )}
@@ -484,7 +484,7 @@ export function ListenScreen() {
           )}
         </section>
 
-        <aside className="insp" aria-label="Words">
+        <aside className="insp" aria-label={t("Words")}>
           {asking !== null && sentences[asking] ? (
             <AskPanel
               key={sentences[asking].idx}
@@ -502,13 +502,12 @@ export function ListenScreen() {
             <LookupCard key={`${lookup.idx}-${lookup.from}-${lookup.to}`} sel={lookup} path={item?.path ?? null} docked onClose={closeLookup} onSaved={(t) => setSaved((s) => (s.includes(t) ? s : [...s, t]))} />
           ) : (
             <p style={{ fontSize: 13, lineHeight: 1.5 }}>
-              Show a sentence, then select a word or phrase in it to see its meaning and save it to My words. Playback pauses while you look, and carries on
-              when you close the card.
+              {t("Show a sentence, then select a word or phrase in it to see its meaning and save it to My words. Playback pauses while you look, and carries on when you close the card.")}
             </p>
           )}
           {saved.length > 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <div className="eyebrow">Saved while listening</div>
+              <div className="eyebrow">{t("Saved while listening")}</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                 {saved.map((t) => (
                   <span key={t} className="badge">
@@ -521,12 +520,12 @@ export function ListenScreen() {
           <div style={{ flexGrow: 1 }} />
           <div style={{ display: "flex", flexDirection: "column" }}>
             <div className="prop">
-              Shown so far
-              <b className="mono">{allShown ? "All" : `${shownCount} of ${sentences.length}`}</b>
+              {t("Shown so far")}
+              <b className="mono">{allShown ? t("All") : t("{a} of {b}", { a: shownCount, b: sentences.length })}</b>
             </div>
             <div className="prop">
-              Listened today
-              <b className="mono">{today === null ? "—" : `${Math.round(today / 60)} min`}</b>
+              {t("Listened today")}
+              <b className="mono">{today === null ? "—" : t("{n} min", { n: Math.round(today / 60) })}</b>
             </div>
           </div>
         </aside>

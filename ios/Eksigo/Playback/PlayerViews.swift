@@ -128,7 +128,7 @@ struct NowPlayingView: View {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(e.title).font(Theme.display(21)).foregroundStyle(Theme.ink).lineLimit(2)
-                    Text([e.showTitle, e.published?.formatted(.dateTime.day().month(.abbreviated))].compactMap { $0 }.joined(separator: " · "))
+                    Text([e.showTitle, e.published?.formatted(Date.FormatStyle(locale: AppLanguage.locale).day().month(.abbreviated))].compactMap { $0 }.joined(separator: " · "))
                         .font(Theme.text(17)).foregroundStyle(Theme.inkSubtle).lineLimit(1)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -146,7 +146,7 @@ struct NowPlayingView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Read \(plural(missed.count, "missed sentence"))")
+                    .accessibilityLabel(L("Read %@", plural(missed.count, "missed sentence")))
                 }
             }
             .padding(.top, 26)
@@ -200,7 +200,7 @@ struct NowPlayingView: View {
 
     private var controls: some View {
         HStack {
-            IconButton(symbol: "gobackward.\(Int(center.settings.skipBack))", label: "Back \(Int(center.settings.skipBack)) seconds", size: 30) {
+            IconButton(symbol: "gobackward.\(Int(center.settings.skipBack))", label: L("Back %lld seconds", Int(center.settings.skipBack)), size: 30) {
                 center.skip(-center.settings.skipBack)
             }
             .frame(width: 56, height: 56)
@@ -211,9 +211,9 @@ struct NowPlayingView: View {
                     .contentTransition(.symbolEffect(.replace))
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(center.isPlaying ? "Pause" : "Play")
+            .accessibilityLabel(L(center.isPlaying ? "Pause" : "Play"))
             Spacer()
-            IconButton(symbol: "goforward.\(Int(center.settings.skipForward))", label: "Forward \(Int(center.settings.skipForward)) seconds", size: 30) {
+            IconButton(symbol: "goforward.\(Int(center.settings.skipForward))", label: L("Forward %lld seconds", Int(center.settings.skipForward)), size: 30) {
                 center.skip(center.settings.skipForward)
             }
             .frame(width: 56, height: 56)
@@ -246,7 +246,7 @@ struct NowPlayingView: View {
                     }
                 }
             }
-            .accessibilityLabel(center.sleepActive ? "Sleep timer: \(sleepText(.now))" : "Sleep timer")
+            .accessibilityLabel(center.sleepActive ? L("Sleep timer: %@", sleepText(.now)) : L("Sleep timer"))
             Spacer(minLength: 0)
             Button { showUpNext = true } label: {
                 ControlLabel(name: "Up Next") {
@@ -262,7 +262,7 @@ struct NowPlayingView: View {
                 }
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Up Next, \(plural(center.queue.count, "episode"))")
+            .accessibilityLabel(L("Up Next, %@", plural(center.queue.count, "episode")))
             Spacer(minLength: 0)
             ZStack {
                 ControlLabel(name: route) { Image(systemName: "airplayaudio").font(.system(size: 20)) }
@@ -281,9 +281,9 @@ struct NowPlayingView: View {
     }
 
     private func sleepText(_ now: Date) -> String {
-        if center.sleepAtEnd { return "End" }
-        if let at = center.sleepAt { return "\(max(1, Int((at.timeIntervalSince(now) / 60).rounded(.up)))) min" }
-        return "Sleep"
+        if center.sleepAtEnd { return L("End") }
+        if let at = center.sleepAt { return L("%lld min", max(1, Int((at.timeIntervalSince(now) / 60).rounded(.up)))) }
+        return L("Sleep")
     }
 
     // MARK: Scrolled up
@@ -295,7 +295,7 @@ struct NowPlayingView: View {
                 Block("Missed on your computer") {
                     Button { missedList = missed[0].audioUrl } label: {
                         RowGroup {
-                            Row(title: plural(missed.count, "sentence") + " you missed",
+                            Row(title: L(missed.count, "%lld sentence you missed", "%lld sentences you missed"),
                                 subtitle: "The sentences and what you typed",
                                 chevron: true, leading: { IconTile("text.alignleft") }, trailing: { EmptyView() })
                         }
@@ -311,7 +311,7 @@ struct NowPlayingView: View {
             }
             Block("Episode") {
                 RowGroup {
-                    if let d = e.published { Row("Published") { RowValue(d.formatted(.dateTime.day().month(.abbreviated).year())) } }
+                    if let d = e.published { Row("Published") { RowValue(d.formatted(Date.FormatStyle(locale: AppLanguage.locale).day().month(.abbreviated).year())) } }
                     if center.duration > 0 { Row("Length") { RowValue(Stats.length(center.duration)) } }
                     Row("On this phone") { RowValue(downloadText(e)) }
                 }
@@ -347,10 +347,10 @@ struct NowPlayingView: View {
     }
 
     private func downloadText(_ e: PodcastEpisode) -> String {
-        if let p = center.downloading[e.key] { return "Downloading \(Int(p * 100))%" }
-        guard center.isDownloaded(e) else { return "Streaming" }
+        if let p = center.downloading[e.key] { return L("Downloading %lld%%", Int(p * 100)) }
+        guard center.isDownloaded(e) else { return L("Streaming") }
         let bytes = center.downloads().first { $0.key == e.key }?.fileBytes ?? 0
-        return bytes > 0 ? ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file) : "Downloaded"
+        return bytes > 0 ? ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file) : L("Downloaded")
     }
 }
 
@@ -363,7 +363,7 @@ private struct ControlLabel<Icon: View>: View {
     var body: some View {
         VStack(spacing: 5) {
             icon.foregroundStyle(on ? Theme.ink : Theme.inkMuted).frame(height: 24)
-            Text(name).font(Theme.text(11, .medium)).foregroundStyle(on ? Theme.ink : Theme.inkSubtle).lineLimit(1)
+            Text(L(name)).font(Theme.text(11, .medium)).foregroundStyle(on ? Theme.ink : Theme.inkSubtle).lineLimit(1)
         }
         .frame(width: 64, height: 52)
         .contentShape(Rectangle())
@@ -384,7 +384,7 @@ private struct MoreMenu<Label: View>: View {
             } else if center.isDownloaded(episode) {
                 Button("Remove download", systemImage: "trash", role: .destructive) { center.deleteDownload(episode) }
             } else {
-                Button(episode.audioBytes.flatMap { $0 > 0 ? "Download · \(ByteCountFormatter.string(fromByteCount: $0, countStyle: .file))" : nil } ?? "Download",
+                Button(episode.audioBytes.flatMap { $0 > 0 ? L("Download · %@", ByteCountFormatter.string(fromByteCount: $0, countStyle: .file)) : nil } ?? L("Download"),
                        systemImage: "arrow.down.circle") { center.download(episode) }
             }
             if let feed = episode.feedUrl {

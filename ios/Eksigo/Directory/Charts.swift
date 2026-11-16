@@ -83,6 +83,6 @@ nonisolated enum Directory {
                                    artworkUrl: (r["artworkUrl600"] as? String).flatMap(URL.init(string:)), genre: r["primaryGenreName"] as? String)
             }
         }
-        throw URLError(.resourceUnavailable, userInfo: [NSLocalizedDescriptionKey: "This show has no public RSS feed, so it can't be played in Eksigo."])
+        throw URLError(.resourceUnavailable, userInfo: [NSLocalizedDescriptionKey: L("This show has no public RSS feed, so it can't be played in Eksigo.")])
     }
 }

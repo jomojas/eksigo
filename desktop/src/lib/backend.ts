@@ -7,6 +7,7 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { open } from "@tauri-apps/plugin-dialog";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { sample } from "./sample";
+import { t } from "./i18n";
 
 export const inApp = isTauri();
 
@@ -417,8 +418,16 @@ function pieces(onText: (t: string) => void): Channel<string> | null {
 }
 
 function call<T>(command: string, args: Record<string, unknown>, fallback: () => T | Promise<T>): Promise<T> {
-  if (inApp) return invoke<T>(command, args);
+  if (inApp) return invoke<T>(command, args).catch((e: unknown) => Promise.reject(translated(e)));
   return Promise.resolve().then(fallback);
+}
+
+/** An error from the Rust side, in the language in use when it's one of the fixed messages. */
+function translated(e: unknown): unknown {
+  if (typeof e === "string") return t(e);
+  if (e && typeof e === "object" && "message" in e && typeof (e as { message: unknown }).message === "string")
+    return { ...e, message: t((e as { message: string }).message) };
+  return e;
 }
 
 export const backend = {

@@ -14,6 +14,7 @@ import { checkForUpdate, restartToUpdate, useUpdate } from "../lib/updates";
 import { cancelSignIn, deleteAccount, displayName, providerName, signIn, signOut, useAccount } from "../lib/account";
 import { syncedAgo, syncNow, useSync } from "../lib/sync";
 import { cancelConnect, connectChatGpt, disconnectChatGpt, removeKey, saveKey, setModel, useAi } from "../lib/ai";
+import { t, useUiLanguage, UI_LANGUAGES, type UiLanguage } from "../lib/i18n";
 
 // Settings (design D12): every section, with AI (D16). The open
 // section is in the address (#/settings?s=storage), so other screens can link straight to one.
@@ -21,7 +22,7 @@ import { cancelConnect, connectChatGpt, disconnectChatGpt, removeKey, saveKey, s
 type SectionId = "general" | "dictation" | "speech" | "dictionaries" | "ai" | "account" | "storage" | "shortcuts" | "about";
 
 const SECTIONS: { id: SectionId; label: string; later?: boolean; words: string }[] = [
-  { id: "general", label: "General", words: "theme light dark appearance" },
+  { id: "general", label: "General", words: "language chinese english 中文 语言 theme light dark appearance" },
   { id: "dictation", label: "Dictation", words: "playback speed plays mode auto manual pause slow" },
   { id: "speech", label: "Speech model", words: "whisper transcription model download phrase translator machine translation" },
   { id: "dictionaries", label: "Dictionaries", words: "meanings language translation chinese japanese korean spanish french english" },
@@ -39,8 +40,8 @@ export function Settings() {
   const [query, setQuery] = useState("");
   const navigate = useNavigate();
   const q = query.trim().toLowerCase();
-  const shown = q ? SECTIONS.filter((s) => `${s.label} ${s.words}`.toLowerCase().includes(q)) : SECTIONS;
-  const label = SECTIONS.find((s) => s.id === section)!.label;
+  const shown = q ? SECTIONS.filter((s) => `${s.label} ${t(s.label)} ${s.words}`.toLowerCase().includes(q)) : SECTIONS;
+  const label = t(SECTIONS.find((s) => s.id === section)!.label);
 
   // Esc clears the search, then leaves Settings for the previous screen.
   const escape = useRef(() => {});
@@ -59,13 +60,13 @@ export function Settings() {
   return (
     <Page crumbs={["Settings", label]} keys={[["Esc", "Back"]]}>
       <div style={{ display: "flex", minHeight: "100%" }}>
-        <nav aria-label="Settings sections" style={{ width: 210, flexShrink: 0, padding: "20px 12px", borderRight: "1px solid var(--hairline)", display: "flex", flexDirection: "column", gap: 1 }}>
+        <nav aria-label={t("Settings sections")} style={{ width: 210, flexShrink: 0, padding: "20px 12px", borderRight: "1px solid var(--hairline)", display: "flex", flexDirection: "column", gap: 1 }}>
           <label className="input" style={{ height: 30, marginBottom: 12 }}>
             <Icon name="search" size={13} />
             <input
               type="search"
-              placeholder="Search settings"
-              aria-label="Search settings"
+              placeholder={t("Search settings")}
+              aria-label={t("Search settings")}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => {
@@ -82,11 +83,11 @@ export function Settings() {
               style={{ width: "100%", border: 0, background: s.id === section ? undefined : "transparent", cursor: "pointer", fontWeight: s.id === section ? 500 : 400 }}
               onClick={() => setSection(s.id)}
             >
-              {s.label}
-              {s.later && <span className="n">later</span>}
+              {t(s.label)}
+              {s.later && <span className="n">{t("later")}</span>}
             </button>
           ))}
-          {shown.length === 0 && <div className="muted" style={{ fontSize: 12, padding: "6px 8px" }}>Nothing matches “{query}”.</div>}
+          {shown.length === 0 && <div className="muted" style={{ fontSize: 12, padding: "6px 8px" }}>{t("Nothing matches “{query}”.", { query })}</div>}
         </nav>
         <div className="page" style={{ flexGrow: 1, minWidth: 0 }}>
           {section === "general" && <General />}
@@ -151,8 +152,8 @@ function ModelRow({ chatgpt }: { chatgpt: NonNullable<AiStatus["chatgpt"]> }) {
   const listed = models && current && chatgpt.chosen && !models.some((m) => m.slug === current) ? [...models, { slug: current, name: current, small: false }] : (models ?? []);
   return (
     <div className="ai-kv">
-      <span>Model</span>
-      <span style={{ marginLeft: "auto", fontSize: 12 }}>{error ?? "Small ones are faster and use less of your limit"}</span>
+      <span>{t("Model")}</span>
+      <span style={{ marginLeft: "auto", fontSize: 12 }}>{error ?? t("Small ones are faster and use less of your limit")}</span>
       <select
         className="select"
         style={{ margin: "4px 0", maxWidth: 240 }}
@@ -162,13 +163,13 @@ function ModelRow({ chatgpt }: { chatgpt: NonNullable<AiStatus["chatgpt"]> }) {
           setError(null);
           setModel(e.target.value || null).catch((err) => setError(String(err)));
         }}
-        aria-label="Model"
+        aria-label={t("Model")}
       >
-        <option value="">Automatic{!chatgpt.chosen && current ? ` · ${name(current)}` : " (recommended)"}</option>
+        <option value="">{t("Automatic")}{!chatgpt.chosen && current ? ` · ${name(current)}` : " " + t("(recommended)")}</option>
         {listed.map((m) => (
           <option key={m.slug} value={m.slug}>
             {m.name}
-            {m.small ? " · faster, uses less" : ""}
+            {m.small ? " · " + t("faster, uses less") : ""}
           </option>
         ))}
       </select>
@@ -188,11 +189,10 @@ function AiSection() {
   return (
     <section aria-labelledby="ai" style={{ maxWidth: 680, display: "flex", flexDirection: "column" }}>
       <h1 id="ai" className="h1">
-        AI
+        {t("AI")}
       </h1>
       <p className="muted" style={{ fontSize: 14, lineHeight: 1.55, marginTop: 8, maxWidth: 620 }}>
-        AI explains words in their sentence when you ask, answers your questions about a sentence (like why you missed it), and reviews each episode you finish. It uses an AI you already have.
-        Only the sentence and what you typed are sent, never the audio.
+        {t("AI explains words in their sentence when you ask, answers your questions about a sentence (like why you missed it), and reviews each episode you finish. It uses an AI you already have. Only the sentence and what you typed are sent, never the audio.")}
       </p>
 
       <div className="panel ai-card" style={{ marginTop: 22 }}>
@@ -202,29 +202,29 @@ function AiSection() {
           </span>
           <div style={{ flexGrow: 1, minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <span className="account-row-t">ChatGPT</span>
+              <span className="account-row-t">{t("ChatGPT")}</span>
               {connected && !chatgpt.limited && (
                 <span className="badge" style={{ height: 20, fontSize: 11 }}>
                   <span className="dot dot-ok" aria-hidden="true" />
-                  Connected
+                  {t("Connected")}
                 </span>
               )}
               {connected && chatgpt.limited && (
                 <span className="badge" style={{ height: 20, fontSize: 11 }}>
                   <span className="dot dot-bad" aria-hidden="true" />
-                  Weekly limit reached
+                  {t("Weekly limit reached")}
                 </span>
               )}
             </div>
             <div className="account-row-h" style={{ marginTop: 3 }}>
               {chatgpt?.reconnect
-                ? "The connection to ChatGPT ended. Connect again to keep using your plan."
-                : "For ChatGPT Plus and Pro. Eksigo uses your plan, so there's nothing extra to pay."}
+                ? t("The connection to ChatGPT ended. Connect again to keep using your plan.")
+                : t("For ChatGPT Plus and Pro. Eksigo uses your plan, so there's nothing extra to pay.")}
             </div>
           </div>
           {!connected && !waiting && (
             <button type="button" className="btn btn-primary" style={{ height: 36, padding: "0 14px" }} onClick={connectChatGpt}>
-              {chatgpt?.reconnect ? "Connect again" : "Continue with ChatGPT"}
+              {t(chatgpt?.reconnect ? "Connect again" : "Continue with ChatGPT")}
             </button>
           )}
         </div>
@@ -233,19 +233,19 @@ function AiSection() {
           <div role="status" style={{ display: "flex", gap: 14, alignItems: "flex-start", borderTop: "1px solid var(--hairline)", paddingTop: 14 }}>
             <span className="spin" aria-hidden="true" />
             <div style={{ flexGrow: 1 }}>
-              <div className="account-row-t">Finish connecting in your browser</div>
+              <div className="account-row-t">{t("Finish connecting in your browser")}</div>
               <div className="account-row-h">
                 {inApp
-                  ? "OpenAI's page opened in your browser. Sign in, then allow Eksigo to use your ChatGPT plan. Eksigo carries on here when you're done."
-                  : "In the app, OpenAI's page opens in your browser. Here in the preview, ChatGPT connects after two seconds."}
+                  ? t("OpenAI's page opened in your browser. Sign in, then allow Eksigo to use your ChatGPT plan. Eksigo carries on here when you're done.")
+                  : t("In the app, OpenAI's page opens in your browser. Here in the preview, ChatGPT connects after two seconds.")}
               </div>
               <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
                 <button type="button" className="btn btn-sm" onClick={() => backend.aiOpenAgain()}>
                   <Icon name="external" size={13} />
-                  Open the page again
+                  {t("Open the page again")}
                 </button>
                 <button type="button" className="btn btn-sm btn-ghost" onClick={cancelConnect}>
-                  Cancel
+                  {t("Cancel")}
                 </button>
               </div>
             </div>
@@ -258,30 +258,30 @@ function AiSection() {
               <div className="ai-warn" role="alert" style={{ marginBottom: 12 }}>
                 <Icon name="alert" size={16} />
                 <div style={{ flexGrow: 1 }}>
-                  <div className="account-row-t">You've used this week's limit for Eksigo</div>
+                  <div className="account-row-t">{t("You've used this week's limit for Eksigo")}</div>
                   <div className="account-row-h" style={{ color: "var(--ink-muted)" }}>
-                    You set it in ChatGPT. AI comes back when the limit resets, or raise it now. Dictation, looking words up and practice work as usual.
+                    {t("You set it in ChatGPT. AI comes back when the limit resets, or raise it now. Dictation, looking words up and practice work as usual.")}
                   </div>
                 </div>
                 <button type="button" className="btn btn-sm btn-primary" style={{ flexShrink: 0 }} onClick={() => backend.manageUsage()}>
-                  Manage usage
+                  {t("Manage usage")}
                   <Icon name="external" size={12} />
                 </button>
               </div>
             )}
             <div className="ai-kv">
-              <span>Account</span>
-              <b>{[chatgpt.email, chatgpt.plan && chatgpt.plan[0].toUpperCase() + chatgpt.plan.slice(1)].filter(Boolean).join(" · ") || "Connected"}</b>
+              <span>{t("Account")}</span>
+              <b>{[chatgpt.email, chatgpt.plan && chatgpt.plan[0].toUpperCase() + chatgpt.plan.slice(1)].filter(Boolean).join(" · ") || t("Connected")}</b>
             </div>
             {!chatgpt.reconnect && <ModelRow chatgpt={chatgpt} />}
             <div className="ai-kv">
-              <span>Using ChatGPT plan</span>
-              <b style={{ fontWeight: 400, color: "var(--ink-subtle)" }}>for explanations and reviews, up to the weekly limit you set in ChatGPT</b>
+              <span>{t("Using ChatGPT plan")}</span>
+              <b style={{ fontWeight: 400, color: "var(--ink-subtle)" }}>{t("for explanations and reviews, up to the weekly limit you set in ChatGPT")}</b>
             </div>
             <div style={{ display: "flex", gap: 8, paddingTop: 12, borderTop: "1px solid var(--hairline)" }}>
               {!chatgpt.limited && (
                 <button type="button" className="btn btn-sm" onClick={() => backend.manageUsage()}>
-                  Manage usage
+                  {t("Manage usage")}
                   <Icon name="external" size={12} />
                 </button>
               )}
@@ -295,7 +295,7 @@ function AiSection() {
                   setBusy(false);
                 }}
               >
-                Disconnect
+                {t("Disconnect")}
               </button>
             </div>
           </div>
@@ -312,28 +312,29 @@ function AiSection() {
           E
         </span>
         <div style={{ flexGrow: 1, minWidth: 0 }}>
-          <div className="account-row-t">Eksigo Premium</div>
+          <div className="account-row-t">{t("Eksigo Premium")}</div>
           <div className="account-row-h" style={{ marginTop: 3 }}>
-            For when you don't have ChatGPT: subscribe once on eksigo.com, nothing to set up.
+            {t("For when you don't have ChatGPT: subscribe once on eksigo.com, nothing to set up.")}
           </div>
         </div>
-        <span className="badge badge-next">Later</span>
+        <span className="badge badge-next">{t("Later")}</span>
       </div>
 
       <button type="button" className="ai-disclosure" aria-expanded={advanced || !!status.key} onClick={() => setAdvanced((a) => !a)} disabled={!!status.key}>
         <Icon name={advanced || status.key ? "chevron" : "chevron-right"} size={12} />
-        Advanced
+        {t("Advanced")}
       </button>
       {!(advanced || status.key) ? (
         <div className="muted" style={{ fontSize: 13, marginTop: 8, paddingLeft: 20 }}>
-          Use my own API key: OpenAI, DeepSeek, Anthropic, Groq, OpenRouter or any OpenAI-compatible service.
+          {t("Use my own API key: OpenAI, DeepSeek, Anthropic, Groq, OpenRouter or any OpenAI-compatible service.")}
         </div>
       ) : (
         <OwnKey />
       )}
 
       <p className="muted" style={{ fontSize: 12, lineHeight: 1.6, marginTop: 22, paddingTop: 14, borderTop: "1px solid var(--hairline)" }}>
-        Explanations are written in {language}, your language in General.{status.key && chatgpt ? " With ChatGPT and a key both set, Eksigo uses ChatGPT." : ""}
+        {t("Explanations are written in {language}, the language of word meanings in Dictionaries.", { language: t(language) })}
+        {status.key && chatgpt ? " " + t("With ChatGPT and a key both set, Eksigo uses ChatGPT.") : ""}
       </p>
     </section>
   );
@@ -358,7 +359,7 @@ function OwnKey() {
   const [model, setModel] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const store = isMac ? "Mac Keychain" : "Windows Credential Manager";
+  const store = t(isMac ? "Mac Keychain" : "Windows Credential Manager");
   const test = async () => {
     setBusy(true);
     setError(null);
@@ -374,31 +375,31 @@ function OwnKey() {
     return (
       <div className="panel ai-card" style={{ marginTop: 10 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span className="account-row-t">Your own API key</span>
+          <span className="account-row-t">{t("Your own API key")}</span>
           <span className="badge" style={{ height: 20, fontSize: 11 }}>
             <span className="dot dot-ok" aria-hidden="true" />
-            {status?.using === "key" ? "In use" : "Kept"}
+            {t(status?.using === "key" ? "In use" : "Kept")}
           </span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--ink-muted)" }}>
           <span className="dot dot-ok" aria-hidden="true" />
-          Works with {saved.name}, model {saved.model}.
+          {t("Works with {name}, model {model}.", { name: saved.name, model: saved.model })}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12, paddingTop: 12, borderTop: "1px solid var(--hairline)", fontSize: 12 }} className="muted">
           <Icon name="lock" size={13} />
           <span style={{ flexGrow: 1 }}>
-            Kept in the {store} and sent only to {saved.name}, never to Eksigo.
+            {t("Kept in the {store} and sent only to {name}, never to Eksigo.", { store, name: saved.name })}
           </span>
           <button type="button" className="btn btn-sm btn-ghost" onClick={() => removeKey()}>
-            Remove key
+            {t("Remove key")}
           </button>
         </div>
       </div>
     );
   return (
     <div className="panel ai-card" style={{ marginTop: 10 }}>
-      <span className="account-row-t">Your own API key</span>
-      <span className="seg" role="group" aria-label="Provider" style={{ alignSelf: "flex-start", flexWrap: "wrap" }}>
+      <span className="account-row-t">{t("Your own API key")}</span>
+      <span className="seg" role="group" aria-label={t("Provider")} style={{ alignSelf: "flex-start", flexWrap: "wrap" }}>
         {KEY_PROVIDERS.map(([id, name]) => (
           <button key={id} type="button" aria-pressed={provider === id} onClick={() => setProvider(id)}>
             {name}
@@ -415,14 +416,14 @@ function OwnKey() {
       )}
       <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
         <label className="lookup-note" style={{ flexGrow: 1 }}>
-          Key
+          {t("Key")}
           <span className="input">
             <input
               type="password"
               value={secret}
               onChange={(e) => setSecret(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && !busy && test()}
-              placeholder="Paste the key"
+              placeholder={t("Paste the key")}
               autoComplete="off"
               spellCheck={false}
               className="mono"
@@ -430,13 +431,13 @@ function OwnKey() {
           </span>
         </label>
         <label className="lookup-note" style={{ width: 190 }}>
-          Model{provider === "other" ? "" : " (optional)"}
+          {t(provider === "other" ? "Model" : "Model (optional)")}
           <span className="input">
-            <input type="text" value={model} onChange={(e) => setModel(e.target.value)} placeholder={provider === "other" ? "model name" : "the usual one"} spellCheck={false} />
+            <input type="text" value={model} onChange={(e) => setModel(e.target.value)} placeholder={t(provider === "other" ? "model name" : "the usual one")} spellCheck={false} />
           </span>
         </label>
         <button type="button" className="btn" disabled={busy || !secret.trim()} onClick={test}>
-          {busy ? "Testing…" : "Test key"}
+          {t(busy ? "Testing…" : "Test key")}
         </button>
       </div>
       {error && (
@@ -446,7 +447,7 @@ function OwnKey() {
       )}
       <div className="muted" style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
         <Icon name="lock" size={13} />
-        The key is kept only when it works: in the {store}, sent only to the provider.
+        {t("The key is kept only when it works: in the {store}, sent only to the provider.", { store })}
       </div>
     </div>
   );
@@ -458,33 +459,32 @@ function AccountSection() {
   return (
     <section aria-labelledby="account" style={{ maxWidth: 680 }}>
       <h1 id="account" className="h1">
-        Account and sync
+        {t("Account and sync")}
       </h1>
       {account === undefined ? null : account ? (
         <SignedIn account={account} />
       ) : (
         <>
           <p className="muted" style={{ fontSize: 14, lineHeight: 1.55, marginTop: 8, maxWidth: 600 }}>
-            An account keeps your words and practice the same on this computer and your iPhone. Everything works without one; nothing you've done is lost
-            when you sign in.
+            {t("An account keeps your words and practice the same on this computer and your iPhone. Everything works without one; nothing you've done is lost when you sign in.")}
           </p>
           {waiting ? (
             <div className="account-wait" role="status">
               <span className="spin" aria-hidden="true" />
               <div style={{ flexGrow: 1 }}>
-                <div className="account-row-t">Finish signing in in your browser</div>
+                <div className="account-row-t">{t("Finish signing in in your browser")}</div>
                 <div className="account-row-h">
                   {inApp
-                    ? `A ${providerName(waiting)} sign-in page opened in your browser. Eksigo carries on here when you're done.`
-                    : `In the app, a ${providerName(waiting)} sign-in page opens in your browser. Here in the preview, you're signed in after two seconds.`}
+                    ? t("A {provider} sign-in page opened in your browser. Eksigo carries on here when you're done.", { provider: providerName(waiting) })
+                    : t("In the app, a {provider} sign-in page opens in your browser. Here in the preview, you're signed in after two seconds.", { provider: providerName(waiting) })}
                 </div>
                 <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
                   <button type="button" className="btn btn-sm" onClick={() => backend.openSignInAgain()}>
                     <Icon name="upload" size={13} />
-                    Open the page again
+                    {t("Open the page again")}
                   </button>
                   <button type="button" className="btn btn-sm btn-ghost" onClick={cancelSignIn}>
-                    Cancel
+                    {t("Cancel")}
                   </button>
                 </div>
               </div>
@@ -493,14 +493,14 @@ function AccountSection() {
             <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 10, marginTop: 24 }}>
               <button type="button" className="btn provider provider-apple" onClick={() => signIn("apple")}>
                 <AppleLogo />
-                Continue with Apple
+                {t("Continue with Apple")}
               </button>
               <button type="button" className="btn provider" onClick={() => signIn("google")}>
                 <GoogleLogo />
-                Continue with Google
+                {t("Continue with Google")}
               </button>
               <p className="muted" style={{ fontSize: 12, lineHeight: 1.5, marginTop: 4 }}>
-                Your browser opens to sign in, then sends you back here.
+                {t("Your browser opens to sign in, then sends you back here.")}
               </p>
             </div>
           )}
@@ -509,29 +509,29 @@ function AccountSection() {
               {error}
             </div>
           )}
-          <div className="syncs" aria-label="What syncs">
+          <div className="syncs" aria-label={t("What syncs")}>
             <div>
               <Icon name="words" size={15} />
               <span>
-                <b>My words</b>Each word with its sentences, your notes, its level and when it's next due.
+                <b>{t("My words")}</b>{t("Each word with its sentences, your notes, its level and when it's next due.")}
               </span>
             </div>
             <div>
               <Icon name="progress" size={15} />
               <span>
-                <b>Practice days</b>Minutes per day, so your streak and Progress are the same everywhere.
+                <b>{t("Practice days")}</b>{t("Minutes per day, so your streak and Progress are the same everywhere.")}
               </span>
             </div>
             <div>
               <Icon name="headphones" size={15} />
               <span>
-                <b>Listening</b>Which episodes you've listened to, and where you stopped.
+                <b>{t("Listening")}</b>{t("Which episodes you've listened to, and where you stopped.")}
               </span>
             </div>
             <div>
               <Icon name="lock" size={15} />
               <span>
-                <b>Stays on this computer</b>Audio, transcripts and what you typed, sentence by sentence.
+                <b>{t("Stays on this computer")}</b>{t("Audio, transcripts and what you typed, sentence by sentence.")}
               </span>
             </div>
           </div>
@@ -546,16 +546,16 @@ function SyncRow() {
   const sync = useSync();
   if (!sync) return null;
   const syncing = sync.state === "syncing";
-  const counts = `${plural(sync.words, "word")}, ${plural(sync.days, "practice day")}`;
+  const counts = `${plural(sync.words, "word")}${t(", ")}${plural(sync.days, "practice day")}`;
   const help = syncing && sync.first
-    ? `Adding this computer's ${counts} to your account.`
+    ? t("Adding this computer's {counts} to your account.", { counts })
     : sync.state === "failed"
-      ? (sync.error ?? "Couldn't sync.")
-      : `Automatic: when Eksigo opens, after each session, and every few minutes. On this computer: ${counts}, ${plural(sync.episodes, "episode")}.`;
+      ? (sync.error ?? t("Couldn't sync."))
+      : t("Automatic: when Eksigo opens, after each session, and every few minutes. On this computer: {counts}, {episodes}.", { counts, episodes: plural(sync.episodes, "episode") });
   return (
     <div className="account-row">
       <div style={{ flexGrow: 1, minWidth: 0 }}>
-        <div className="account-row-t">Sync</div>
+        <div className="account-row-t">{t("Sync")}</div>
         <div className="account-row-h">{help}</div>
       </div>
       <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 12 }} role="status">
@@ -563,22 +563,22 @@ function SyncRow() {
           {syncing ? (
             <>
               <span className="spin spin-sm" aria-hidden="true" />
-              Syncing…
+              {t("Syncing…")}
             </>
           ) : sync.state === "failed" ? (
             <>
               <span className="dot dot-bad" aria-hidden="true" />
-              {sync.last ? `Last synced ${syncedAgo(sync.last)}` : "Not synced yet"}
+              {sync.last ? t("Last synced {when}", { when: syncedAgo(sync.last) }) : t("Not synced yet")}
             </>
           ) : (
             <>
               <span className="dot dot-ok" aria-hidden="true" />
-              {sync.last ? `Synced ${syncedAgo(sync.last)}` : "Not synced yet"}
+              {sync.last ? t("Synced {when}", { when: syncedAgo(sync.last) }) : t("Not synced yet")}
             </>
           )}
         </span>
         <button type="button" className="btn btn-sm" disabled={syncing} onClick={() => syncNow().catch(() => {})}>
-          {sync.state === "failed" ? "Try now" : "Sync now"}
+          {t(sync.state === "failed" ? "Try now" : "Sync now")}
         </button>
       </div>
     </div>
@@ -611,60 +611,59 @@ function SignedIn({ account }: { account: Account }) {
             {name}
           </div>
           <div className="muted ell" style={{ fontSize: 13, marginTop: 3 }}>
-            {[account.email, `signed in with ${providerName(account.provider)}`].filter(Boolean).join(" · ")}
+            {[account.email, t("signed in with {provider}", { provider: providerName(account.provider) })].filter(Boolean).join(" · ")}
           </div>
         </div>
-        <span className="badge">{account.plan === "premium" ? "Premium" : "Free"}</span>
+        <span className="badge">{t(account.plan === "premium" ? "Premium" : "Free")}</span>
       </div>
       <SyncRow />
       <div className="account-row">
         <div style={{ flexGrow: 1, minWidth: 0 }}>
-          <div className="account-row-t">Plan</div>
+          <div className="account-row-t">{t("Plan")}</div>
           <div className="account-row-h">
             {account.plan === "premium" ? "Premium: everything, with AI included." : "Free: everything except the AI features. Premium, for AI without your own subscription, comes later."}
           </div>
         </div>
         {account.plan !== "premium" && (
           <span className="badge badge-next" style={{ flexShrink: 0 }}>
-            Premium · later
+            {t("Premium · later")}
           </span>
         )}
       </div>
       <div className="account-row">
         <div style={{ flexGrow: 1, minWidth: 0 }}>
-          <div className="account-row-t">Sign out</div>
-          <div className="account-row-h">Your words and practice stay on this computer; they just stop syncing.</div>
+          <div className="account-row-t">{t("Sign out")}</div>
+          <div className="account-row-h">{t("Your words and practice stay on this computer; they just stop syncing.")}</div>
         </div>
         <button type="button" className="btn" style={{ flexShrink: 0 }} disabled={busy} onClick={() => run(signOut)}>
-          Sign out
+          {t("Sign out")}
         </button>
       </div>
       {confirm ? (
         <div className="account-confirm" role="alertdialog" aria-labelledby="delete-title" aria-describedby="delete-text">
           <div id="delete-title" className="account-row-t">
-            Delete your account?
+            {t("Delete your account?")}
           </div>
           <div id="delete-text" style={{ fontSize: 13, lineHeight: 1.5, color: "var(--ink-muted)" }}>
-            Your account and everything synced to it are removed from Eksigo's server, and your iPhone signs out. This can't be undone. Everything stays on
-            this computer.
+            {t("Your account and everything synced to it are removed from Eksigo's server, and your iPhone signs out. This can't be undone. Everything stays on this computer.")}
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             <button type="button" className="btn btn-danger" disabled={busy} onClick={() => run(deleteAccount)}>
-              {busy ? "Deleting…" : "Delete account"}
+              {t(busy ? "Deleting…" : "Delete account")}
             </button>
             <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => setConfirm(false)} autoFocus>
-              Keep it
+              {t("Keep it")}
             </button>
           </div>
         </div>
       ) : (
         <div className="account-row" style={{ borderBottom: "none" }}>
           <div style={{ flexGrow: 1, minWidth: 0 }}>
-            <div className="account-row-t">Delete account</div>
-            <div className="account-row-h">Removes your account and everything synced from Eksigo's server. This computer keeps its own copy.</div>
+            <div className="account-row-t">{t("Delete account")}</div>
+            <div className="account-row-h">{t("Removes your account and everything synced from Eksigo's server. This computer keeps its own copy.")}</div>
           </div>
           <button type="button" className="btn btn-ghost danger" style={{ flexShrink: 0 }} disabled={busy} onClick={() => setConfirm(true)}>
-            Delete account…
+            {t("Delete account…")}
           </button>
         </div>
       )}
@@ -701,10 +700,10 @@ function Dictation() {
   return (
     <section aria-labelledby="dictation">
       <h1 id="dictation" className="h1">
-        Dictation
+        {t("Dictation")}
       </h1>
       <p className="muted" style={{ marginTop: 8, lineHeight: 1.5 }}>
-        How each sentence plays. The same settings are beside every dictation, where changes also become these defaults.
+        {t("How each sentence plays. The same settings are beside every dictation, where changes also become these defaults.")}
       </p>
       <div style={{ marginTop: 20 }}>
         <PlaybackSettings settings={settings} update={update} />
@@ -715,6 +714,7 @@ function Dictation() {
 
 function General() {
   const { choice, setChoice } = useTheme();
+  const [language, setLanguage] = useUiLanguage();
   const options: [ThemeChoice, string][] = [
     ["system", "System"],
     ["light", "Light"],
@@ -722,13 +722,22 @@ function General() {
   ];
   return (
     <section aria-labelledby="general">
-      <h1 id="general" className="h1">General</h1>
+      <h1 id="general" className="h1">{t("General")}</h1>
       <div style={{ marginTop: 16 }}>
-        <Row label="Theme" hint="System follows your computer's light or dark setting.">
-          <div className="seg" role="group" aria-label="Theme">
+        <Row label={t("Language")} hint={t("The language of Eksigo's own screens. Word meanings have their own language, in Dictionaries.")}>
+          <select className="select" value={language} onChange={(e) => setLanguage(e.target.value as UiLanguage)} aria-label={t("Language")}>
+            {UI_LANGUAGES.map(([code, name]) => (
+              <option key={code} value={code}>
+                {code === "system" ? t(name) : name}
+              </option>
+            ))}
+          </select>
+        </Row>
+        <Row label={t("Theme")} hint={t("System follows your computer's light or dark setting.")}>
+          <div className="seg" role="group" aria-label={t("Theme")}>
             {options.map(([value, label]) => (
               <button key={value} type="button" aria-pressed={choice === value} onClick={() => setChoice(value)}>
-                {label}
+                {t(label)}
               </button>
             ))}
           </div>
@@ -764,10 +773,10 @@ function Speech() {
 
   return (
     <section aria-labelledby="speech">
-      <h1 id="speech" className="h1">Speech model</h1>
+      <h1 id="speech" className="h1">{t("Speech model")}</h1>
       <p className="muted" style={{ marginTop: 8, fontSize: 14, lineHeight: 1.5 }}>
-        Episodes are transcribed on this computer with Whisper ({info?.whisperBackend === "Metal" ? "on the graphics chip" : "on the processor"}).
-        The audio never leaves it. The model is downloaded once, the first time you transcribe.
+        {t(info?.whisperBackend === "Metal" ? "Episodes are transcribed on this computer with Whisper (on the graphics chip)." : "Episodes are transcribed on this computer with Whisper (on the processor).")}{" "}
+        {t("The audio never leaves it. The model is downloaded once, the first time you transcribe.")}
       </p>
       <div style={{ marginTop: 16 }}>
         {models?.map((m) => (
@@ -776,12 +785,12 @@ function Speech() {
             label={m.name}
             hint={
               m.available
-                ? `English · ${bytes(m.bytes)} · ${m.id === "base.en" ? "quick on any computer, good for clear speech" : ""}`
-                : "Better with fast or unclear speech · arrives after v0.1"
+                ? `${t("English")} · ${bytes(m.bytes)} · ${m.id === "base.en" ? t("quick on any computer, good for clear speech") : ""}`
+                : t("Better with fast or unclear speech · arrives after v0.1")
             }
           >
             {!m.available ? (
-              <span className="badge badge-next">Later</span>
+              <span className="badge badge-next">{t("Later")}</span>
             ) : progress && progress.id === m.id ? (
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <span className="track" style={{ width: 120 }}>
@@ -791,13 +800,13 @@ function Speech() {
                   {Math.round((progress.received / progress.total) * 100)}%
                 </span>
                 <button type="button" className="btn btn-sm btn-ghost" onClick={() => backend.cancelModel()}>
-                  Cancel
+                  {t("Cancel")}
                 </button>
               </div>
             ) : m.installed ? (
               confirm ? (
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 12 }}>Transcripts you have stay.</span>
+                  <span style={{ fontSize: 12 }}>{t("Transcripts you have stay.")}</span>
                   <button
                     type="button"
                     className="btn btn-sm"
@@ -807,26 +816,26 @@ function Speech() {
                       load();
                     }}
                   >
-                    Delete
+                    {t("Delete")}
                   </button>
                   <button type="button" className="btn btn-sm btn-ghost" onClick={() => setConfirm(false)}>
-                    Keep
+                    {t("Keep")}
                   </button>
                 </div>
               ) : (
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                     <span className="dot dot-ok" />
-                    Downloaded
+                    {t("Downloaded")}
                   </span>
                   <button type="button" className="btn btn-sm btn-ghost" onClick={() => setConfirm(true)}>
-                    Delete
+                    {t("Delete")}
                   </button>
                 </div>
               )
             ) : (
               <button type="button" className="btn" onClick={download}>
-                Download
+                {t("Download")}
               </button>
             )}
           </Row>
@@ -840,7 +849,7 @@ function Speech() {
       )}
       {models?.[0] && (
         <p className="muted" style={{ marginTop: 16, fontSize: 12 }}>
-          Kept in <span className="mono selectable">{models[0].path.replace(/[\\/][^\\/]+$/, "")}</span>
+          {t("Kept in")} <span className="mono selectable">{models[0].path.replace(/[\\/][^\\/]+$/, "")}</span>
         </p>
       )}
     </section>
@@ -850,10 +859,10 @@ function Speech() {
 /** The phrase translator: downloaded by itself when the app first opens, so there's normally nothing to do. */
 function Translator() {
   const { translation: progress } = useActivity();
-  const [t, setT] = useState<TranslationModel | null>(null);
+  const [model, setModel] = useState<TranslationModel | null>(null);
   const [error, setError] = useState<string | null>(null);
   const load = useCallback(() => {
-    backend.translationModel().then(setT);
+    backend.translationModel().then(setModel);
   }, []);
   useEffect(load, [load]);
   useEffect(
@@ -865,10 +874,10 @@ function Translator() {
       }),
     [load],
   );
-  if (!t) return null;
+  if (!model) return null;
   const pct = progress ? Math.round((progress.received / progress.total) * 100) : null;
   return (
-    <Row label="Phrase translator" hint={`${t.name} · ${bytes(t.bytes)} · translates phrases the dictionary doesn't have, on this computer${error ? ` · ${error}` : ""}`}>
+    <Row label={t("Phrase translator")} hint={`${model.name} · ${bytes(model.bytes)} · translates phrases the dictionary doesn't have, on this computer${error ? ` · ${error}` : ""}`}>
       {pct !== null ? (
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span className="track" style={{ width: 120 }}>
@@ -878,14 +887,14 @@ function Translator() {
             {pct}%
           </span>
         </div>
-      ) : t.installed ? (
+      ) : model.installed ? (
         <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
           <span className="dot dot-ok" />
-          Downloaded
+          {t("Downloaded")}
         </span>
       ) : (
         <button type="button" className="btn" onClick={() => backend.downloadTranslation().catch(() => {})}>
-          Download
+          {t("Download")}
         </button>
       )}
     </Row>
@@ -926,12 +935,12 @@ function Dictionaries() {
   return (
     <section aria-labelledby="dictionaries" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <Header
-        title="Dictionaries"
-        text="Meanings for the words you look up in a review come from a dictionary on this computer, so looking up is instant and works offline. Each one downloads once, the first time it's needed, or here."
+        title={t("Dictionaries")}
+        text={t("Meanings for the words you look up in a review come from a dictionary on this computer, so looking up is instant and works offline. Each one downloads once, the first time it's needed, or here.")}
       />
       <div>
-        <Row label="Word meanings in" hint="English definitions are shown beside the meanings, whatever the language.">
-          <select className="select" value={lang} onChange={(e) => setLang(e.target.value)} aria-label="Word meanings in">
+        <Row label={t("Word meanings in")} hint={t("English definitions are shown beside the meanings, whatever the language.")}>
+          <select className="select" value={lang} onChange={(e) => setLang(e.target.value)} aria-label={t("Word meanings in")}>
             {MEANING_LANGUAGES.map(([code, name]) => (
               <option key={code} value={code}>
                 {name}
@@ -942,7 +951,7 @@ function Dictionaries() {
       </div>
       {list?.offline && (
         <div className="notice" role="status" style={{ fontSize: 13 }}>
-          The dictionary server can't be reached, so only the dictionaries on this computer are listed.
+          {t("The dictionary server can't be reached, so only the dictionaries on this computer are listed.")}
         </div>
       )}
       {error && (
@@ -951,7 +960,7 @@ function Dictionaries() {
         </div>
       )}
       <div className="panel" style={{ overflow: "hidden" }}>
-        {!list && <div style={{ padding: 16 }} className="muted">Checking…</div>}
+        {!list && <div style={{ padding: 16 }} className="muted">{t("Checking…")}</div>}
         {rows.map((d, i) => {
           const installed = d.installedVersion != null;
           const update = installed && d.latestVersion != null && d.latestVersion > d.installedVersion!;
@@ -964,33 +973,37 @@ function Dictionaries() {
               <span style={{ display: "flex", flexDirection: "column", gap: 4, flexGrow: 1, minWidth: 0 }}>
                 <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <b style={{ color: "var(--ink)", fontWeight: 500 }}>{LANGUAGE_NAMES[d.lang] ?? d.lang}</b>
-                  {d.lang === lang && <span className="badge" style={{ height: 18, fontSize: 11 }}>In use</span>}
-                  {d.lang === "en" && d.lang !== lang && <span className="muted" style={{ fontSize: 12 }}>for the English definitions</span>}
+                  {d.lang === lang && <span className="badge" style={{ height: 18, fontSize: 11 }}>{t("In use")}</span>}
+                  {d.lang === "en" && d.lang !== lang && <span className="muted" style={{ fontSize: 12 }}>{t("for the English definitions")}</span>}
                 </span>
                 <span className="muted" style={{ fontSize: 12 }}>
                   {d.source || "—"} ·{" "}
-                  {installed ? `${bytes(d.installedBytes)} on this computer${update ? " · a newer version is out" : ""}` : d.downloadBytes ? `${bytes(d.downloadBytes)} download` : "not downloaded"}
+                  {installed
+                    ? t("{size} on this computer", { size: bytes(d.installedBytes) }) + (update ? " · " + t("a newer version is out") : "")
+                    : d.downloadBytes
+                      ? t("{size} download", { size: bytes(d.downloadBytes) })
+                      : t("not downloaded")}
                 </span>
               </span>
               <span style={{ display: "flex", gap: 6, justifyContent: "flex-end", alignItems: "center" }}>
                 {busy === d.lang ? (
                   <span className="muted" style={{ fontSize: 12 }}>
-                    {installed && !update ? "Removing…" : "Downloading…"}
+                    {t(installed && !update ? "Removing…" : "Downloading…")}
                   </span>
                 ) : confirm === d.lang ? (
                   <>
                     <button type="button" className="btn btn-sm" onClick={() => act(d.lang, () => backend.removeDictionary(d.lang))}>
-                      Remove
+                      {t("Remove")}
                     </button>
                     <button type="button" className="btn btn-sm btn-ghost" onClick={() => setConfirm(null)}>
-                      Keep
+                      {t("Keep")}
                     </button>
                   </>
                 ) : (
                   <>
                     {(!installed || update) && d.latestVersion != null && (
                       <button type="button" className="btn btn-sm" disabled={!!busy} onClick={() => act(d.lang, () => backend.updateDictionary(d.lang))}>
-                        {update ? "Update" : "Download"}
+                        {t(update ? "Update" : "Download")}
                       </button>
                     )}
                     {installed && (
@@ -998,10 +1011,10 @@ function Dictionaries() {
                         type="button"
                         className="btn btn-sm btn-ghost"
                         disabled={!!busy}
-                        title={used ? "It downloads again the next time you look a word up" : undefined}
+                        title={used ? t("It downloads again the next time you look a word up") : undefined}
                         onClick={() => setConfirm(d.lang)}
                       >
-                        Remove
+                        {t("Remove")}
                       </button>
                     )}
                   </>
@@ -1012,8 +1025,7 @@ function Dictionaries() {
         })}
       </div>
       <p className="muted" style={{ fontSize: 12, lineHeight: 1.6, maxWidth: 640 }}>
-        ECDICT (MIT licence) for Chinese and English, EJDict (public domain) for Japanese, and Wiktionary's contributors (CC BY-SA) for Korean,
-        Spanish and French.
+        {t("ECDICT (MIT licence) for Chinese and English, EJDict (public domain) for Japanese, and Wiktionary's contributors (CC BY-SA) for Korean, Spanish and French.")}
       </p>
     </section>
   );
@@ -1035,7 +1047,7 @@ function Storage({ onOpen }: { onOpen: (s: SectionId) => void }) {
         {
           key: "episodes",
           label: "Downloaded episodes",
-          hint: `${plural(u.episodes, "episode")}. Remove the ones you're done with in the Library.`,
+          hint: t("{n}. Remove the ones you're done with in the Library.", { n: plural(u.episodes, "episode") }),
           n: u.episodesBytes,
           tone: "var(--ink-muted)",
           action: ["Library", () => navigate("/library")],
@@ -1049,7 +1061,7 @@ function Storage({ onOpen }: { onOpen: (s: SectionId) => void }) {
 
   return (
     <section aria-labelledby="storage" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <Header title="Storage" text="Everything stays on this computer. Episodes you download are kept until you remove them; your own files are never copied or moved." />
+      <Header title={t("Storage")} text={t("Everything stays on this computer. Episodes you download are kept until you remove them; your own files are never copied or moved.")} />
       {u && (
         <>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -1058,12 +1070,12 @@ function Storage({ onOpen }: { onOpen: (s: SectionId) => void }) {
                 {bytes(total)}
               </span>
               <span className="muted" style={{ fontSize: 13 }}>
-                used by Eksigo
+                {t("used by Eksigo")}
               </span>
             </div>
             <div
               role="img"
-              aria-label={parts.map((p) => `${p.label} ${bytes(p.n)}`).join(", ")}
+              aria-label={parts.map((p) => `${t(p.label)} ${bytes(p.n)}`).join(", ")}
               style={{ display: "flex", height: 8, borderRadius: 9999, overflow: "hidden", background: "var(--hairline)", gap: 2 }}
             >
               {parts
@@ -1078,9 +1090,9 @@ function Storage({ onOpen }: { onOpen: (s: SectionId) => void }) {
               <div key={p.key} style={{ display: "flex", alignItems: "center", gap: 16, padding: "12px 0", borderBottom: "1px solid var(--hairline)" }}>
                 <span aria-hidden="true" style={{ width: 10, height: 10, borderRadius: 3, background: p.tone, flexShrink: 0 }} />
                 <div style={{ flexGrow: 1, minWidth: 0 }}>
-                  <div style={{ color: "var(--ink)", fontWeight: 500 }}>{p.label}</div>
+                  <div style={{ color: "var(--ink)", fontWeight: 500 }}>{t(p.label)}</div>
                   <div className="muted" style={{ marginTop: 4, fontSize: 12 }}>
-                    {p.hint}
+                    {t(p.hint)}
                   </div>
                 </div>
                 <span className="mono" style={{ fontSize: 13, color: "var(--ink)", minWidth: 72, textAlign: "right" }}>
@@ -1089,7 +1101,7 @@ function Storage({ onOpen }: { onOpen: (s: SectionId) => void }) {
                 <span style={{ width: 120, display: "flex", justifyContent: "flex-end" }}>
                   {p.action && (
                     <button type="button" className="btn btn-sm btn-ghost" onClick={p.action[1]}>
-                      {p.action[0]}
+                      {t(p.action[0])}
                     </button>
                   )}
                 </span>
@@ -1099,9 +1111,9 @@ function Storage({ onOpen }: { onOpen: (s: SectionId) => void }) {
               <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "12px 0", borderBottom: "1px solid var(--hairline)" }}>
                 <span aria-hidden="true" style={{ width: 10, height: 10, borderRadius: 3, border: "1px dashed var(--hairline-tertiary)", flexShrink: 0 }} />
                 <div style={{ flexGrow: 1, minWidth: 0 }}>
-                  <div style={{ color: "var(--ink)", fontWeight: 500 }}>Your own files</div>
+                  <div style={{ color: "var(--ink)", fontWeight: 500 }}>{t("Your own files")}</div>
                   <div className="muted" style={{ marginTop: 4, fontSize: 12 }}>
-                    {plural(u.ownFiles, "file")}, left where they are. Not counted above.
+                    {t("{n}, left where they are. Not counted above.", { n: plural(u.ownFiles, "file") })}
                   </div>
                 </div>
                 <span className="mono muted" style={{ fontSize: 13, minWidth: 72, textAlign: "right" }}>
@@ -1113,10 +1125,10 @@ function Storage({ onOpen }: { onOpen: (s: SectionId) => void }) {
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             <span className="muted" style={{ fontSize: 12 }}>
-              Kept in <span className="mono selectable">{u.dataDir}</span>
+              {t("Kept in")} <span className="mono selectable">{u.dataDir}</span>
             </span>
             <button type="button" className="btn btn-sm" onClick={() => backend.reveal(u.dataDir)}>
-              {isMac ? "Show in Finder" : "Show in File Explorer"}
+              {t(isMac ? "Show in Finder" : "Show in File Explorer")}
             </button>
           </div>
         </>
@@ -1218,18 +1230,18 @@ const SHORTCUTS: [string, [string, string][]][] = [
 function Shortcuts() {
   return (
     <section aria-labelledby="shortcuts" style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      <Header title="Shortcuts" text="Eksigo is made to be used from the keyboard. These can't be changed yet." />
+      <Header title={t("Shortcuts")} text={t("Eksigo is made to be used from the keyboard. These can't be changed yet.")} />
       {SHORTCUTS.map(([group, keys]) => (
         <div key={group} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <div className="eyebrow" style={{ marginBottom: 4 }}>
-            {group}
+            {t(group)}
           </div>
           {keys.map(([k, what]) => (
             <div key={k + what} style={{ display: "flex", alignItems: "center", gap: 16, minHeight: 32, borderBottom: "1px solid var(--hairline)" }}>
-              <span style={{ flexGrow: 1, color: "var(--ink)" }}>{what}</span>
+              <span style={{ flexGrow: 1, color: "var(--ink)" }}>{t(what)}</span>
               {/^[A-Z]?[a-z]/.test(k) && k.includes(" ") && !k.startsWith("Mod") && !k.startsWith("Shift") ? (
                 <span className="muted" style={{ fontSize: 12 }}>
-                  {k}
+                  {t(k)}
                 </span>
               ) : (
                 <Kbd keys={k} />
@@ -1263,13 +1275,13 @@ const CREDITS: [string, string, string][] = [
 function Updates() {
   const u = useUpdate();
   const text =
-    !inApp ? "Updates are checked in the app, not in the browser preview."
-    : u.state === "checking" ? "Checking…"
-    : u.state === "current" ? "Eksigo is up to date."
-    : u.state === "downloading" ? `Downloading version ${u.version}${u.fraction !== null ? ` · ${Math.round(u.fraction * 100)}%` : ""}`
-    : u.state === "ready" ? `Version ${u.version} is downloaded and ready.`
-    : u.state === "failed" ? "Couldn't check for updates. Check your connection and try again."
-    : "Eksigo checks for a new version each time it starts.";
+    !inApp ? t("Updates are checked in the app, not in the browser preview.")
+    : u.state === "checking" ? t("Checking…")
+    : u.state === "current" ? t("Eksigo is up to date.")
+    : u.state === "downloading" ? t("Downloading version {v}", { v: u.version ?? "" }) + (u.fraction !== null ? ` · ${Math.round(u.fraction * 100)}%` : "")
+    : u.state === "ready" ? t("Version {v} is downloaded and ready.", { v: u.version ?? "" })
+    : u.state === "failed" ? t("Couldn't check for updates. Check your connection and try again.")
+    : t("Eksigo checks for a new version each time it starts.");
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
       <span style={{ flexGrow: 1, fontSize: 13 }} role="status">
@@ -1277,11 +1289,11 @@ function Updates() {
       </span>
       {u.state === "ready" ? (
         <button type="button" className="btn btn-sm btn-primary" onClick={() => restartToUpdate()}>
-          Restart to update
+          {t("Restart to update")}
         </button>
       ) : (
         <button type="button" className="btn btn-sm" disabled={!inApp || u.state === "checking" || u.state === "downloading"} onClick={() => checkForUpdate()}>
-          Check for updates
+          {t("Check for updates")}
         </button>
       )}
     </div>
@@ -1292,17 +1304,17 @@ function About() {
   const info = useAppInfo();
   return (
     <section aria-labelledby="about" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <Header title="About" text="Eksigo: dictation practice with real podcasts, on your own computer." />
+      <Header title={t("About")} text={t("Eksigo: dictation practice with real podcasts, on your own computer.")} />
       <div className="panel" style={{ padding: "8px 16px" }}>
-        <div className="prop">Version<b className="mono">{info?.version}</b></div>
-        <div className="prop">System<b className="mono">{info?.os}</b></div>
-        <div className="prop">Speech engine<b className="mono">{info?.whisperBackend}</b></div>
-        <div className="prop">Database schema<b className="mono">{info?.schemaVersion}</b></div>
+        <div className="prop">{t("Version")}<b className="mono">{info?.version}</b></div>
+        <div className="prop">{t("System")}<b className="mono">{info?.os}</b></div>
+        <div className="prop">{t("Speech engine")}<b className="mono">{info?.whisperBackend}</b></div>
+        <div className="prop">{t("Database schema")}<b className="mono">{info?.schemaVersion}</b></div>
         <div className="prop">
-          Licence
+          {t("Licence")}
           <b>
             <button type="button" className="link-btn" style={{ fontSize: 13 }} onClick={() => backend.openUrl("https://github.com/jomojas/eksigo/blob/main/LICENSE")}>
-              GNU AGPL v3
+              {t("GNU AGPL v3")}
             </button>
           </b>
         </div>
@@ -1310,15 +1322,15 @@ function About() {
       <Updates />
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <button type="button" className="btn btn-sm" onClick={() => backend.openUrl("https://eksigo.com")}>
-          eksigo.com
+          {t("eksigo.com")}
         </button>
         <button type="button" className="btn btn-sm btn-ghost" onClick={() => backend.openUrl("https://github.com/jomojas/eksigo/issues")}>
-          Report a problem
+          {t("Report a problem")}
         </button>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         <div className="eyebrow" style={{ marginBottom: 4 }}>
-          Made with
+          {t("Made with")}
         </div>
         {CREDITS.map(([name, licence, url]) => (
           <div key={name} style={{ display: "flex", alignItems: "center", gap: 16, minHeight: 32, borderBottom: "1px solid var(--hairline)" }}>

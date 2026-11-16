@@ -2,6 +2,7 @@
 // misspelled ones underlined.
 
 import type { Marked } from "../lib/backend";
+import { t } from "../lib/i18n";
 
 const TITLES: Partial<Record<Marked["mark"], string>> = {
   missing: "Missed",
@@ -18,7 +19,7 @@ export function MarkedText({ words, indexed }: { words: Marked[]; indexed?: bool
       {words.map((w, i) => (
         <span key={i}>
           {i > 0 && " "}
-          <span className={`w w-${w.mark}`} title={TITLES[w.mark]} data-i={indexed ? i : undefined}>
+          <span className={`w w-${w.mark}`} title={TITLES[w.mark] && t(TITLES[w.mark]!)} data-i={indexed ? i : undefined}>
             {w.text}
           </span>
         </span>

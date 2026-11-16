@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The Review tab (design P11): words due today, words by level, the week.
+/// The Review tab (design P11): words due today, the missed sentences from the computer, words by level, the week.
 struct ReviewView: View {
     @Environment(RecordStore.self) private var store
     @Environment(Account.self) private var account
@@ -14,6 +14,13 @@ struct ReviewView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 todayCard(words: words, counts: counts, now: now)
+                if !store.missed.isEmpty {
+                    MissedCard()
+                } else if !words.isEmpty {
+                    Block("Missed sentences") {
+                        Note("The sentences you miss while dictating on your computer come here, with what you typed.")
+                    }
+                }
                 if !words.isEmpty {
                     Block("Your words", trailing: { NavigationLink("See All", value: Route.words(nil)) }) {
                         LevelCells(words: words)
@@ -33,7 +40,7 @@ struct ReviewView: View {
         VStack(alignment: .leading, spacing: 14) {
             if words.isEmpty {
                 IconTile("laptopcomputer", color: Theme.warm)
-                Text(account.isSignedIn ? "No words yet" : "Your words come from the computer").font(Theme.display(20)).foregroundStyle(Theme.ink)
+                Text(L(account.isSignedIn ? "No words yet" : "Your words come from the computer")).font(Theme.display(20)).foregroundStyle(Theme.ink)
                 Text("Save words while you dictate on your computer. They come here with the sentence you heard them in, to review on the way.")
                     .font(Theme.text(14)).lineSpacing(3).foregroundStyle(Theme.inkSubtle)
                 if !account.isSignedIn {
@@ -44,10 +51,10 @@ struct ReviewView: View {
                 Text("TODAY").font(Theme.text(12, .semibold)).tracking(0.3).foregroundStyle(on ? .white.opacity(0.85) : Theme.inkSubtle)
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                     Text("\(counts.due)").font(Theme.display(40)).foregroundStyle(on ? .white : Theme.ink)
-                    Text("word\(counts.due == 1 ? "" : "s") due · \(counts.new) new").font(Theme.text(17, .semibold)).foregroundStyle(on ? .white : Theme.ink)
+                    Text(L(counts.due == 1 ? "word due · %lld new" : "words due · %lld new", counts.new)).font(Theme.text(17, .semibold)).foregroundStyle(on ? .white : Theme.ink)
                 }
                 .accessibilityElement(children: .combine)
-                Text(counts.total > 0 ? "About \(max(1, Int((Double(min(counts.total, PracticeRules.perSession)) * 0.5).rounded()))) minutes. Each one plays the sentence you saved it from."
+                Text(counts.total > 0 ? L("About %lld minutes. Each one plays the sentence you saved it from.", max(1, Int((Double(min(counts.total, PracticeRules.perSession)) * 0.5).rounded())))
                      : nextText(words, now: now))
                     .font(Theme.text(15)).foregroundStyle(on ? .white.opacity(0.9) : Theme.inkSubtle)
                 if on {
@@ -81,11 +88,15 @@ struct ReviewView: View {
 
     private func nextText(_ words: [Word], now: Int) -> String {
         guard let next = words.filter({ $0.level != "new" }).compactMap(\.dueAt).filter({ $0 > now }).min() else {
-            return "Nothing due today."
+            return L("Nothing due today.")
         }
         let date = Date(timeIntervalSince1970: TimeInterval(next))
         let n = words.filter { ($0.dueAt ?? 0) > now && Calendar.current.isDate(Date(timeIntervalSince1970: TimeInterval($0.dueAt ?? 0)), inSameDayAs: date) }.count
-        return "Nothing due today. The next \(n) come\(n == 1 ? "s" : "") back \(Calendar.current.isDateInTomorrow(date) ? "tomorrow" : date.formatted(.dateTime.weekday(.wide)))."
+        if Calendar.current.isDateInTomorrow(date) {
+            return L(n, "Nothing due today. The next %lld comes back tomorrow.", "Nothing due today. The next %lld come back tomorrow.")
+        }
+        return L(n == 1 ? "Nothing due today. The next %lld comes back on %@." : "Nothing due today. The next %lld come back on %@.",
+                 n, date.formatted(Date.FormatStyle(locale: AppLanguage.locale).weekday(.wide)))
     }
 }
 
@@ -118,7 +129,7 @@ struct WeekBlock: View {
         let peak = max(days.map(\.1).max() ?? 0, 600)
         let streak = Stats.streak(byDay)
         Block("This week", trailing: {
-            Text("\(streak) day streak").font(Theme.text(15)).foregroundStyle(Theme.inkSubtle)
+            Text(L(streak, "%lld day streak", "%lld day streak")).font(Theme.text(15)).foregroundStyle(Theme.inkSubtle)
         }) {
             VStack(spacing: 8) {
                 HStack(alignment: .bottom, spacing: 8) {
@@ -132,14 +143,14 @@ struct WeekBlock: View {
                 .frame(height: 72, alignment: .bottom)
                 HStack(spacing: 8) {
                     ForEach(Array(days.enumerated()), id: \.offset) { i, d in
-                        Text(d.0.formatted(.dateTime.weekday(.narrow))).font(Theme.mono(11))
+                        Text(d.0.formatted(Date.FormatStyle(locale: AppLanguage.locale).weekday(.narrow))).font(Theme.mono(11))
                             .foregroundStyle(i == days.count - 1 ? Theme.ink : Theme.inkSubtle).frame(maxWidth: .infinity)
                     }
                 }
             }
             .card(padding: 16)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("This week: \(days.map { "\($0.0.formatted(.dateTime.weekday(.wide))) \(Stats.duration($0.1))" }.joined(separator: ", "))")
+            .accessibilityLabel(L("This week: %@", days.map { "\($0.0.formatted(Date.FormatStyle(locale: AppLanguage.locale).weekday(.wide))) \(Stats.duration($0.1))" }.joined(separator: ", ")))
         }
     }
 }
@@ -147,10 +158,10 @@ struct WeekBlock: View {
 /// "1 day", "3 days", "2 mo".
 func intervalText(_ seconds: Int) -> String {
     let days = Double(seconds) / 86400
-    if days < 1 { return "\(max(1, seconds / 60)) min" }
-    if days < 30 { let d = Int(days.rounded()); return "\(d) day\(d == 1 ? "" : "s")" }
-    if days < 365 { return "\(Int((days / 30).rounded())) mo" }
-    return "\(Int((days / 365).rounded())) yr"
+    if days < 1 { return L("%lld min", max(1, seconds / 60)) }
+    if days < 30 { let d = Int(days.rounded()); return L(d, "%lld day", "%lld days") }
+    if days < 365 { return L("%lld mo", Int((days / 30).rounded())) }
+    return L("%lld yr", Int((days / 365).rounded()))
 }
 
 /// A review session (design P12–P15): the sentence with a gap, then the answer and four grades; new words pick the
@@ -184,7 +195,7 @@ struct ReviewSessionView: View {
                 NavBar(close: true, onBack: { dismiss() })
                 DoneView(results: results, seconds: Int(Date.now.timeIntervalSince(started))) { dismiss() }
             } else if let item = queue[safe: pos] {
-                NavBar(title: "\(pos + 1) of \(queue.count)", close: true, onBack: end) {
+                NavBar(title: L("%lld of %lld", pos + 1, queue.count), close: true, onBack: end) {
                     Menu {
                         Button("I know this word", systemImage: "checkmark.seal") { know(item) }
                         Button("End the review", systemImage: "xmark") { end() }
@@ -267,7 +278,7 @@ struct ReviewSessionView: View {
                     ForEach(Array(["Again", "Hard", "Good", "Easy"].enumerated()), id: \.offset) { i, label in
                         Button { grade(item, i + 1, mode: "recall") } label: {
                             VStack(spacing: 5) {
-                                Text(label).font(Theme.text(16, .semibold))
+                                Text(L(label)).font(Theme.text(16, .semibold))
                                     .foregroundStyle(i == 2 ? .white : i == 0 ? Theme.error : Theme.ink)
                                 Text(intervalText(item.next[i])).font(Theme.mono(12))
                                     .foregroundStyle(i == 2 ? .white.opacity(0.8) : Theme.inkSubtle)
@@ -277,7 +288,7 @@ struct ReviewSessionView: View {
                                         in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("\(label), back in \(intervalText(item.next[i]))")
+                        .accessibilityLabel(L("%@, back in %@", L(label), intervalText(item.next[i])))
                     }
                 }
                 Button("I know this word · don't ask for a year") { know(item) }.buttonStyle(.eks(.ghost, small: true, block: true))
@@ -299,7 +310,7 @@ struct ReviewSessionView: View {
             Text(MissedWordsText.attributed([("“" + gap[0], false), (String(repeating: "\u{2007}", count: max(5, gap[1].count * 2 / 3)), true),
                                              (gap[2] + "”", false)]))
                 .font(Theme.display(22, .medium)).lineSpacing(6)
-                .accessibilityLabel("\(gap[0]) blank \(gap[2])")
+                .accessibilityLabel(L("%@ blank %@", gap[0], gap[2]))
         } else {
             Eyebrow("What does it mean here?")
             Text(item.word.text).font(Theme.display(30)).tracking(-0.7).foregroundStyle(Theme.ink)
@@ -320,7 +331,7 @@ struct ReviewSessionView: View {
                     clips.play(item.context, rate: slow ? 0.7 : 1)
                 } label: { Text("0.7×") }
                     .buttonStyle(.eks(slow ? .secondary : .ghost))
-                    .accessibilityLabel(slow ? "Normal speed" : "Slower")
+                    .accessibilityLabel(L(slow ? "Normal speed" : "Slower"))
             }
         } else if item.context.playable {
             Note("This podcast puts different ads in each download, so the sentence would play at the wrong spot here. Hear it on your computer.")
@@ -332,7 +343,7 @@ struct ReviewSessionView: View {
     private func source(_ item: PracticeRules.Item) -> String {
         var parts: [String] = []
         if let t = item.context.title, !t.isEmpty { parts.append(t) }
-        if item.word.addedAt > 0 { parts.append("saved on \(Date(timeIntervalSince1970: TimeInterval(item.word.addedAt)).formatted(.dateTime.day().month(.abbreviated)))") }
+        if item.word.addedAt > 0 { parts.append(L("saved on %@", Date(timeIntervalSince1970: TimeInterval(item.word.addedAt)).formatted(Date.FormatStyle(locale: AppLanguage.locale).day().month(.abbreviated)))) }
         return parts.joined(separator: " · ")
     }
 
@@ -401,7 +412,7 @@ struct ReviewSessionView: View {
                         .strokeBorder(state == 1 ? Theme.success : state == 2 ? Theme.error : .clear, lineWidth: 2))
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(choice + (state == 1 ? ", right" : state == 2 ? ", wrong" : ""))
+                .accessibilityLabel(choice + (state == 1 ? L(", right") : state == 2 ? L(", wrong") : ""))
             }
         }
         // The rest of the meaning, once picked.
@@ -462,7 +473,7 @@ struct MeaningBlock: View {
     let word: Word
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(word.firstMeaning.isEmpty ? "No meaning saved" : word.firstMeaning).font(Theme.text(17)).foregroundStyle(Theme.ink)
+            Text(word.firstMeaning.isEmpty ? L("No meaning saved") : word.firstMeaning).font(Theme.text(17)).foregroundStyle(Theme.ink)
             if !word.otherMeanings.isEmpty {
                 Text(word.otherMeanings).font(Theme.text(14)).lineSpacing(2).foregroundStyle(Theme.inkSubtle)
             }
@@ -490,15 +501,16 @@ private struct DoneView: View {
                     Image(systemName: "checkmark").font(.system(size: 24, weight: .medium)).foregroundStyle(Theme.success)
                         .frame(width: 56, height: 56).background(Theme.success.opacity(0.15), in: Circle())
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("\(results.count) word\(results.count == 1 ? "" : "s") reviewed").font(Theme.display(30)).tracking(-0.8).foregroundStyle(Theme.ink)
-                        Text(counts.total > 0 ? "\(counts.total) more \(counts.total == 1 ? "is" : "are") waiting for another session."
-                             : next > 0 ? "Nothing else is due today. The next \(next) come\(next == 1 ? "s" : "") back tomorrow." : "Nothing else is due today.")
+                        Text(L(results.count, "%lld word reviewed", "%lld words reviewed")).font(Theme.display(30)).tracking(-0.8).foregroundStyle(Theme.ink)
+                        Text(counts.total > 0 ? L(counts.total, "%lld more is waiting for another session.", "%lld more are waiting for another session.")
+                             : next > 0 ? L(next, "Nothing else is due today. The next %lld comes back tomorrow.", "Nothing else is due today. The next %lld come back tomorrow.")
+                             : L("Nothing else is due today."))
                             .font(Theme.text(16)).foregroundStyle(Theme.inkSubtle)
                     }
                     Cells(items: [("\(results.count - again)", "Remembered"), ("\(again)", "Again"), (Stats.short(seconds), "Time")])
                     RowGroup {
                         ForEach(results.prefix(8), id: \.word) { r in
-                            Row(r.word, subtitle: r.again ? "Again · back tomorrow" : r.from == r.to ? r.to.label : "\(r.from.label) → \(r.to.label)")
+                            Row(r.word, subtitle: r.again ? L("Again · back tomorrow") : r.from == r.to ? r.to.label : "\(r.from.label) → \(r.to.label)")
                         }
                     }
                 }
@@ -535,7 +547,7 @@ private struct Pronunciation: View {
     var body: some View {
         if !ipa.isEmpty {
             Text(ipa).font(Theme.mono(14)).foregroundStyle(Theme.inkSubtle)
-                .accessibilityLabel("Pronunciation \(ipa)")
+                .accessibilityLabel(L("Pronunciation %@", ipa))
         }
     }
 }

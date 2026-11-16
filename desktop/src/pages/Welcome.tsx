@@ -3,6 +3,7 @@ import { backend, type ModelInfo } from "../lib/backend";
 import { bytes } from "../lib/format";
 import { MEANING_LANGUAGES, useMeaningLanguage } from "../lib/words";
 import { Kbd } from "../components/Shell";
+import { t } from "../lib/i18n";
 
 // First launch (design D13, DESIGN.md "First launch"): the learner's language, then the speech model, which
 // downloads in the background while they carry on. Shown once; the AI step waits until there's AI to set up.
@@ -66,7 +67,7 @@ export function Welcome({ onDone }: { onDone: () => void }) {
               {STEPS.map((s, i) => (
                 <span key={s}>
                   {i > 0 && " · "}
-                  {i === step ? <b>{s}</b> : s}
+                  {i === step ? <b>{t(s)}</b> : t(s)}
                 </span>
               ))}
             </span>
@@ -74,11 +75,10 @@ export function Welcome({ onDone }: { onDone: () => void }) {
 
           {step === 0 ? (
             <>
-              <Heading title="Which language do you speak?">
-                Word meanings are shown in it, beside the English definition. Eksigo itself is in English for now. You can change
-                this later in Settings.
+              <Heading title={t("Which language do you speak?")}>
+                {t("Word meanings are shown in it, beside the English definition. You can change this later in Settings.")}
               </Heading>
-              <div className="welcome-options welcome-langs" role="radiogroup" aria-label="Your language">
+              <div className="welcome-options welcome-langs" role="radiogroup" aria-label={t("Your language")}>
                 {MEANING_LANGUAGES.map(([code, name]) => (
                   <Option key={code} on={lang === code} onPick={() => setLang(code)} title={name} />
                 ))}
@@ -86,17 +86,16 @@ export function Welcome({ onDone }: { onDone: () => void }) {
             </>
           ) : (
             <>
-              <Heading title="The speech model">
-                It turns episodes into sentences. It runs on this computer, so your audio never leaves it. After it, Eksigo also downloads
-                its phrase translator (about 1.1 GB), for phrases the dictionary doesn't have.
+              <Heading title={t("The speech model")}>
+                {t("It turns episodes into sentences. It runs on this computer, so your audio never leaves it. After it, Eksigo also downloads its phrase translator (about 1.1 GB), for phrases the dictionary doesn't have.")}
               </Heading>
-              <div className="welcome-options" role="radiogroup" aria-label="Speech model">
-                <Option on title="Fast" size={fast ? bytes(fast.bytes) : "150 MB"} onPick={() => {}}>
-                  Good on most computers. Transcribes faster than you can dictate.
-                  {fast?.installed && " Already on this computer."}
+              <div className="welcome-options" role="radiogroup" aria-label={t("Speech model")}>
+                <Option on title={t("Fast")} size={fast ? bytes(fast.bytes) : "150 MB"} onPick={() => {}}>
+                  {t("Good on most computers. Transcribes faster than you can dictate.")}
+                  {fast?.installed && " " + t("Already on this computer.")}
                 </Option>
-                <Option on={false} title="Accurate" later>
-                  Better with strong accents and noisy audio. Arrives after this first version.
+                <Option on={false} title={t("Accurate")} later>
+                  {t("Better with strong accents and noisy audio. Arrives after this first version.")}
                 </Option>
               </div>
             </>
@@ -105,13 +104,13 @@ export function Welcome({ onDone }: { onDone: () => void }) {
           <div className="welcome-actions">
             {step > 0 && (
               <button type="button" className="btn btn-ghost" style={{ marginLeft: -12 }} onClick={() => setStep(step - 1)}>
-                Back
+                {t("Back")}
               </button>
             )}
             <span style={{ flexGrow: 1 }} />
-            {last && fast && !fast.installed && <span className="muted welcome-hint">Downloads in the background</span>}
+            {last && fast && !fast.installed && <span className="muted welcome-hint">{t("Downloads in the background")}</span>}
             <button type="button" className="btn btn-primary" onClick={next}>
-              {last && fast && !fast.installed ? "Download and start" : last ? "Start" : "Continue"} <Kbd keys="Enter" />
+              {t(last && fast && !fast.installed ? "Download and start" : last ? "Start" : "Continue")} <Kbd keys="Enter" />
             </button>
           </div>
         </div>
@@ -137,7 +136,7 @@ function Option({ on, title, size, later, onPick, children }: { on: boolean; tit
         <span className="welcome-option-title">
           {title}
           {size && <span className="mono muted">{size}</span>}
-          {later && <span className="badge badge-next">Later</span>}
+          {later && <span className="badge badge-next">{t("Later")}</span>}
         </span>
         {children && <span className="welcome-option-text">{children}</span>}
       </span>

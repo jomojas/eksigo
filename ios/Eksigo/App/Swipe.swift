@@ -33,7 +33,7 @@ struct Swipeable<Content: View>: View {
                     } label: {
                         VStack(spacing: 5) {
                             Image(systemName: a.symbol).font(.system(size: 18, weight: .medium))
-                            Text(a.title).font(Theme.text(12, .medium)).lineLimit(1).minimumScaleFactor(0.8)
+                            Text(L(a.title)).font(Theme.text(12, .medium)).lineLimit(1).minimumScaleFactor(0.8)
                         }
                         .foregroundStyle(a.foreground)
                         .frame(width: width).frame(maxHeight: .infinity)
