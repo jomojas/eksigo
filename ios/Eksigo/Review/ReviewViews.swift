@@ -29,7 +29,10 @@ struct ReviewView: View {
                 WeekBlock()
             }
             .padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 24)
+            // Exactly as wide as the screen: anything long wraps, so the page only moves up and down.
+            .containerRelativeFrame(.horizontal)
         }
+        .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
         .canvas()
         .navigationTitle("Review")
         // The title in the bar's own row, not a row below it: less empty space at the top.
