@@ -94,9 +94,6 @@ export function Welcome({ onDone }: { onDone: () => void }) {
                   {t("Good on most computers. Transcribes faster than you can dictate.")}
                   {fast?.installed && " " + t("Already on this computer.")}
                 </Option>
-                <Option on={false} title={t("Accurate")} later>
-                  {t("Better with strong accents and noisy audio. Arrives after this first version.")}
-                </Option>
               </div>
             </>
           )}
@@ -128,15 +125,14 @@ function Heading({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-function Option({ on, title, size, later, onPick, children }: { on: boolean; title: string; size?: string; later?: boolean; onPick?: () => void; children?: ReactNode }) {
+function Option({ on, title, size, onPick, children }: { on: boolean; title: string; size?: string; onPick?: () => void; children?: ReactNode }) {
   return (
-    <button type="button" role="radio" aria-checked={on} aria-disabled={later} className="welcome-option" data-on={on || undefined} disabled={later} onClick={onPick}>
+    <button type="button" role="radio" aria-checked={on} className="welcome-option" data-on={on || undefined} onClick={onPick}>
       <span className="welcome-radio" aria-hidden="true" />
       <span style={{ flexGrow: 1, minWidth: 0 }}>
         <span className="welcome-option-title">
           {title}
           {size && <span className="mono muted">{size}</span>}
-          {later && <span className="badge badge-next">{t("Later")}</span>}
         </span>
         {children && <span className="welcome-option-text">{children}</span>}
       </span>

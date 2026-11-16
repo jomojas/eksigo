@@ -307,19 +307,6 @@ function AiSection() {
         )}
       </div>
 
-      <div className="panel ai-card" style={{ marginTop: 10, flexDirection: "row", alignItems: "center", gap: 14 }}>
-        <span className="ai-logo" aria-hidden="true" style={{ font: "600 15px/1 var(--font-display)" }}>
-          E
-        </span>
-        <div style={{ flexGrow: 1, minWidth: 0 }}>
-          <div className="account-row-t">{t("Eksigo Premium")}</div>
-          <div className="account-row-h" style={{ marginTop: 3 }}>
-            {t("For when you don't have ChatGPT: subscribe once on eksigo.com, nothing to set up.")}
-          </div>
-        </div>
-        <span className="badge badge-next">{t("Later")}</span>
-      </div>
-
       <button type="button" className="ai-disclosure" aria-expanded={advanced || !!status.key} onClick={() => setAdvanced((a) => !a)} disabled={!!status.key}>
         <Icon name={advanced || status.key ? "chevron" : "chevron-right"} size={12} />
         {t("Advanced")}
@@ -614,22 +601,9 @@ function SignedIn({ account }: { account: Account }) {
             {[account.email, t("signed in with {provider}", { provider: providerName(account.provider) })].filter(Boolean).join(" · ")}
           </div>
         </div>
-        <span className="badge">{t(account.plan === "premium" ? "Premium" : "Free")}</span>
+        {account.plan === "premium" && <span className="badge">{t("Premium")}</span>}
       </div>
       <SyncRow />
-      <div className="account-row">
-        <div style={{ flexGrow: 1, minWidth: 0 }}>
-          <div className="account-row-t">{t("Plan")}</div>
-          <div className="account-row-h">
-            {account.plan === "premium" ? "Premium: everything, with AI included." : "Free: everything except the AI features. Premium, for AI without your own subscription, comes later."}
-          </div>
-        </div>
-        {account.plan !== "premium" && (
-          <span className="badge badge-next" style={{ flexShrink: 0 }}>
-            {t("Premium · later")}
-          </span>
-        )}
-      </div>
       <div className="account-row">
         <div style={{ flexGrow: 1, minWidth: 0 }}>
           <div className="account-row-t">{t("Sign out")}</div>
@@ -779,19 +753,14 @@ function Speech() {
         {t("The audio never leaves it. The model is downloaded once, the first time you transcribe.")}
       </p>
       <div style={{ marginTop: 16 }}>
-        {models?.map((m) => (
+        {/* Only models that can be used: a better one shows up here once it's ready. */}
+        {models?.filter((m) => m.available).map((m) => (
           <Row
             key={m.id}
             label={m.name}
-            hint={
-              m.available
-                ? `${t("English")} · ${bytes(m.bytes)} · ${m.id === "base.en" ? t("quick on any computer, good for clear speech") : ""}`
-                : t("Better with fast or unclear speech · arrives after v0.1")
-            }
+            hint={`${t("English")} · ${bytes(m.bytes)}${m.id === "base.en" ? ` · ${t("quick on any computer, good for clear speech")}` : ""}`}
           >
-            {!m.available ? (
-              <span className="badge badge-next">{t("Later")}</span>
-            ) : progress && progress.id === m.id ? (
+            {progress && progress.id === m.id ? (
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <span className="track" style={{ width: 120 }}>
                   <span className="fill" style={{ display: "block", width: `${Math.round((progress.received / progress.total) * 100)}%` }} />
