@@ -303,7 +303,7 @@ export const zh: Record<string, string> = {
   "The speech model": "语音模型",
   "Which language do you speak?": "你说哪种语言？",
   "Your language": "你的语言",
-  "Word meanings are shown in it, beside the English definition. Eksigo itself is in English for now. You can change this later in Settings.":
+  "Word meanings are shown in it, beside the English definition. You can change this later in Settings.":
     "单词释义会用这种语言显示，旁边附英文释义。以后可以在设置中更改。",
   "It turns episodes into sentences. It runs on this computer, so your audio never leaves it. After it, Eksigo also downloads its phrase translator (about 1.1 GB), for phrases the dictionary doesn't have.":
     "它把单集转写成一句句文字。它在这台电脑上运行，所以你的音频不会离开电脑。之后 Eksigo 还会下载短语翻译器（约 1.1 GB），用来翻译词典里没有的短语。",

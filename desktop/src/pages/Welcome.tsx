@@ -76,7 +76,7 @@ export function Welcome({ onDone }: { onDone: () => void }) {
           {step === 0 ? (
             <>
               <Heading title={t("Which language do you speak?")}>
-                {t("Word meanings are shown in it, beside the English definition. Eksigo itself is in English for now. You can change this later in Settings.")}
+                {t("Word meanings are shown in it, beside the English definition. You can change this later in Settings.")}
               </Heading>
               <div className="welcome-options welcome-langs" role="radiogroup" aria-label={t("Your language")}>
                 {MEANING_LANGUAGES.map(([code, name]) => (
