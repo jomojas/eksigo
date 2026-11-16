@@ -49,7 +49,10 @@ jobs:
           npm ci
           npm run build
 
+      # On Windows with the static C runtime, as release.yml builds it: a mismatch there only shows when linking.
       - name: Build the phrase translator, and its tests
+        env:
+          RUSTFLAGS: ${{ runner.os == 'Windows' && '-C target-feature=+crt-static' || '' }}
         run: |
           node scripts/translator.mjs
           cargo test --release --locked --manifest-path translate/Cargo.toml
