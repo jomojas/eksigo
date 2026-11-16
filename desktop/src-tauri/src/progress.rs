@@ -7,7 +7,7 @@ use chrono::{Datelike, Days, Local, Months, NaiveDate, TimeZone};
 use rusqlite::{params, Connection};
 use serde::Serialize;
 
-use crate::activity;
+use crate::{activity, mishear};
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -36,6 +36,8 @@ pub struct Progress {
     pub days: Vec<activity::Day>,
     /// The last twelve weeks, oldest first, this week last.
     pub weeks: Vec<WeekAccuracy>,
+    /// The kinds of words missed most in dictation, the last 90 days.
+    pub mishear: mishear::Mishear,
 }
 
 fn day_of(d: NaiveDate) -> String {
@@ -99,6 +101,7 @@ pub fn progress(conn: &Connection, today: NaiveDate) -> Result<Progress> {
         year_seconds,
         days,
         weeks,
+        mishear: mishear::mishear(conn, start_of(today + Days::new(1)))?,
     })
 }
 

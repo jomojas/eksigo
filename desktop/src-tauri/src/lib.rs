@@ -12,6 +12,7 @@ pub mod models;
 pub mod player;
 pub mod podcasts;
 mod practice;
+mod mishear;
 mod progress;
 pub mod sentences;
 mod storage;

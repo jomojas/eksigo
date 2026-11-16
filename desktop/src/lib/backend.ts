@@ -312,6 +312,17 @@ export type Progress = {
   yearSeconds: number;
   days: { day: string; seconds: number }[];
   weeks: { start: string; accuracy: number | null; sentences: number }[];
+  /** The kinds of words missed most in dictation, the last 90 days. */
+  mishear: Mishear;
+};
+export type MishearKind = "stretch" | "linked" | "small" | "endings" | "numbers" | "names" | "spelling" | "other";
+export type Mishear = {
+  sentences: number;
+  missed: number;
+  /** Most missed kind first. */
+  kinds: { kind: MishearKind; count: number; examples: string[] }[];
+  /** Words missed more than once, most first. */
+  words: { word: string; count: number }[];
 };
 export type Week = { days: { day: string; seconds: number }[]; streak: number; wordsStarted: number };
 export type PracticeMode = "type" | "recall" | "pick";

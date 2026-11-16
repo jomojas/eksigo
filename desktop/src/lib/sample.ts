@@ -836,6 +836,29 @@ export const sample = {
       yearSeconds: days.reduce((n, d) => n + d.seconds, 0),
       days,
       weeks,
+      mishear: {
+        sentences: 412,
+        missed: 236,
+        kinds: [
+          { kind: "linked", count: 74, examples: ["want to", "kind of", "a lot of", "going to"] },
+          { kind: "small", count: 61, examples: ["the", "to", "of", "it's"] },
+          { kind: "stretch", count: 38, examples: ["and that's why we …", "if you think about …"] },
+          { kind: "endings", count: 27, examples: ["walked", "plans", "habits"] },
+          { kind: "other", count: 22, examples: ["ambitious", "boring", "fade"] },
+          { kind: "numbers", count: 9, examples: ["fifteen", "2019"] },
+          { kind: "names", count: 5, examples: ["neil", "sam"] },
+        ],
+        words: [
+          { word: "the", count: 18 },
+          { word: "to", count: 15 },
+          { word: "of", count: 11 },
+          { word: "and", count: 9 },
+          { word: "want", count: 6 },
+          { word: "it's", count: 5 },
+          { word: "habits", count: 4 },
+          { word: "going", count: 3 },
+        ],
+      },
     };
   },
   listened(seconds: number): number {
