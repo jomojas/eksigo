@@ -3,7 +3,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Page } from "../components/Shell";
-import { backend, on, type Progress as Data } from "../lib/backend";
+import { backend, on, type Mishear, type MishearKind, type Progress as Data } from "../lib/backend";
 
 type DayDetail = Data["days"][number];
 import { percent } from "../lib/dictation";
@@ -281,22 +281,92 @@ export function Progress() {
         {data && <YearGrid data={data} />}
 
         {data && (
-          <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+          // A row, so the chart's flex size is its width, not its height.
+          <div style={{ display: "flex" }}>
             <AccuracyChart weeks={data.weeks} />
-            <section className="panel" aria-labelledby="miss" style={{ padding: "18px 20px", flex: "1 1 260px", display: "flex", flexDirection: "column", gap: 10 }}>
-              <div style={{ display: "flex", alignItems: "center" }}>
-                <h2 id="miss" className="h2" style={{ flexGrow: 1 }}>
-                  {t("What you mishear most")}
-                </h2>
-                <span className="badge badge-next">{t("Later")}</span>
-              </div>
-              <p className="muted" style={{ fontSize: 13, lineHeight: 1.5 }}>
-                {t("Small words like")} <i>{t("to")}</i> {t("and")} <i>{t("of")}</i>{t(", words that run together, numbers: once mistakes are sorted by kind, the ones you miss most will show here.")}
-              </p>
-            </section>
           </div>
         )}
+        {data && <MishearPanel m={data.mishear} />}
       </div>
     </Page>
+  );
+}
+
+/** What each kind of missed word is, and what helps. */
+const KINDS: Record<MishearKind, { name: string; help: string }> = {
+  stretch: { name: "Whole stretches", help: "Four words or more in a row: the thread was lost. Slow the speed a little, or play the sentence again before typing." },
+  linked: { name: "Words that run together", help: "Two or three words said as one sound, like “want to” becoming “wanna”. Listen for the joins." },
+  small: { name: "Small words", help: "Grammar words said fast and soft: “to” sounds like /tə/, “of” like /əv/. The sentence often needs them." },
+  endings: { name: "Word endings", help: "The end of a word: -s, -ed, -ing. Check the tense and whether there's one or more." },
+  numbers: { name: "Numbers", help: "Fifteen and fifty, thirteen and thirty: listen for which syllable is stressed." },
+  names: { name: "Names and places", help: "Names you haven't heard before. Missing them costs little." },
+  spelling: { name: "Spelling", help: "Heard, but misspelled: half a word each." },
+  other: { name: "Other words", help: "Words you may not know yet. Look them up in the review and save them to My words." },
+};
+
+/** What you mishear most (DESIGN.md, Progress): missed words by kind, the last 90 days, from the comparisons. */
+function MishearPanel({ m }: { m: Mishear }) {
+  const top = m.kinds[0]?.count ?? 0;
+  return (
+    <section className="panel" aria-labelledby="miss" style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+        <h2 id="miss" className="h2" style={{ flexGrow: 1 }}>
+          {t("What you mishear most")}
+        </h2>
+        {m.missed > 0 && (
+          <span className="muted" style={{ fontSize: 12 }}>
+            {t("Last 90 days · {words} missed in {sentences}", { words: plural(m.missed, "word"), sentences: plural(m.sentences, "sentence") })}
+          </span>
+        )}
+      </div>
+      {m.missed === 0 ? (
+        <p className="muted" style={{ fontSize: 13, lineHeight: 1.5 }}>
+          {t(
+            m.sentences > 0
+              ? "Nothing missed in the last 90 days."
+              : "Dictate an episode and the words you miss are sorted here by kind: small words, words that run together, endings, numbers.",
+          )}
+        </p>
+      ) : (
+        <>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {m.kinds.slice(0, 5).map((k) => (
+              <div key={k.kind} style={{ display: "grid", gridTemplateColumns: "minmax(140px, 200px) minmax(0, 1fr) 64px", columnGap: 14, rowGap: 4, alignItems: "center" }}>
+                <b style={{ fontWeight: 500, color: "var(--ink)" }}>{t(KINDS[k.kind].name)}</b>
+                <span className="track" aria-hidden="true">
+                  <span className="fill" style={{ display: "block", width: `${Math.max(3, Math.round((k.count / Math.max(top, 1)) * 100))}%` }} />
+                </span>
+                <span className="mono" style={{ fontSize: 12, textAlign: "right" }}>
+                  {Math.round((k.count / m.missed) * 100)}%
+                </span>
+                <span />
+                <span className="muted" style={{ fontSize: 12, lineHeight: 1.5, display: "flex", flexDirection: "column", gap: 6 }}>
+                  {t(KINDS[k.kind].help)}
+                  {k.examples.length > 0 && (
+                    <span style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {k.examples.map((e) => (
+                        <span key={e} className="tag">
+                          {e}
+                        </span>
+                      ))}
+                    </span>
+                  )}
+                </span>
+              </div>
+            ))}
+          </div>
+          {m.words.length > 0 && (
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap", borderTop: "1px solid var(--hairline)", paddingTop: 12, fontSize: 12 }}>
+              <span className="muted">{t("Missed most often")}</span>
+              {m.words.map((w) => (
+                <span key={w.word} className="tag">
+                  {w.word} <span className="mono" style={{ color: "var(--ink-subtle)" }}>×{w.count}</span>
+                </span>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </section>
   );
 }
