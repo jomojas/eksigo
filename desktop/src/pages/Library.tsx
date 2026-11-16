@@ -11,6 +11,7 @@ import { useLibraryChanged } from "../lib/downloads";
 import { bytes, clock, plural, whenDay } from "../lib/format";
 import { isBusy, transcribed, useTranscript } from "../lib/transcripts";
 import { PracticeStatus } from "./Show";
+import { t } from "../lib/i18n";
 
 const COLS = "minmax(0,1fr) 160px 64px 190px 72px 110px";
 
@@ -98,13 +99,13 @@ export function Library() {
 
   const all = page?.items ?? [];
   const counts = { all: all.length, podcasts: all.filter((i) => !i.ownFile).length, files: all.filter((i) => i.ownFile).length };
-  const statusLine = page ? `${plural(all.length, "item")} · ${bytes(page.downloadsBytes)} downloaded` : "";
+  const statusLine = page ? t("{items} · {size} downloaded", { items: plural(all.length, "item"), size: bytes(page.downloadsBytes) }) : "";
 
   return (
     <Page crumbs={["Library"]} keys={[["Enter", "Open"], ["Mod O", "Add audio"], ["Del", "Remove"]]} status={statusLine}>
       <div className="page" style={{ padding: "20px 32px 32px", gap: 14 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          <div className="pills" role="group" aria-label="Show">
+          <div className="pills" role="group" aria-label={t("Show")}>
             {(
               [
                 ["all", "All"],
@@ -113,30 +114,30 @@ export function Library() {
               ] as [Kind, string][]
             ).map(([k, label]) => (
               <button key={k} type="button" className="pill" aria-pressed={kind === k} onClick={() => setKind(k)}>
-                {label} <span className="mono">{counts[k]}</span>
+                {t(label)} <span className="mono">{counts[k]}</span>
               </button>
             ))}
           </div>
-          <select className="btn btn-sm" value={status} onChange={(e) => setStatus(e.target.value as StatusFilter)} aria-label="Status">
-            <option value="any">Any status</option>
-            <option value="ready">Ready to practise</option>
-            <option value="downloading">Downloading</option>
-            <option value="problem">Needs attention</option>
+          <select className="btn btn-sm" value={status} onChange={(e) => setStatus(e.target.value as StatusFilter)} aria-label={t("Status")}>
+            <option value="any">{t("Any status")}</option>
+            <option value="ready">{t("Ready to practise")}</option>
+            <option value="downloading">{t("Downloading")}</option>
+            <option value="problem">{t("Needs attention")}</option>
           </select>
-          <select className="btn btn-sm" value={sort} onChange={(e) => setSort(e.target.value as Sort)} aria-label="Order">
-            <option value="recent">Last practised</option>
-            <option value="added">Recently added</option>
-            <option value="title">Title</option>
-            <option value="length">Longest first</option>
+          <select className="btn btn-sm" value={sort} onChange={(e) => setSort(e.target.value as Sort)} aria-label={t("Order")}>
+            <option value="recent">{t("Last practised")}</option>
+            <option value="added">{t("Recently added")}</option>
+            <option value="title">{t("Title")}</option>
+            <option value="length">{t("Longest first")}</option>
           </select>
           <span style={{ flexGrow: 1 }} />
           <label className="input" style={{ width: 200 }}>
             <Icon name="search" size={13} stroke={1.8} />
-            <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filter" aria-label="Filter the library" />
+            <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder={t("Filter")} aria-label={t("Filter the library")} />
           </label>
-          <button type="button" className="btn btn-primary" onClick={() => add()} disabled={!inApp} title={inApp ? undefined : "Only in the app"}>
+          <button type="button" className="btn btn-primary" onClick={() => add()} disabled={!inApp} title={inApp ? undefined : t("Only in the app")}>
             <Icon name="plus" size={14} stroke={2} />
-            Add audio
+            {t("Add audio")}
             <Kbd keys="Mod O" />
           </button>
         </div>
@@ -144,40 +145,40 @@ export function Library() {
         {added && <AddedNotice added={added} onClose={() => setAdded(null)} />}
 
         {confirm && (
-          <div className="notice" role="alertdialog" aria-label="Remove from library">
+          <div className="notice" role="alertdialog" aria-label={t("Remove from library")}>
             <span style={{ flexGrow: 1 }}>
-              Remove <b style={{ color: "var(--ink)", fontWeight: 500 }}>{confirm.title}</b>?{" "}
-              {confirm.ownFile ? "Your file stays where it is." : "The downloaded audio is deleted."}
+              {t("Remove")} <b style={{ color: "var(--ink)", fontWeight: 500 }}>{confirm.title}</b>?{" "}
+              {t(confirm.ownFile ? "Your file stays where it is." : "The downloaded audio is deleted.")}
             </span>
             <button type="button" className="btn btn-sm" onClick={() => remove(confirm)} autoFocus>
-              Remove
+              {t("Remove")}
             </button>
             <button type="button" className="btn btn-sm btn-ghost" onClick={() => setConfirm(null)}>
-              Keep
+              {t("Keep")}
             </button>
           </div>
         )}
 
         {page && all.length === 0 ? (
           <div className="empty">
-            <h2 className="h2">Nothing here yet</h2>
-            <p>Download an episode from Podcasts, or add an audio or video file of your own. Everything you can practise lives here.</p>
+            <h2 className="h2">{t("Nothing here yet")}</h2>
+            <p>{t("Download an episode from Podcasts, or add an audio or video file of your own. Everything you can practise lives here.")}</p>
             <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
               <button type="button" className="btn btn-primary" onClick={() => navigate("/podcasts")}>
                 <Icon name="podcasts" />
-                Find a podcast
+                {t("Find a podcast")}
               </button>
             </div>
           </div>
         ) : (
           <div>
             <div className="th" style={{ gridTemplateColumns: COLS }}>
-              <span>Title</span>
-              <span>From</span>
-              <span>Length</span>
-              <span>Progress</span>
-              <span>Accuracy</span>
-              <span>Last practised</span>
+              <span>{t("Title")}</span>
+              <span>{t("From")}</span>
+              <span>{t("Length")}</span>
+              <span>{t("Progress")}</span>
+              <span>{t("Accuracy")}</span>
+              <span>{t("Last practised")}</span>
             </div>
             {items.map((it, i) => (
               <div
@@ -193,7 +194,7 @@ export function Library() {
                     {it.title}
                   </b>
                 </span>
-                <span className="ell">{it.source}</span>
+                <span className="ell">{t(it.source)}</span>
                 <span className="mono" style={{ fontSize: 12 }}>
                   {clock(it.durationS)}
                 </span>
@@ -208,7 +209,7 @@ export function Library() {
             ))}
             {page && items.length === 0 && (
               <p className="muted" style={{ padding: "16px 12px" }}>
-                Nothing matches these filters.
+                {t("Nothing matches these filters.")}
               </p>
             )}
           </div>
@@ -218,9 +219,9 @@ export function Library() {
           <Icon name="upload" size={20} />
           <div>
             <div style={{ font: "500 13px/1.3 var(--font-text)", color: "var(--ink-muted)" }}>
-              {dragging ? "Drop to add to your library" : "Drop audio or video files here"}
+              {t(dragging ? "Drop to add to your library" : "Drop audio or video files here")}
             </div>
-            <div style={{ fontSize: 12, marginTop: 4 }}>MP3, M4A, WAV, MP4 and more. Files stay where they are on this computer.</div>
+            <div style={{ fontSize: 12, marginTop: 4 }}>{t("MP3, M4A, WAV, MP4 and more. Files stay where they are on this computer.")}</div>
           </div>
         </div>
       </div>
@@ -231,15 +232,15 @@ export function Library() {
 /** Downloading, transcribing, or how far the learner has got. */
 function ItemProgress({ item }: { item: Item }) {
   const live = useTranscript(item.id, null);
-  const t = live ?? { state: item.transcriptState, doneMs: item.transcriptDoneMs, durationMs: item.durationS ? item.durationS * 1000 : null };
-  if (item.state === "ready" && isBusy(t.state) && !item.practice?.done) {
-    const f = transcribed(t);
+  const tr = live ?? { state: item.transcriptState, doneMs: item.transcriptDoneMs, durationMs: item.durationS ? item.durationS * 1000 : null };
+  if (item.state === "ready" && isBusy(tr.state) && !item.practice?.done) {
+    const f = transcribed(tr);
     return (
       <>
         <span className="track" style={{ width: 60 }}>
           <span className="fill" style={{ display: "block", width: `${Math.round(f * 100)}%`, background: "var(--ink-subtle)" }} />
         </span>
-        <span style={{ fontSize: 12 }}>{t.state === "running" ? `Transcribing ${Math.round(f * 100)}%` : t.state === "model" ? "Getting the model" : "Waiting"}</span>
+        <span style={{ fontSize: 12 }}>{tr.state === "running" ? t("Transcribing {pct}%", { pct: Math.round(f * 100) }) : t(tr.state === "model" ? "Getting the model" : "Waiting")}</span>
       </>
     );
   }
@@ -251,14 +252,14 @@ function AddedNotice({ added, onClose }: { added: Added; onClose: () => void }) 
   return (
     <div className={failed ? "notice notice-error" : "notice"} role="status">
       <div style={{ flexGrow: 1, display: "flex", flexDirection: "column", gap: 4 }}>
-        {added.ids.length > 0 && <span>Added {plural(added.ids.length, "file")} to your library.</span>}
+        {added.ids.length > 0 && <span>{t("Added {n} to your library.", { n: plural(added.ids.length, "file") })}</span>}
         {added.skipped.map(([path, reason]) => (
           <span key={path}>
-            Couldn't add {path.split(/[\\/]/).pop()}: {reason}.
+            {t("Couldn't add {file}: {reason}.", { file: path.split(/[\\/]/).pop() ?? path, reason })}
           </span>
         ))}
       </div>
-      <button type="button" className="btn btn-sm btn-ghost" onClick={onClose} aria-label="Dismiss">
+      <button type="button" className="btn btn-sm btn-ghost" onClick={onClose} aria-label={t("Dismiss")}>
         <Icon name="x" size={13} stroke={1.8} />
       </button>
     </div>

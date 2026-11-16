@@ -15,6 +15,7 @@ import { modKey } from "../lib/platform";
 import { sentenceAt, usePlayer } from "../lib/playback";
 import { isBusy, useActivity, useTranscript } from "../lib/transcripts";
 import { Review } from "./Review";
+import { t } from "../lib/i18n";
 
 type Phase = "dictating" | "ad" | "stop" | "results";
 
@@ -110,30 +111,36 @@ export function DictationScreen() {
 function Preparing({ item, status, onRetry, onBack }: { item: Item | null; status: TranscriptStatus | null; onRetry: () => void; onBack: () => void }) {
   const progress = useDownloads().get(item?.id ?? -1);
   const { model } = useActivity();
-  let body: ReactNode = "Opening…";
+  let body: ReactNode = t("Opening…");
   if (item?.state === "downloading") {
     const f = fraction(progress);
     body = (
       <>
         <Bar f={f ?? 0} />
-        <span>Downloading the episode{progress ? ` · ${bytes(progress.received)}${progress.total ? ` of ${bytes(progress.total)}` : ""}` : ""}. Dictation opens when it's here.</span>
+        <span>
+          {progress
+            ? t("Downloading the episode · {size}. Dictation opens when it's here.", {
+                size: progress.total ? t("{a} of {b}", { a: bytes(progress.received), b: bytes(progress.total) }) : bytes(progress.received),
+              })
+            : t("Downloading the episode. Dictation opens when it's here.")}
+        </span>
       </>
     );
   } else if (item?.state === "failed" || item?.state === "missing") {
     return (
       <div className="notice notice-error" role="alert">
-        <span style={{ flexGrow: 1 }}>{item.state === "failed" ? item.error ?? "The download failed." : "The audio file can't be found."}</span>
+        <span style={{ flexGrow: 1 }}>{item.state === "failed" ? t(item.error ?? "The download failed.") : t("The audio file can't be found.")}</span>
         <button type="button" className="btn btn-sm" onClick={onBack}>
-          Back to the episode
+          {t("Back to the episode")}
         </button>
       </div>
     );
   } else if (status?.state === "failed") {
     return (
       <div className="notice notice-error" role="alert">
-        <span style={{ flexGrow: 1 }}>{status.error ?? "Transcription failed."}</span>
+        <span style={{ flexGrow: 1 }}>{t(status.error ?? "Transcription failed.")}</span>
         <button type="button" className="btn btn-sm" onClick={onRetry}>
-          Try again
+          {t("Try again")}
         </button>
       </div>
     );
@@ -142,7 +149,7 @@ function Preparing({ item, status, onRetry, onBack }: { item: Item | null; statu
       <>
         <Bar f={model.received / model.total} />
         <span>
-          Downloading the speech model, once · {bytes(model.received)} of {bytes(model.total)}
+          {t("Downloading the speech model, once · {a} of {b}", { a: bytes(model.received), b: bytes(model.total) })}
         </span>
       </>
     );
@@ -150,11 +157,11 @@ function Preparing({ item, status, onRetry, onBack }: { item: Item | null; statu
     body = (
       <>
         <span className="dot dot-ring" aria-hidden="true" />
-        <span>Getting the first sentences ready. Dictation starts in about half a minute, and the rest is transcribed while you type.</span>
+        <span>{t("Getting the first sentences ready. Dictation starts in about half a minute, and the rest is transcribed while you type.")}</span>
       </>
     );
   } else if (status?.state === "done") {
-    body = "This audio has no speech Eksigo could find.";
+    body = t("This audio has no speech Eksigo could find.");
   }
   return (
     <div className="panel" style={{ padding: 16, display: "flex", alignItems: "center", gap: 12 }} role="status">
@@ -264,7 +271,7 @@ function Dictation({
     (sp = speed, anyway = false) => {
       if (!sentence) return false;
       if (plays >= settings.maxPlays && !anyway) {
-        setNote("No plays left for this sentence.");
+        setNote(t("No plays left for this sentence."));
         return false;
       }
       clearAuto();
@@ -300,7 +307,7 @@ function Dictation({
 
   const slow = () => {
     const sp = slowerSpeed(speed, settings.slowSpeed);
-    if (playSentence(sp)) setNote(`Played once at ${speedLabel(sp)}.`);
+    if (playSentence(sp)) setNote(t("Played once at {speed}.", { speed: speedLabel(sp) }));
   };
 
   // ---------- moving ----------
@@ -453,7 +460,7 @@ function Dictation({
       if (is("r", "KeyR")) slow();
       else if (is("p", "KeyP")) {
         if (phase === "dictating" && playSentence(speed, true) && plays + 1 > settings.maxPlays)
-          setNote(`Played ${plays + 1} times · ${plays + 1 - settings.maxPlays} over your limit of ${settings.maxPlays}.`);
+          setNote(t("Played {n} times · {over} over your limit of {max}.", { n: plays + 1, over: plays + 1 - settings.maxPlays, max: settings.maxPlays }));
       } else if (is("arrowleft")) move(-1);
       else if (is("arrowright")) move(1);
       else if (is("arrowdown")) jump(firstNotDone());
@@ -476,8 +483,8 @@ function Dictation({
     }
     if (phase !== "dictating") return;
     // The dictation keys work from the box, or with nothing else focused.
-    const t = e.target as HTMLElement | null;
-    if (t !== box.current && t?.closest?.("input, textarea, select, button, a, [contenteditable]")) return;
+    const target = e.target as HTMLElement | null;
+    if (target !== box.current && target?.closest?.("input, textarea, select, button, a, [contenteditable]")) return;
     if (e.key === "Tab" && !e.shiftKey) {
       stop();
       playSentence();
@@ -516,19 +523,19 @@ function Dictation({
 
   const actions = (
     <>
-      <span className="mono" style={{ fontSize: 12, color: "var(--ink-muted)", whiteSpace: "nowrap" }} title="Sentences done">
-        {doneCount} / {toDo ?? `${sentences.length - adCount}+`} done
+      <span className="mono" style={{ fontSize: 12, color: "var(--ink-muted)", whiteSpace: "nowrap" }} title={t("Sentences done")}>
+        {t("{a} / {b} done", { a: doneCount, b: toDo ?? `${sentences.length - adCount}+` })}
       </span>
-      <span className="track" role="progressbar" aria-label="Sentences done" aria-valuenow={doneCount} aria-valuemax={toDo ?? undefined} style={{ width: 120 }}>
+      <span className="track" role="progressbar" aria-label={t("Sentences done")} aria-valuenow={doneCount} aria-valuemax={toDo ?? undefined} style={{ width: 120 }}>
         <span className="fill" style={{ display: "block", width: `${toDo ? Math.round((doneCount / toDo) * 100) : 0}%` }} />
       </span>
-      <button type="button" className="btn btn-ghost btn-sm" aria-label="Focus mode" aria-pressed={focus} onClick={() => setFocus(!focus)}>
+      <button type="button" className="btn btn-ghost btn-sm" aria-label={t("Focus mode")} aria-pressed={focus} onClick={() => setFocus(!focus)}>
         <Icon name="focus" size={14} />
         <Kbd keys="Mod \" />
       </button>
       {phase !== "results" && (
         <button type="button" className="btn btn-sm" onClick={() => (phase === "ad" ? cancelAd() : openStop())}>
-          Stop <Kbd keys="Esc" />
+          {t("Stop")} <Kbd keys="Esc" />
         </button>
       )}
     </>
@@ -556,10 +563,10 @@ function Dictation({
   return (
     <Page crumbs={crumbs} keys={KEYS} actions={actions}>
       <div style={{ display: "flex", minHeight: "100%" }}>
-        <section aria-label="Sentences" className="page" style={{ flexGrow: 1, minWidth: 0, gap: 4, padding: "24px 40px 32px 28px" }}>
+        <section aria-label={t("Sentences")} className="page" style={{ flexGrow: 1, minWidth: 0, gap: 4, padding: "24px 40px 32px 28px" }}>
           {before.length > 0 && (
             <div className="eyebrow" style={{ paddingLeft: 42, marginBottom: 6 }}>
-              Your text so far · the original shows in the review
+              {t("Your text so far · the original shows in the review")}
             </div>
           )}
           {before.map((i) => {
@@ -568,12 +575,12 @@ function Dictation({
               <div key={i} className="done-row" style={a ? undefined : { color: "var(--ink-tertiary)" }}>
                 <span className="mono num">{i + 1}</span>
                 <span className="ell" style={{ flexGrow: 1, ...(a?.kind === "known" ? { color: "var(--ink-tertiary)" } : {}) }}>
-                  {!a ? "Not done yet" : a.kind === "ad" ? "Ad · left out" : a.kind === "known" ? "Known · not typed" : a.typed || "(nothing typed)"}
+                  {!a ? t("Not done yet") : a.kind === "ad" ? t("Ad · left out") : a.kind === "known" ? t("Known · not typed") : a.typed || t("(nothing typed)")}
                 </span>
                 {flagged.has(i) && (
                   <span className="flag-label">
                     <Icon name="flag" size={12} />
-                    Flagged
+                    {t("Flagged")}
                   </span>
                 )}
               </div>
@@ -586,16 +593,16 @@ function Dictation({
               <div style={{ flexGrow: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 14 }}>
                 <div className="eyebrow" style={{ display: "flex", gap: 8, alignItems: "baseline", marginBottom: -4 }}>
                   <span style={{ color: "var(--ink)" }}>
-                    Sentence {pos + 1}
+                    {t("Sentence {n}", { n: pos + 1 })}
                     {total ? ` of ${total}` : ""}
                   </span>
-                  {current?.kind === "typed" && <span>· Done · finishing it again replaces the answer</span>}
-                  {current?.kind === "known" && <span>· Done: known</span>}
-                  {current?.kind === "ad" && <span>· Left out as an ad</span>}
+                  {current?.kind === "typed" && <span>{t("· Done · finishing it again replaces the answer")}</span>}
+                  {current?.kind === "known" && <span>{t("· Done: known")}</span>}
+                  {current?.kind === "ad" && <span>{t("· Left out as an ad")}</span>}
                   {flagged.has(pos) && (
                     <span className="flag-label">
                       <Icon name="flag" size={12} />
-                      Flagged for review
+                      {t("Flagged for review")}
                     </span>
                   )}
                 </div>
@@ -603,8 +610,8 @@ function Dictation({
                   <div className="panel" style={{ padding: "14px 16px", display: "flex", alignItems: "center", gap: 14 }} role="status">
                     <span className="dot dot-ok" aria-hidden="true" />
                     <span style={{ flexGrow: 1 }}>
-                      Skipping a section · playing on from sentence {adFrom + 1}, now at {adAt + 1}. Press <Kbd keys="Mod K" /> when the episode is back; the
-                      sentences before that are left out of your score. <Kbd keys="Esc" /> cancels.
+                      {t("Skipping a section · playing on from sentence {from}, now at {at}. Press", { from: adFrom + 1, at: adAt + 1 })} <Kbd keys="Mod K" />{" "}
+                      {t("when the episode is back; the sentences before that are left out of your score.")} <Kbd keys="Esc" /> {t("cancels.")}
                     </span>
                   </div>
                 ) : (
@@ -613,7 +620,7 @@ function Dictation({
                       <button
                         type="button"
                         className="btn"
-                        aria-label={plays ? "Play again" : "Play"}
+                        aria-label={t(plays ? "Play again" : "Play")}
                         onClick={() => {
                           playSentence();
                           focusBox();
@@ -626,17 +633,17 @@ function Dictation({
                         <span className="fill" style={{ display: "block", width: `${Math.min(100, Math.round(inSentence * 100))}%`, transition: "width 120ms linear" }} />
                       </span>
                       <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }} aria-label={`Played ${plays} of ${settings.maxPlays} times`}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }} aria-label={t("Played {n} of {max} times", { n: plays, max: settings.maxPlays })}>
                           {Array.from({ length: settings.maxPlays }, (_, i) => (
                             <span key={i} className={i < plays ? "dot dot-ink" : "dot dot-ring"} />
                           ))}
                           <span className="mono" style={{ fontSize: 12, color: plays > settings.maxPlays ? "var(--semantic-error)" : "var(--ink)", marginLeft: 4 }}>
                             {plays} / {settings.maxPlays}
-                            {plays > settings.maxPlays && ` · ${plays - settings.maxPlays} over`}
+                            {plays > settings.maxPlays && " · " + t("{n} over", { n: plays - settings.maxPlays })}
                           </span>
                         </span>
                         <span className="mono" style={{ fontSize: 11 }}>
-                          {settings.mode === "auto" ? "Auto" : "Manual"} · {speedLabel(speed)}
+                          {t(settings.mode === "auto" ? "Auto" : "Manual")} · {speedLabel(speed)}
                         </span>
                       </div>
                     </div>
@@ -644,15 +651,17 @@ function Dictation({
                       {note ||
                         (plays === 0 ? (
                           <>
-                            Press <Kbd keys="Tab" /> to play the sentence{settings.mode === "auto" ? ` ${plural(settings.maxPlays, "time")} in a row` : ""}.
+                            {t("Press")} <Kbd keys="Tab" />{" "}
+                            {settings.mode === "auto" ? t("to play the sentence {times} in a row.", { times: plural(settings.maxPlays, "time") }) : t("to play the sentence.")}
                           </>
                         ) : playsLeft > 0 ? (
                           <>
-                            Played {plays === 1 ? "once" : `${plays} times`} · {plural(playsLeft, "play")} left. <Kbd keys="Tab" /> plays it again.
+                            {plays === 1 ? t("Played once · {left} left.", { left: plural(playsLeft, "play") }) : t("Played {n} times · {left} left.", { n: plays, left: plural(playsLeft, "play") })}{" "}
+                            <Kbd keys="Tab" /> {t("plays it again.")}
                           </>
                         ) : (
                           <>
-                            No plays left. <Kbd keys="Mod P" /> plays it anyway.
+                            {t("No plays left.")} <Kbd keys="Mod P" /> {t("plays it anyway.")}
                           </>
                         ))}
                     </div>
@@ -660,7 +669,7 @@ function Dictation({
                 )}
 
                 <label htmlFor="dictation" className="eyebrow" style={{ marginTop: 4 }}>
-                  Type what you hear
+                  {t("Type what you hear")}
                 </label>
                 <textarea
                   id="dictation"
@@ -674,14 +683,14 @@ function Dictation({
                   autoCapitalize="off"
                   autoComplete="off"
                   disabled={phase !== "dictating"}
-                  placeholder={current?.kind === "known" ? "Known: not typed. Type here to answer it instead." : undefined}
+                  placeholder={current?.kind === "known" ? t("Known: not typed. Type here to answer it instead.") : undefined}
                 />
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                   <button type="button" className="btn btn-primary" onClick={() => submit("typed")} disabled={busy || phase !== "dictating"}>
-                    Finish sentence <Kbd keys="Shift Enter" />
+                    {t("Finish sentence")} <Kbd keys="Shift Enter" />
                   </button>
                   <button type="button" className="btn" onClick={() => submit("known")} disabled={busy || phase !== "dictating"}>
-                    I know this one <Kbd keys="Shift Tab" />
+                    {t("I know this one")} <Kbd keys="Shift Tab" />
                   </button>
                   <button
                     type="button"
@@ -694,11 +703,11 @@ function Dictation({
                     disabled={phase !== "dictating"}
                   >
                     <Icon name="flag" size={14} />
-                    {flagged.has(pos) ? "Flagged" : "Flag for review"} <Kbd keys="Mod D" />
+                    {t(flagged.has(pos) ? "Flagged" : "Flag for review")} <Kbd keys="Mod D" />
                   </button>
                   <span style={{ flexGrow: 1 }} />
                   <button type="button" className="btn btn-ghost" onClick={toggleAd}>
-                    {phase === "ad" ? "The episode is back" : "Skip section"} <Kbd keys="Mod K" />
+                    {t(phase === "ad" ? "The episode is back" : "Skip section")} <Kbd keys="Mod K" />
                   </button>
                 </div>
               </div>
@@ -712,7 +721,7 @@ function Dictation({
                 <span className="dot dot-ring" aria-hidden="true" />
                 <span style={{ flexGrow: 1 }}>You've caught up with the transcription. The next sentences are on their way; this carries on by itself.</span>
                 <button type="button" className="btn btn-sm btn-ghost" onClick={() => move(-1)}>
-                  Previous sentence
+                  {t("Previous sentence")}
                 </button>
               </div>
             </div>
@@ -725,11 +734,11 @@ function Dictation({
               </span>
               <span>
                 {left === 0 ? (
-                  "This is the last sentence."
+                  t("This is the last sentence.")
                 ) : (
                   <>
-                    Waits for you. Press <Kbd keys="Tab" /> after finishing this one to play it.{" "}
-                    {left !== null ? `${plural(left, "sentence")} to go.` : "More sentences are being transcribed."}
+                    {t("Waits for you. Press")} <Kbd keys="Tab" /> {t("after finishing this one to play it.")}{" "}
+                    {left !== null ? t("{n} to go.", { n: plural(left, "sentence") }) : t("More sentences are being transcribed.")}
                   </>
                 )}
               </span>
@@ -738,29 +747,29 @@ function Dictation({
         </section>
 
         {!focus && (
-          <aside className="insp" aria-label="Playback">
+          <aside className="insp" aria-label={t("Playback")}>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <div className="eyebrow">Playback</div>
+              <div className="eyebrow">{t("Playback")}</div>
               <PlaybackSettings settings={settings} update={update} onSpeed={setSpeed} />
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <div className="eyebrow">This session</div>
+              <div className="eyebrow">{t("This session")}</div>
               <div className="cells" style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}>
                 <div className="cell">
                   <div className="big">{doneCount}</div>
-                  <div className="small">Sentences done</div>
+                  <div className="small">{t("Sentences done")}</div>
                 </div>
                 <div className="cell">
                   <div className="big">{flagged.size}</div>
-                  <div className="small">Flagged</div>
+                  <div className="small">{t("Flagged")}</div>
                 </div>
                 <div className="cell" style={{ gridColumn: "span 2" }}>
                   <div className="big mono">{clock(elapsed)}</div>
-                  <div className="small">Time</div>
+                  <div className="small">{t("Time")}</div>
                 </div>
               </div>
             </div>
-            <p style={{ fontSize: 12, lineHeight: 1.5 }}>Settings here change this session and become your defaults.</p>
+            <p style={{ fontSize: 12, lineHeight: 1.5 }}>{t("Settings here change this session and become your defaults.")}</p>
           </aside>
         )}
       </div>
@@ -815,23 +824,23 @@ function StopDialog({
     <div className="scrim" onMouseDown={(e) => e.target === e.currentTarget && onCancel()}>
       <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="stop-title">
         <h2 id="stop-title" className="h2">
-          Stop for now?
+          {t("Stop for now?")}
         </h2>
         <p style={{ lineHeight: 1.55 }}>
-          You've done {plural(done, "sentence")}
-          {total ? ` of ${total}` : ""}
-          {flagged ? `, ${flagged} flagged for review` : ""}. Your progress is saved either way, and you can resume at sentence {pos + 1} any time.
+          {total ? t("You've done {done} of {total}.", { done: plural(done, "sentence"), total }) : t("You've done {done}.", { done: plural(done, "sentence") })}
+          {flagged ? " " + t("{n} flagged for review.", { n: flagged }) : ""}{" "}
+          {t("Your progress is saved either way, and you can resume at sentence {n} any time.", { n: pos + 1 })}
         </p>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button type="button" className="btn btn-primary" onClick={onResults} autoFocus>
-            Review so far <Kbd keys="Enter" />
+            {t("Review so far")} <Kbd keys="Enter" />
           </button>
           <button type="button" className="btn" onClick={onLater}>
-            Save and continue later
+            {t("Save and continue later")}
           </button>
           <span style={{ flexGrow: 1 }} />
           <button type="button" className="btn btn-ghost" onClick={onCancel}>
-            Keep going <Kbd keys="Esc" />
+            {t("Keep going")} <Kbd keys="Esc" />
           </button>
         </div>
       </div>

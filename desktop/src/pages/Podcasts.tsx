@@ -6,6 +6,7 @@ import { Art } from "../components/Art";
 import { Icon } from "../components/Icon";
 import { Kbd, Page } from "../components/Shell";
 import { backend, type Listing, type Show } from "../lib/backend";
+import { t } from "../lib/i18n";
 
 type Tab = { key: string; label: string; genre: number | null; learners?: boolean };
 
@@ -160,16 +161,16 @@ export function Podcasts() {
                   input.current?.blur();
                 }
               }}
-              placeholder="Search podcasts, or paste an RSS link"
-              aria-label="Search podcasts, or paste an RSS link"
+              placeholder={t("Search podcasts, or paste an RSS link")}
+              aria-label={t("Search podcasts, or paste an RSS link")}
               spellCheck={false}
             />
             {isLink(query) ? (
               <button className="btn btn-sm btn-primary" type="submit" disabled={busy === "feed"}>
-                {busy === "feed" ? "Reading the feed…" : "Add feed"}
+                {t(busy === "feed" ? "Reading the feed…" : "Add feed")}
               </button>
             ) : searching ? (
-              <span style={{ fontSize: 12 }}>Searching…</span>
+              <span style={{ fontSize: 12 }}>{t("Searching…")}</span>
             ) : (
               <Kbd keys="/" />
             )}
@@ -183,11 +184,11 @@ export function Podcasts() {
         )}
 
         {results ? (
-          <section aria-label="Search results">
+          <section aria-label={t("Search results")}>
             <h2 className="eyebrow" style={{ marginBottom: 10 }}>
-              {results.length ? `${results.length} shows` : "No shows found"}
+              {results.length ? t("{n} shows", { n: results.length }) : t("No shows found")}
             </h2>
-            {results.length === 0 && <p className="muted">Try other words, or paste the show's RSS link.</p>}
+            {results.length === 0 && <p className="muted">{t("Try other words, or paste the show's RSS link.")}</p>}
             <ListingRows listings={results} busy={busy} onOpen={open} isSubscribed={isSubscribed} />
           </section>
         ) : (
@@ -211,9 +212,9 @@ function YourShows({ shows, onAddFeed }: { shows: Show[] | null; onAddFeed: () =
     <section aria-labelledby="yours">
       <div style={{ display: "flex", alignItems: "baseline", marginBottom: 12 }}>
         <h2 id="yours" className="eyebrow" style={{ flexGrow: 1 }}>
-          Your shows
+          {t("Your shows")}
         </h2>
-        <span style={{ fontSize: 12 }}>{shows.length ? `${shows.length} subscribed` : "Subscribe to a show to keep it here"}</span>
+        <span style={{ fontSize: 12 }}>{shows.length ? t("{n} subscribed", { n: shows.length }) : t("Subscribe to a show to keep it here")}</span>
       </div>
       <div className="tiles">
         {shows.map((s) => (
@@ -223,7 +224,7 @@ function YourShows({ shows, onAddFeed }: { shows: Show[] | null; onAddFeed: () =
               {s.title}
             </span>
             <span className="ell" style={{ fontSize: 12, marginTop: -4 }}>
-              {s.newCount ? `${s.newCount} new` : s.author || " "}
+              {s.newCount ? t("{n} new", { n: s.newCount }) : s.author || " "}
             </span>
           </button>
         ))}
@@ -231,7 +232,7 @@ function YourShows({ shows, onAddFeed }: { shows: Show[] | null; onAddFeed: () =
           <span className="tile-add">
             <Icon name="plus" size={20} />
           </span>
-          <span style={{ fontSize: 13 }}>Add an RSS feed</span>
+          <span style={{ fontSize: 13 }}>{t("Add an RSS feed")}</span>
         </button>
       </div>
     </section>
@@ -268,37 +269,37 @@ function Recommended({
     };
   }, [tab, country]);
 
-  const countryName = COUNTRIES.find(([c]) => c === country)?.[1] ?? country.toUpperCase();
+  const countryName = t(COUNTRIES.find(([c]) => c === country)?.[1] ?? country.toUpperCase());
 
   return (
     <section aria-labelledby="recommended">
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10, flexWrap: "wrap" }}>
         <h2 id="recommended" className="eyebrow">
-          Recommended
+          {t("Recommended")}
         </h2>
-        <div className="pills" role="group" aria-label="Recommendations">
-          {TABS.map((t) => (
-            <button key={t.key} type="button" className="pill" aria-pressed={t.key === tab.key} onClick={() => setTab(t)}>
-              {t.key === "top" ? `Top in ${countryName}` : t.label}
+        <div className="pills" role="group" aria-label={t("Recommendations")}>
+          {TABS.map((tb) => (
+            <button key={tb.key} type="button" className="pill" aria-pressed={tb.key === tab.key} onClick={() => setTab(tb)}>
+              {tb.key === "top" ? t("Top in {country}", { country: countryName }) : t(tb.label)}
             </button>
           ))}
         </div>
         <span style={{ flexGrow: 1 }} />
         {!tab.learners && (
-          <select className="btn btn-sm" value={country} onChange={(e) => onCountry(e.target.value)} aria-label="Charts for country">
+          <select className="btn btn-sm" value={country} onChange={(e) => onCountry(e.target.value)} aria-label={t("Charts for country")}>
             {COUNTRIES.map(([c, name]) => (
               <option key={c} value={c}>
-                {name}
+                {t(name)}
               </option>
             ))}
           </select>
         )}
       </div>
       <p style={{ fontSize: 12, marginBottom: 8 }}>
-        {tab.learners ? "Clear speech at a steady pace. Chosen by us." : `Apple Podcasts charts${tab.genre ? `, ${tab.label}` : ""}, ${countryName}.`}
+        {tab.learners ? t("Clear speech at a steady pace. Chosen by us.") : tab.genre ? t("Apple Podcasts charts, {genre}, {country}.", { genre: t(tab.label), country: countryName }) : t("Apple Podcasts charts, {country}.", { country: countryName })}
       </p>
       {error && <div className="notice notice-error">{error}</div>}
-      {list === null && !error && <p className="muted" style={{ padding: "12px 0" }}>Loading…</p>}
+      {list === null && !error && <p className="muted" style={{ padding: "12px 0" }}>{t("Loading…")}</p>}
       {list && <ListingRows listings={list} busy={busy} onOpen={onOpen} isSubscribed={isSubscribed} numbered={!tab.learners} />}
     </section>
   );
@@ -347,11 +348,11 @@ function ListingRows({
             </div>
             <span style={{ textAlign: "right" }}>
               {busy === key ? (
-                <span style={{ fontSize: 12 }}>Opening…</span>
+                <span style={{ fontSize: 12 }}>{t("Opening…")}</span>
               ) : sub ? (
                 <span style={{ fontSize: 12, display: "inline-flex", alignItems: "center", gap: 6 }}>
                   <Icon name="check" size={14} stroke={2} />
-                  Subscribed
+                  {t("Subscribed")}
                 </span>
               ) : (
                 <button
@@ -362,7 +363,7 @@ function ListingRows({
                     onOpen(l, true);
                   }}
                 >
-                  Subscribe
+                  {t("Subscribe")}
                 </button>
               )}
             </span>

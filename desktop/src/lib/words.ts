@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { backend, on, type Level, type PracticeCounts, type SavedWord } from "./backend";
+import { t } from "./i18n";
 
 /** The offline dictionaries the server has (backend/app/dictionaries), by the language meanings are in. */
 export const MEANING_LANGUAGES: [string, string][] = [
@@ -95,7 +96,7 @@ export const LEVELS: [Level, string][] = [
   ["familiar", "Familiar"],
   ["known", "Known"],
 ];
-export const levelName = (l: Level) => LEVELS.find(([x]) => x === l)?.[1] ?? l;
+export const levelName = (l: Level) => t(LEVELS.find(([x]) => x === l)?.[1] ?? l);
 
 /** Words to practise today (due, and new ones up to 10 a day), kept current. */
 export function usePracticeCounts(): PracticeCounts | null {

@@ -9,6 +9,7 @@ import { backend, on, type Episode, type Practice, type ShowPage } from "../lib/
 import { percent, progressLabel } from "../lib/dictation";
 import { fraction, useDownloads, useLibraryChanged } from "../lib/downloads";
 import { clock, plural, shortDate } from "../lib/format";
+import { t } from "../lib/i18n";
 
 const PAGE = 100;
 const COLS = "84px minmax(0,1fr) 64px 170px 104px";
@@ -125,7 +126,7 @@ export function ShowScreen() {
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
                 <button type="button" className={show.subscribed ? "btn" : "btn btn-primary"} onClick={toggleSubscribe}>
                   {show.subscribed && <Icon name="check" size={14} stroke={2} />}
-                  {show.subscribed ? "Subscribed" : "Subscribe"}
+                  {t(show.subscribed ? "Subscribed" : "Subscribe")}
                 </button>
                 <span className="badge">{plural(show.episodeCount, "episode")}</span>
               </div>
@@ -136,7 +137,7 @@ export function ShowScreen() {
         <section aria-labelledby="eps" style={{ display: "flex", flexDirection: "column" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
             <h2 id="eps" className="eyebrow" style={{ flexGrow: 1 }}>
-              {page ? (filter ? `${episodes.length} of ${page.episodes.length} episodes` : plural(page.episodes.length, "episode")) : "Episodes"}
+              {page ? (filter ? t("{n} of {total} episodes", { n: episodes.length, total: page.episodes.length }) : plural(page.episodes.length, "episode")) : t("Episodes")}
             </h2>
             <label className="input" style={{ height: 28, width: 220 }}>
               <Icon name="search" size={13} stroke={1.8} />
@@ -146,25 +147,25 @@ export function ShowScreen() {
                   setFilter(e.target.value);
                   setSelected(0);
                 }}
-                placeholder="Filter episodes"
-                aria-label="Filter episodes"
+                placeholder={t("Filter episodes")}
+                aria-label={t("Filter episodes")}
               />
             </label>
-            <select className="btn btn-sm" value={oldestFirst ? "old" : "new"} onChange={(e) => setOldestFirst(e.target.value === "old")} aria-label="Order">
-              <option value="new">Newest first</option>
-              <option value="old">Oldest first</option>
+            <select className="btn btn-sm" value={oldestFirst ? "old" : "new"} onChange={(e) => setOldestFirst(e.target.value === "old")} aria-label={t("Order")}>
+              <option value="new">{t("Newest first")}</option>
+              <option value="old">{t("Oldest first")}</option>
             </select>
           </div>
           <div className="th" style={{ gridTemplateColumns: COLS }}>
-            <span>Date</span>
-            <span>Episode</span>
-            <span>Length</span>
-            <span>Practice</span>
+            <span>{t("Date")}</span>
+            <span>{t("Episode")}</span>
+            <span>{t("Length")}</span>
+            <span>{t("Practice")}</span>
             <span />
           </div>
           {page && page.episodes.length === 0 && (
             <p className="muted" style={{ padding: "16px 12px" }}>
-              {refreshing ? "Reading the feed…" : "This feed has no episodes with audio."}
+              {t(refreshing ? "Reading the feed…" : "This feed has no episodes with audio.")}
             </p>
           )}
           {episodes.slice(0, shown).map((e, i) => (
@@ -178,7 +179,7 @@ export function ShowScreen() {
           ))}
           {episodes.length > shown && (
             <button type="button" className="btn btn-ghost" style={{ alignSelf: "center", marginTop: 12 }} onClick={() => setShown(shown + PAGE)}>
-              Show {Math.min(PAGE, episodes.length - shown)} more
+              {t("Show {n} more", { n: Math.min(PAGE, episodes.length - shown) })}
             </button>
           )}
         </section>
@@ -213,7 +214,7 @@ function EpisodeRow({ episode: e, on, onOpen, onDownload }: { episode: Episode; 
             }}
           >
             <Icon name="download" size={13} stroke={1.8} />
-            Download
+            {t("Download")}
           </button>
         )}
       </span>
@@ -232,12 +233,12 @@ export function PracticeStatus({ itemId, state, practice }: { itemId: number | n
         <span className="track" style={{ width: 60 }}>
           <span className="fill" style={{ display: "block", width: `${Math.round((f ?? 0) * 100)}%` }} />
         </span>
-        <span style={{ fontSize: 12 }}>{f === null ? "Downloading" : `${Math.round(f * 100)}%`}</span>
+        <span style={{ fontSize: 12 }}>{f === null ? t("Downloading") : `${Math.round(f * 100)}%`}</span>
       </>
     );
   }
-  if (state === "failed") return <span style={{ color: "var(--semantic-error)" }}>Download failed</span>;
-  if (state === "missing") return <span style={{ color: "var(--semantic-error)" }}>File not found</span>;
+  if (state === "failed") return <span style={{ color: "var(--semantic-error)" }}>{t("Download failed")}</span>;
+  if (state === "missing") return <span style={{ color: "var(--semantic-error)" }}>{t("File not found")}</span>;
   if (practice?.finished && practice.transcriptDone && practice.position >= practice.sentences)
     return (
       <>
@@ -263,7 +264,7 @@ export function PracticeStatus({ itemId, state, practice }: { itemId: number | n
   return (
     <>
       <span className="dot" />
-      Not started
+      {t("Not started")}
     </>
   );
 }

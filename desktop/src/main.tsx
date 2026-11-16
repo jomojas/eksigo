@@ -13,6 +13,7 @@ import { Shell } from "./components/Shell";
 import { DownloadsProvider } from "./lib/downloads";
 import { ThemeProvider } from "./lib/theme";
 import { TranscriptsProvider } from "./lib/transcripts";
+import { useLanguageKey } from "./lib/i18n";
 import { DictationScreen } from "./pages/Dictation";
 import { ListenScreen } from "./pages/Listen";
 import { MissedScreen } from "./pages/Missed";
@@ -59,12 +60,18 @@ document.addEventListener("keydown", (e) => {
   e.preventDefault();
 });
 
+/** A new language (Settings › General) draws every page again; the page stays where it is. */
+function App() {
+  const lang = useLanguageKey();
+  return <RouterProvider key={lang} router={router} />;
+}
+
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <ThemeProvider>
       <DownloadsProvider>
         <TranscriptsProvider>
-          <RouterProvider router={router} />
+          <App />
         </TranscriptsProvider>
       </DownloadsProvider>
     </ThemeProvider>

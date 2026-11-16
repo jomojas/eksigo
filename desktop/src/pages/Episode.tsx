@@ -13,6 +13,7 @@ import { dictationPath, percent, progressLabel } from "../lib/dictation";
 import { fraction, useDownloads, useLibraryChanged } from "../lib/downloads";
 import { bytes, clock, plural, shortDate, whenDay } from "../lib/format";
 import { isBusy, transcribed, useActivity, useTranscript } from "../lib/transcripts";
+import { t } from "../lib/i18n";
 
 type Data = { episode: Episode | null; show: Show | null; item: Item | null };
 
@@ -72,7 +73,7 @@ export function EpisodeScreen({ from }: { from: "podcasts" | "library" }) {
                 <Art url={episode?.artworkUrl ?? item?.artworkUrl ?? null} size={96} radius={10} file={!!item?.ownFile} />
                 <div style={{ flexGrow: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
                   <div className="eyebrow">
-                    {show ? `${show.title} · ${shortDate(episode?.publishedAt)}` : `My files · added ${whenDay(item?.addedAt)}`}
+                    {show ? `${show.title} · ${shortDate(episode?.publishedAt)}` : t("My files · added {when}", { when: whenDay(item?.addedAt) })}
                   </div>
                   <h1 className="h1 selectable" style={{ fontSize: 26, letterSpacing: -0.6, maxWidth: 820 }}>
                     {title}
@@ -92,7 +93,7 @@ export function EpisodeScreen({ from }: { from: "podcasts" | "library" }) {
               {episode?.description && (
                 <section aria-labelledby="about">
                   <h2 id="about" className="eyebrow" style={{ marginBottom: 8 }}>
-                    About this episode
+                    {t("About this episode")}
                   </h2>
                   <p className="selectable" style={{ fontSize: 14, lineHeight: 1.6 }}>
                     {episode.description}
@@ -139,14 +140,14 @@ function Actions({ episode, item, onChange, onError }: { episode: Episode | null
   if (!item) {
     return (
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <button type="button" className="btn btn-primary" onClick={() => download(true)} title="Downloads the episode and opens dictation">
-          Practise
+        <button type="button" className="btn btn-primary" onClick={() => download(true)} title={t("Downloads the episode and opens dictation")}>
+          {t("Practise")}
         </button>
         <button type="button" className="btn" onClick={() => download()}>
           <Icon name="download" size={14} stroke={1.8} />
-          Download{episode?.audioBytes ? ` · ${bytes(episode.audioBytes)}` : ""}
+          {t("Download")}{episode?.audioBytes ? ` · ${bytes(episode.audioBytes)}` : ""}
         </button>
-        <span style={{ fontSize: 12, marginLeft: 4 }}>Downloaded episodes stay in your Library until you remove them.</span>
+        <span style={{ fontSize: 12, marginLeft: 4 }}>{t("Downloaded episodes stay in your Library until you remove them.")}</span>
       </div>
     );
   }
@@ -155,18 +156,18 @@ function Actions({ episode, item, onChange, onError }: { episode: Episode | null
     const f = fraction(progress);
     return (
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <span className="track" style={{ width: 240 }} role="progressbar" aria-valuenow={f === null ? undefined : Math.round(f * 100)} aria-label="Download">
+        <span className="track" style={{ width: 240 }} role="progressbar" aria-valuenow={f === null ? undefined : Math.round(f * 100)} aria-label={t("Download")}>
           <span className="fill" style={{ display: "block", width: `${Math.round((f ?? 0) * 100)}%` }} />
         </span>
         <span className="mono" style={{ fontSize: 12 }}>
-          {progress ? `${bytes(progress.received)}${progress.total ? ` of ${bytes(progress.total)}` : ""}` : "Starting…"}
+          {progress ? (progress.total ? t("{a} of {b}", { a: bytes(progress.received), b: bytes(progress.total) }) : bytes(progress.received)) : t("Starting…")}
         </span>
         <button type="button" className="btn btn-sm btn-ghost" onClick={() => backend.cancelDownload(item.id)}>
-          Cancel
+          {t("Cancel")}
         </button>
         <span style={{ flexGrow: 1 }} />
-        <button type="button" className="btn" onClick={() => navigate(dictationPath(item.id))} title="Dictation opens when the download is done">
-          Practise
+        <button type="button" className="btn" onClick={() => navigate(dictationPath(item.id))} title={t("Dictation opens when the download is done")}>
+          {t("Practise")}
         </button>
       </div>
     );
@@ -175,9 +176,9 @@ function Actions({ episode, item, onChange, onError }: { episode: Episode | null
   if (item.state === "failed") {
     return (
       <div className="notice notice-error" role="alert">
-        <span style={{ flexGrow: 1 }}>{item.error ?? "The download failed."}</span>
+        <span style={{ flexGrow: 1 }}>{t(item.error ?? "The download failed.")}</span>
         <button type="button" className="btn btn-sm" onClick={() => download()}>
-          Try again
+          {t("Try again")}
         </button>
       </div>
     );
@@ -186,7 +187,7 @@ function Actions({ episode, item, onChange, onError }: { episode: Episode | null
   if (item.state === "missing") {
     return (
       <div className="notice notice-error" role="alert">
-        This file is no longer at {item.path}. Move it back, or remove it from the Library and add it again.
+        {t("This file is no longer at {path}. Move it back, or remove it from the Library and add it again.", { path: item.path ?? "" })}
       </div>
     );
   }
@@ -198,25 +199,25 @@ function Actions({ episode, item, onChange, onError }: { episode: Episode | null
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         <button type="button" className="btn btn-primary" onClick={() => open(!!p?.finished)}>
-          {inProgress ? `Resume dictation at ${p.position + 1}` : p?.finished ? "Dictate again" : "Start dictation"}
+          {inProgress ? t("Resume dictation at {n}", { n: p.position + 1 }) : t(p?.finished ? "Dictate again" : "Start dictation")}
         </button>
         <button type="button" className="btn" onClick={() => navigate(listenPath(item.id))}>
           <Icon name="headphones" size={14} />
-          Listen <Kbd keys="L" />
+          {t("Listen")} <Kbd keys="L" />
         </button>
         {inProgress && (
           <button type="button" className="btn btn-ghost" onClick={() => open(true)}>
-            Start dictation over
+            {t("Start dictation over")}
           </button>
         )}
-        {inProgress && <span style={{ fontSize: 12, marginLeft: 4 }}>{progressLabel(p)} sentences dictated so far.</span>}
+        {inProgress && <span style={{ fontSize: 12, marginLeft: 4 }}>{t("{n} sentences dictated so far.", { n: progressLabel(p) })}</span>}
       </div>
       <div style={{ display: "flex", gap: "4px 24px", flexWrap: "wrap", fontSize: 12 }}>
         <span>
-          <b style={{ fontWeight: 500, color: "var(--ink-muted)" }}>Dictate:</b> one sentence at a time, typed from what you hear.
+          <b style={{ fontWeight: 500, color: "var(--ink-muted)" }}>{t("Dictate:")}</b> {t("one sentence at a time, typed from what you hear.")}
         </span>
         <span>
-          <b style={{ fontWeight: 500, color: "var(--ink-muted)" }}>Listen:</b> straight through, sentences hidden until you show them; save words as you go.
+          <b style={{ fontWeight: 500, color: "var(--ink-muted)" }}>{t("Listen:")}</b> {t("straight through, sentences hidden until you show them; save words as you go.")}
         </span>
       </div>
     </div>
@@ -237,7 +238,7 @@ function Attempts({ item }: { item: Item }) {
   return (
     <section aria-labelledby="attempts">
       <h2 id="attempts" className="eyebrow" style={{ marginBottom: 8 }}>
-        Your attempts
+        {t("Your attempts")}
       </h2>
       <div className="panel" style={{ overflow: "hidden" }}>
         {shown.map((s) => (
@@ -246,7 +247,7 @@ function Attempts({ item }: { item: Item }) {
             className="tr"
             role="link"
             tabIndex={0}
-            title="Open the review"
+            title={t("Open the review")}
             onClick={() => navigate(reviewPath(item.id, s.attempt.id))}
             onKeyDown={(e) => e.key === "Enter" && navigate(reviewPath(item.id, s.attempt.id))}
             style={{ gridTemplateColumns: "120px minmax(0,1fr) 90px 80px 110px", borderBottom: "1px solid var(--hairline)", cursor: "pointer" }}
@@ -266,7 +267,7 @@ function Attempts({ item }: { item: Item }) {
             </span>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
               <span className={s.attempt.finishedAt ? "dot dot-ok" : "dot dot-ring"} />
-              {!s.attempt.finishedAt ? "In progress" : s.transcriptDone && s.attempt.position >= s.sentences ? "Finished" : "Stopped"}
+              {t(!s.attempt.finishedAt ? "In progress" : s.transcriptDone && s.attempt.position >= s.sentences ? "Finished" : "Stopped")}
             </span>
           </div>
         ))}
@@ -312,11 +313,11 @@ function transcriptLabel(state: string | undefined): string {
     case "running":
     case "queued":
     case "model":
-      return "In progress";
+      return t("In progress");
     case "failed":
-      return "Failed";
+      return t("Failed");
     default:
-      return "Not yet";
+      return t("Not yet");
   }
 }
 
@@ -332,18 +333,17 @@ function Transcript({ status, onStop, onStart }: { status: TranscriptStatus | nu
     <section aria-labelledby="transcript" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, minHeight: 28 }}>
         <h2 id="transcript" className="eyebrow" style={{ flexGrow: 1 }}>
-          Transcript
+          {t("Transcript")}
         </h2>
       </div>
 
       {status.state === "none" && (
         <div className="panel" style={{ padding: 16, display: "flex", alignItems: "center", gap: 16 }}>
           <p style={{ flexGrow: 1, lineHeight: 1.5 }}>
-            Eksigo writes out the episode on this computer, sentence by sentence, for listening along and for dictation. It starts on its own
-            when you listen or dictate; it takes a few seconds to begin.
+            {t("Eksigo writes out the episode on this computer, sentence by sentence, for listening along and for dictation. It starts on its own when you listen or dictate; it takes a few seconds to begin.")}
           </p>
           <button type="button" className="btn" onClick={onStart}>
-            Transcribe
+            {t("Transcribe")}
           </button>
         </div>
       )}
@@ -356,7 +356,7 @@ function Transcript({ status, onStop, onStart }: { status: TranscriptStatus | nu
                 <span className="fill" style={{ display: "block", width: `${Math.round((model.received / model.total) * 100)}%` }} />
               </span>
               <span style={{ flexGrow: 1 }}>
-                Downloading the speech model, once · {bytes(model.received)} of {bytes(model.total)}
+                {t("Downloading the speech model, once · {a} of {b}", { a: bytes(model.received), b: bytes(model.total) })}
               </span>
             </>
           ) : status.state === "running" ? (
@@ -365,23 +365,23 @@ function Transcript({ status, onStop, onStart }: { status: TranscriptStatus | nu
                 <span className="fill" style={{ display: "block", width: `${Math.round(f * 100)}%` }} />
               </span>
               <span style={{ flexGrow: 1 }}>
-                {minutes(status.doneMs)} of {minutes(status.durationMs)} min · {status.sentences} sentences so far
+                {t("{a} of {b} min · {n} sentences so far", { a: minutes(status.doneMs), b: minutes(status.durationMs), n: status.sentences })}
               </span>
             </>
           ) : (
-            <span style={{ flexGrow: 1 }}>{status.state === "model" ? "Getting the speech model ready…" : "Waiting for another episode to finish…"}</span>
+            <span style={{ flexGrow: 1 }}>{t(status.state === "model" ? "Getting the speech model ready…" : "Waiting for another episode to finish…")}</span>
           )}
           <button type="button" className="btn btn-sm btn-ghost" onClick={onStop}>
-            Stop
+            {t("Stop")}
           </button>
         </div>
       )}
 
       {status.state === "failed" && (
         <div className="notice notice-error" role="alert">
-          <span style={{ flexGrow: 1 }}>{status.error ?? "Transcription failed."}</span>
+          <span style={{ flexGrow: 1 }}>{t(status.error ?? "Transcription failed.")}</span>
           <button type="button" className="btn btn-sm" onClick={onStart}>
-            Try again
+            {t("Try again")}
           </button>
         </div>
       )}
@@ -403,32 +403,32 @@ function Details({ episode, item, onRemoved }: { episode: Episode | null; item: 
     onRemoved();
   };
   return (
-    <aside className="insp" aria-label="Details">
+    <aside className="insp" aria-label={t("Details")}>
       <div style={{ display: "flex", flexDirection: "column" }}>
         <div className="eyebrow" style={{ marginBottom: 6 }}>
-          Details
+          {t("Details")}
         </div>
         <div className="prop">
-          Source<b>{item?.ownFile ? "Your file" : "Podcast"}</b>
+          {t("Source")}<b>{t(item?.ownFile ? "Your file" : "Podcast")}</b>
         </div>
         <div className="prop">
-          Length<b className="mono">{clock(item?.durationS ?? episode?.durationS)}</b>
+          {t("Length")}<b className="mono">{clock(item?.durationS ?? episode?.durationS)}</b>
         </div>
         {episode && (
           <div className="prop">
-            Published<b>{shortDate(episode.publishedAt)}</b>
+            {t("Published")}<b>{shortDate(episode.publishedAt)}</b>
           </div>
         )}
         <div className="prop">
-          {item?.ownFile ? "File" : "Download"}
+          {t(item?.ownFile ? "File" : "Download")}
           <b className="mono">{item?.state === "ready" ? bytes(item.bytes) : episode?.audioBytes ? bytes(episode.audioBytes) : "—"}</b>
         </div>
         <div className="prop">
-          Transcript<b>{transcriptLabel(liveTranscript?.state ?? item?.transcriptState)}</b>
+          {t("Transcript")}<b>{transcriptLabel(liveTranscript?.state ?? item?.transcriptState)}</b>
         </div>
         {item?.ownFile && item.path && (
           <div className="prop" style={{ flexDirection: "column", alignItems: "flex-start", gap: 6 }}>
-            Location
+            {t("Location")}
             <b className="mono selectable" style={{ fontSize: 11, wordBreak: "break-all", textAlign: "left" }}>
               {item.path}
             </b>
@@ -440,20 +440,20 @@ function Details({ episode, item, onRemoved }: { episode: Episode | null; item: 
         (confirming ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <p style={{ fontSize: 12 }}>
-              {item.ownFile ? "Your file stays where it is on this computer." : "The downloaded audio is deleted from this computer."}
+              {t(item.ownFile ? "Your file stays where it is on this computer." : "The downloaded audio is deleted from this computer.")}
             </p>
             <div style={{ display: "flex", gap: 8 }}>
               <button type="button" className="btn btn-sm" onClick={remove} autoFocus>
-                Remove
+                {t("Remove")}
               </button>
               <button type="button" className="btn btn-sm btn-ghost" onClick={() => setConfirming(false)}>
-                Keep
+                {t("Keep")}
               </button>
             </div>
           </div>
         ) : (
           <button type="button" className="btn btn-ghost" style={{ alignSelf: "flex-start", marginLeft: -12 }} onClick={() => setConfirming(true)}>
-            Remove from library
+            {t("Remove from library")}
           </button>
         ))}
     </aside>

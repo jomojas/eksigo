@@ -18,6 +18,7 @@ import { dictationPath, percent, useDictationSettings } from "../lib/dictation";
 import { clock, plural } from "../lib/format";
 import { usePlayer } from "../lib/playback";
 import { useMissed } from "./Missed";
+import { t, tn } from "../lib/i18n";
 
 type Filter = "all" | "flagged" | "mistakes";
 
@@ -147,32 +148,32 @@ export function Review({
     <div className="page" style={{ gap: 16 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <h1 className="h1" style={{ flexGrow: 1 }}>
-          {finished ? "Review" : "Review so far"}
+          {t(finished ? "Review" : "Review so far")}
         </h1>
         {onResume && (
           <button type="button" className="btn btn-primary" onClick={onResume} autoFocus>
-            Resume at sentence {s.attempt.position + 1}
+            {t("Resume at sentence {n}", { n: s.attempt.position + 1 })}
           </button>
         )}
         {onAgain && (
           <button type="button" className={onResume ? "btn" : "btn btn-primary"} onClick={onAgain} autoFocus={!onResume}>
-            Practise again
+            {t("Practise again")}
           </button>
         )}
         <button type="button" className="btn" onClick={onBack}>
-          Back to the episode
+          {t("Back to the episode")}
         </button>
       </div>
       {finished && counts.mistakes > 0 && <EpisodeReviewPanel itemId={item.id} attemptId={s.attempt.id} answers={answers} mistakes={counts.mistakes} ai={ai} lang={lang} onShow={showSentence} />}
       <div className="cells" style={{ gridTemplateColumns: "repeat(5, minmax(0, 1fr))" }}>
-        <Cell big={percent(s.accuracy)} small="Accuracy" />
-        <Cell big={`${s.done}${s.transcriptDone ? ` / ${s.sentences - s.ads}` : ""}`} small="Sentences done" />
-        <Cell big={String(s.known)} small="Known" />
-        <Cell big={String(flagged.size)} small="Flagged" />
-        <Cell big={clock(s.attempt.seconds)} small="Time" />
+        <Cell big={percent(s.accuracy)} small={t("Accuracy")} />
+        <Cell big={`${s.done}${s.transcriptDone ? ` / ${s.sentences - s.ads}` : ""}`} small={t("Sentences done")} />
+        <Cell big={String(s.known)} small={t("Known")} />
+        <Cell big={String(flagged.size)} small={t("Flagged")} />
+        <Cell big={clock(s.attempt.seconds)} small={t("Time")} />
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-        <span className="seg" role="group" aria-label="Show">
+        <span className="seg" role="group" aria-label={t("Show")}>
           {(
             [
               ["all", "All"],
@@ -182,7 +183,7 @@ export function Review({
           ).map(([f, label]) => (
             <button key={f} type="button" aria-pressed={filter === f} onClick={() => setFilter(f)} style={{ gap: 6 }}>
               {f === "flagged" && <Icon name="flag" size={12} />}
-              {label}
+              {t(label)}
               <span className="mono" style={{ fontSize: 11, color: "var(--ink-subtle)" }}>
                 {counts[f]}
               </span>
@@ -190,22 +191,26 @@ export function Review({
           ))}
         </span>
         <span style={{ fontSize: 12 }}>
-          Select words in the original to look them up{ai?.using ? <> · <Kbd keys="?" /> asks about a sentence</> : ""}. <span className="w w-missing">Boxed</span> words were missed, <span className="w w-wrong">red</span> ones wrong,{" "}
-          <span className="w w-spelling">underlined</span> ones misspelled (half a word).
-          {s.ads > 0 && ` ${plural(s.ads, "sentence")} skipped as ads.`}
+          {t("Select words in the original to look them up")}
+          {ai?.using ? <> · <Kbd keys="?" /> {t("asks about a sentence")}</> : ""}
+          {t(". ")}
+          <span className="w w-missing">{t("Boxed")}</span> {t("words were missed,")} <span className="w w-wrong">{t("red")}</span> {t("ones wrong,")}{" "}
+          <span className="w w-spelling">{t("underlined")}</span> {t("ones misspelled (half a word).")}
+          {s.ads > 0 && " " + t("{n} skipped as ads.", { n: plural(s.ads, "sentence") })}
           {hearAgain > 0 && (
             <>
               {" "}
               <button type="button" className="btn btn-xs" style={{ marginLeft: 4 }} onClick={() => navigate(`/missed?item=${item.id}`)}>
                 <Icon name="replay" size={11} />
-                Hear {hearAgain === 1 ? "it" : `the ${hearAgain}`} again
+                {hearAgain === 1 ? t("Hear it again") : t("Hear the {n} again", { n: hearAgain })}
               </button>
             </>
           )}
           {toPhone && rows.some(sendable) && (
             <>
               {" "}
-              <Icon name="headphones" size={11} /> {plural(toPhone.size, "sentence")} go{toPhone.size === 1 ? "es" : ""} to your phone's missed sentences. Spelling slips stay here unless you send them.
+              <Icon name="headphones" size={11} />{" "}
+              {tn(toPhone.size, "{n} sentence goes to your phone's missed sentences. Spelling slips stay here unless you send them.", "{n} sentences go to your phone's missed sentences. Spelling slips stay here unless you send them.")}
             </>
           )}
         </span>
@@ -213,8 +218,8 @@ export function Review({
       <div className="panel selectable" style={{ overflow: "hidden" }}>
         <div className="review-row review-head">
           <span />
-          <span>Original</span>
-          <span>You typed</span>
+          <span>{t("Original")}</span>
+          <span>{t("You typed")}</span>
           <span />
         </div>
         {shown.map((i) => {
@@ -230,7 +235,7 @@ export function Review({
                   type="button"
                   className="btn flag-btn"
                   style={{ borderRadius: 9999, color: "var(--ink-muted)" }}
-                  aria-label={`Play sentence ${i + 1}`}
+                  aria-label={t("Play sentence {n}", { n: i + 1 })}
                   onClick={() => (setTouched(i), player.playing && playing === i ? player.stop() : playRow(i))}
                   disabled={!item.path || !sentences[i]}
                 >
@@ -240,8 +245,8 @@ export function Review({
                   type="button"
                   className={`btn btn-ghost flag-btn${isFlagged ? " on" : ""}`}
                   aria-pressed={isFlagged}
-                  aria-label={isFlagged ? `Unflag sentence ${i + 1}` : `Flag sentence ${i + 1}`}
-                  title={isFlagged ? "Flagged for review" : "Flag for review"}
+                  aria-label={t(isFlagged ? "Unflag sentence {n}" : "Flag sentence {n}", { n: i + 1 })}
+                  title={t(isFlagged ? "Flagged for review" : "Flag for review")}
                   onClick={() => onFlag(i, !isFlagged)}
                 >
                   <Icon name="flag" size={13} />
@@ -252,19 +257,19 @@ export function Review({
               </span>
               <span>
                 {!a ? (
-                  <span style={{ color: "var(--ink-tertiary)" }}>Not done yet</span>
+                  <span style={{ color: "var(--ink-tertiary)" }}>{t("Not done yet")}</span>
                 ) : a.kind === "known" ? (
-                  <span style={{ color: "var(--ink-tertiary)" }}>Known · not typed</span>
+                  <span style={{ color: "var(--ink-tertiary)" }}>{t("Known · not typed")}</span>
                 ) : a.comparison?.typed.length ? (
                   <MarkedText words={a.comparison.typed} />
                 ) : (
-                  <span style={{ color: "var(--ink-tertiary)" }}>(nothing typed)</span>
+                  <span style={{ color: "var(--ink-tertiary)" }}>{t("(nothing typed)")}</span>
                 )}
                 {a && (mistaken(i) || asked.has(i) || open.has(i)) && (
                   <span style={{ display: "block", marginTop: 4 }}>
                     <button type="button" className={open.has(i) ? "btn btn-xs" : "btn btn-xs btn-ghost"} style={open.has(i) ? undefined : { paddingLeft: 0 }} aria-expanded={open.has(i)} onClick={() => toggleAsk(i)}>
                       <Icon name="chat" size={12} />
-                      {asked.has(i) && !open.has(i) ? "Your questions about this sentence" : "Ask about this sentence"}
+                      {t(asked.has(i) && !open.has(i) ? "Your questions about this sentence" : "Ask about this sentence")}
                     </button>
                   </span>
                 )}
@@ -278,7 +283,7 @@ export function Review({
                 {a && (
                   <span>
                     {plural(a.plays, "play")}
-                    {a.plays > maxPlays && ` · ${a.plays - maxPlays} over`}
+                    {a.plays > maxPlays && " · " + t("{n} over", { n: a.plays - maxPlays })}
                   </span>
                 )}
                 {toPhone && sendable(i) && (
@@ -286,12 +291,12 @@ export function Review({
                     type="button"
                     className={`btn btn-xs${toPhone.has(i) ? "" : " btn-ghost"}`}
                     aria-pressed={toPhone.has(i)}
-                    title={toPhone.has(i) ? "Goes to your phone's missed sentences. Click to keep it here." : "Send to your phone's missed sentences"}
+                    title={t(toPhone.has(i) ? "Goes to your phone's missed sentences. Click to keep it here." : "Send to your phone's missed sentences")}
                     onClick={() => sendToPhone(i, !toPhone.has(i))}
                     style={{ marginTop: 2, gap: 4 }}
                   >
                     <Icon name={toPhone.has(i) ? "check" : "headphones"} size={11} />
-                    {toPhone.has(i) ? "On phone" : "To phone"}
+                    {t(toPhone.has(i) ? "On phone" : "To phone")}
                   </button>
                 )}
               </span>
@@ -325,7 +330,7 @@ export function Review({
         )}
         {shown.length === 0 && (
           <div style={{ padding: 16 }}>
-            {filter === "flagged" ? "No flagged sentences. Press Mod D while dictating to flag one." : filter === "mistakes" ? "No mistakes." : "No sentences done yet."}
+            {t(filter === "flagged" ? "No flagged sentences. Press Mod D while dictating to flag one." : filter === "mistakes" ? "No mistakes." : "No sentences done yet.")}
           </div>
         )}
       </div>
@@ -374,10 +379,10 @@ function EpisodeReviewPanel({
     return (
       <div className="panel" style={{ padding: "12px 16px", display: "flex", alignItems: "center", gap: 12, fontSize: 13 }}>
         <span className="muted" style={{ flexGrow: 1 }}>
-          With AI set up, a review of your {plural(mistakes, "sentence")} with mistakes appears here: why you missed them, by reason, and what to do next time.
+          {t("With AI set up, a review of your {n} with mistakes appears here: why you missed them, by reason, and what to do next time.", { n: plural(mistakes, "sentence") })}
         </span>
         <button type="button" className="btn btn-sm" onClick={() => navigate(SETTINGS_AI)}>
-          Set up AI
+          {t("Set up AI")}
         </button>
       </div>
     );
@@ -387,15 +392,15 @@ function EpisodeReviewPanel({
       <div style={{ flexGrow: 1, minWidth: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <h2 id="episode-review" className="h2">
-            Episode review
+            {t("Episode review")}
           </h2>
-          {st.state === "done" && <AiSource ai={ai}> · written when you finished</AiSource>}
+          {st.state === "done" && <AiSource ai={ai}> {t("· written when you finished")}</AiSource>}
         </div>
         {st.state === "loading" && (
           <div role="status" style={{ padding: "16px 0 18px", display: "flex", flexDirection: "column", gap: 12 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: "var(--ink-muted)" }}>
               <span className="spin" aria-hidden="true" />
-              Reading your {plural(mistakes, "sentence")} with mistakes…
+              {t("Reading your {n} with mistakes…", { n: plural(mistakes, "sentence") })}
             </div>
             <div className="skel" style={{ width: "92%" }} />
             <div className="skel" style={{ width: "78%" }} />
@@ -418,7 +423,7 @@ function EpisodeReviewPanel({
       </div>
       {st.state === "done" && st.review.next && (
         <div className="ai-next">
-          <span className="eyebrow">Next time</span>
+          <span className="eyebrow">{t("Next time")}</span>
           <p className="ai-text">{st.review.next}</p>
         </div>
       )}
@@ -488,12 +493,12 @@ function Pattern({ p, itemId, answers, lang, onShow }: { p: ReviewPattern; itemI
             {adding === "done" ? (
               <span className="flag-label" style={{ color: "var(--semantic-success)" }}>
                 <Icon name="check" size={14} />
-                Added to My words
+                {t("Added to My words")}
               </span>
             ) : (
               <button type="button" className="btn btn-sm" onClick={addAll} disabled={adding === "busy"}>
                 <Icon name="plus" size={12} />
-                {toAdd.length === 1 ? `Add ${toAdd[0].text} to My words` : `Add these ${toAdd.length} to My words`}
+                {toAdd.length === 1 ? t("Add {word} to My words", { word: toAdd[0].text }) : t("Add these {n} to My words", { n: toAdd.length })}
               </button>
             )}
             {error && (
@@ -506,7 +511,7 @@ function Pattern({ p, itemId, answers, lang, onShow }: { p: ReviewPattern; itemI
       </div>
       <div style={{ display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "flex-end", maxWidth: 180 }}>
         {p.sentences.slice(0, 4).map((n) => (
-          <button key={n} type="button" className="ai-chip" onClick={() => onShow(n)} aria-label={`Show sentence ${n}`}>
+          <button key={n} type="button" className="ai-chip" onClick={() => onShow(n)} aria-label={t("Show sentence {n}", { n })}>
             {n}
           </button>
         ))}
@@ -582,7 +587,7 @@ export function ReviewScreen() {
           onBack={() => navigate(`/library/${itemId}`)}
         />
       ) : (
-        <div className="page">Opening…</div>
+        <div className="page">{t("Opening…")}</div>
       )}
     </Page>
   );

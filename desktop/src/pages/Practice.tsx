@@ -12,6 +12,7 @@ import { clock, interval, plural } from "../lib/format";
 import { usePlayer } from "../lib/playback";
 import { modKey } from "../lib/platform";
 import { speak, usePracticeCounts } from "../lib/words";
+import { t } from "../lib/i18n";
 
 const MODES: [PracticeMode, string][] = [
   ["type", "Listen and type"],
@@ -208,7 +209,7 @@ export function Practice() {
     <Page crumbs={[{ label: "My words", to: "/words" }, "Practice"]} keys={pageKeys}>
       <section style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "28px 24px 40px", gap: 24 }}>
         <div style={{ width: "100%", maxWidth: 640, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          <div className="pills" role="group" aria-label="How to practise">
+          <div className="pills" role="group" aria-label={t("How to practise")}>
             {MODES.map(([m, label]) => (
               <button
                 key={m}
@@ -216,10 +217,10 @@ export function Practice() {
                 className="pill"
                 aria-pressed={mode === m}
                 disabled={m === "pick" && queue !== null && !pickPossible}
-                title={m === "pick" && queue !== null && !pickPossible ? "Needs at least four words with meanings in My words" : undefined}
+                title={m === "pick" && queue !== null && !pickPossible ? t("Needs at least four words with meanings in My words") : undefined}
                 onClick={() => setMode(m)}
               >
-                {label}
+                {t(label)}
               </button>
             ))}
           </div>
@@ -244,13 +245,13 @@ export function Practice() {
 
         {queue && queue.length === 0 && !done && (
           <div className="empty" style={{ maxWidth: 640 }}>
-            <h2 className="h2">Nothing to practise right now</h2>
+            <h2 className="h2">{t("Nothing to practise right now")}</h2>
             <p>
-              {counts && counts.total === 0 && "Words you've practised come back when they're due. "}
-              Save words from a review to practise them; up to ten new ones start each day.
+              {counts && counts.total === 0 && t("Words you've practised come back when they're due.") + " "}
+              {t("Save words from a review to practise them; up to ten new ones start each day.")}
             </p>
             <button type="button" className="btn" onClick={() => navigate("/words")}>
-              Back to My words
+              {t("Back to My words")}
             </button>
           </div>
         )}
@@ -264,7 +265,7 @@ export function Practice() {
                 <button
                   type="button"
                   className="btn"
-                  aria-label="Play the sentence"
+                  aria-label={t("Play the sentence")}
                   onClick={() => play()}
                   style={{ width: 48, height: 48, padding: 0, borderRadius: 9999, flexShrink: 0 }}
                 >
@@ -272,7 +273,7 @@ export function Practice() {
                 </button>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontWeight: 500, color: "var(--ink)" }}>
-                    {how === "type" ? "Listen, and type the missing words" : how === "recall" ? "What does it mean here?" : "Pick its meaning"}
+                    {t(how === "type" ? "Listen, and type the missing words" : how === "recall" ? "What does it mean here?" : "Pick its meaning")}
                   </div>
                   <div className="muted" style={{ fontSize: 12, marginTop: 4, display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
                     {item.context.path ? (
@@ -280,10 +281,10 @@ export function Practice() {
                         {item.context.itemTitle} · {clock(item.context.sentenceStartMs / 1000)}
                       </span>
                     ) : (
-                      <span>Read by your computer's voice: the episode is no longer in your library</span>
+                      <span>{t("Read by your computer's voice: the episode is no longer in your library")}</span>
                     )}
                     <span>·</span>
-                    <Kbd keys="Tab" /> again <Kbd keys="Mod R" /> slower
+                    <Kbd keys="Tab" /> {t("again")} <Kbd keys="Mod R" /> {t("slower")}
                   </div>
                 </div>
               </div>
@@ -298,7 +299,7 @@ export function Practice() {
               {how === "type" && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   <label htmlFor="practice-answer" className="eyebrow">
-                    The missing words
+                    {t("The missing words")}
                   </label>
                   <input
                     id="practice-answer"
@@ -333,17 +334,17 @@ export function Practice() {
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                   {how === "type" && (
                     <button type="button" className="btn btn-primary" onClick={check} disabled={!typed.trim()}>
-                      Check <Kbd keys="Enter" />
+                      {t("Check")} <Kbd keys="Enter" />
                     </button>
                   )}
                   {how === "recall" && (
                     <button type="button" className="btn btn-primary" onClick={showAnswer}>
-                      Show the meaning <Kbd keys="Space" />
+                      {t("Show the meaning")} <Kbd keys="Space" />
                     </button>
                   )}
                   {how !== "recall" && (
                     <button type="button" className="btn btn-ghost" onClick={showAnswer}>
-                      Show the answer <Kbd keys="Shift Tab" />
+                      {t("Show the answer")} <Kbd keys="Shift Tab" />
                     </button>
                   )}
                 </div>
@@ -355,12 +356,12 @@ export function Practice() {
             <div style={{ width: "100%", maxWidth: 640, display: "flex", flexDirection: "column", gap: 10 }}>
               <div className="eyebrow">
                 {!answer
-                  ? "After answering"
+                  ? t("After answering")
                   : answer.correct === false
-                    ? "Counts as Again: it comes back at the end of this session, and tomorrow"
+                    ? t("Counts as Again: it comes back at the end of this session, and tomorrow")
                     : answer.correct === true
-                      ? "Right. Enter for Good, or 2 if it was hard, 4 if it was easy"
-                      : "How well did you know it? Enter for Good"}
+                      ? t("Right. Enter for Good, or 2 if it was hard, 4 if it was easy")
+                      : t("How well did you know it? Enter for Good")}
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 8 }}>
                 {GRADES.map((label, i) => {
@@ -376,7 +377,7 @@ export function Practice() {
                       style={{ height: 52, flexDirection: "column", gap: 4, opacity: on ? 1 : 0.4 }}
                     >
                       <span>
-                        {label} <span className="mono" style={{ fontSize: 11, opacity: 0.7 }}>{g}</span>
+                        {t(label)} <span className="mono" style={{ fontSize: 11, opacity: 0.7 }}>{g}</span>
                       </span>
                       <span className="mono" style={{ fontSize: 11, opacity: 0.75 }}>
                         {interval(item.next[i])}
@@ -402,7 +403,7 @@ function Sentence({ item, how, answer }: { item: PracticeItem; how: PracticeMode
     return (
       <p style={style}>
         {before}
-        <span className="gap" style={{ width: `${Math.max(4, word.length) * 0.62}em` }} aria-label="missing words" />
+        <span className="gap" style={{ width: `${Math.max(4, word.length) * 0.62}em` }} aria-label={t("missing words")} />
         {after}
       </p>
     );
@@ -423,18 +424,18 @@ function Result({ item, how, answer }: { item: PracticeItem; how: PracticeMode; 
         <div style={{ fontSize: 13 }}>
           {answer.typed.trim() ? (
             <>
-              You typed <span className="answer-wrong">{answer.typed.trim()}</span> · it's <b style={{ color: "var(--ink)" }}>{item.word.text}</b>
+              {t("You typed")} <span className="answer-wrong">{answer.typed.trim()}</span> {t("· it's")} <b style={{ color: "var(--ink)" }}>{item.word.text}</b>
             </>
           ) : (
             <>
-              It's <b style={{ color: "var(--ink)" }}>{item.word.text}</b>
+              {t("It's")} <b style={{ color: "var(--ink)" }}>{item.word.text}</b>
             </>
           )}
         </div>
       )}
       {how !== "pick" && (
         <div style={{ fontSize: 15, lineHeight: 1.6, color: "var(--ink)", whiteSpace: "pre-line" }}>
-          {item.answer || <span className="muted">No meaning saved. Add a note in My words.</span>}
+          {item.answer || <span className="muted">{t("No meaning saved. Add a note in My words.")}</span>}
         </div>
       )}
       {item.word.ipa && (
@@ -450,18 +451,19 @@ function Finished({ practised, again, more, onMore }: { practised: number; again
   const navigate = useNavigate();
   return (
     <div className="panel" style={{ width: "100%", maxWidth: 640, padding: 28, display: "flex", flexDirection: "column", gap: 16 }}>
-      <h1 className="h1">Done for now</h1>
+      <h1 className="h1">{t("Done for now")}</h1>
       <p style={{ fontSize: 14, lineHeight: 1.6 }}>
-        You practised {plural(practised, "word")}
-        {again > 0 ? `; you missed ${plural(again, "time")}, and those words come back tomorrow.` : ", all of them right."} The rest come back when they're due.
+        {again > 0
+          ? t("You practised {words}; you missed {times}, and those words come back tomorrow. The rest come back when they're due.", { words: plural(practised, "word"), times: plural(again, "time") })
+          : t("You practised {words}, all of them right. The rest come back when they're due.", { words: plural(practised, "word") })}
       </p>
       <div style={{ display: "flex", gap: 8 }}>
         <button type="button" className="btn btn-primary" onClick={() => navigate("/words")}>
-          My words <Kbd keys="Enter" />
+          {t("My words")} <Kbd keys="Enter" />
         </button>
         {more > 0 && (
           <button type="button" className="btn" onClick={onMore}>
-            Practise {more} more
+            {t("Practise {n} more", { n: more })}
           </button>
         )}
       </div>

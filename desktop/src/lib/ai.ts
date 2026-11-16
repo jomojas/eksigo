@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from "react";
 import { aiProblem, backend, on, type AiKey, type AiProblem, type AiStatus, type SavedWord } from "./backend";
+import { t } from "./i18n";
 
 export type AiState = {
   /** undefined until read. */
@@ -86,13 +87,13 @@ export async function removeKey() {
 export function problemText(p: AiProblem): string {
   switch (p.kind) {
     case "notSetUp":
-      return "AI isn't set up yet. Connect ChatGPT or add a key in Settings › AI.";
+      return t("AI isn't set up yet. Connect ChatGPT or add a key in Settings › AI.");
     case "limit":
-      return "You've used this week's ChatGPT limit for Eksigo. Raise it in ChatGPT, or wait until it resets.";
+      return t("You've used this week's ChatGPT limit for Eksigo. Raise it in ChatGPT, or wait until it resets.");
     case "reconnect":
-      return "ChatGPT needs connecting again, in Settings › AI.";
+      return t("ChatGPT needs connecting again, in Settings › AI.");
     default:
-      return p.message ?? "The AI couldn't answer. Try again.";
+      return p.message ?? t("The AI couldn't answer. Try again.");
   }
 }
 

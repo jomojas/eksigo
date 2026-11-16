@@ -11,6 +11,7 @@ import { Welcome, WELCOMED } from "../pages/Welcome";
 import { displayName, useAccount } from "../lib/account";
 import { useSync } from "../lib/sync";
 import { useAi } from "../lib/ai";
+import { t } from "../lib/i18n";
 
 const NAV: { to: string; label: string; icon: IconName }[] = [
   { to: "/today", label: "Today", icon: "today" },
@@ -44,7 +45,7 @@ export const useFocusMode = (): [boolean, (on: boolean) => void] => {
 
 /** Opens the file picker and adds the chosen audio or video files to the Library. Null when cancelled. */
 export async function addAudio(): Promise<Added | null> {
-  const paths = await backend.pickFiles("Add audio or video", AUDIO_EXTENSIONS, true);
+  const paths = await backend.pickFiles(t("Add audio or video"), AUDIO_EXTENSIONS, true);
   return paths.length ? backend.addFiles(paths) : null;
 }
 
@@ -143,25 +144,25 @@ function AppShell() {
     <ShellContext.Provider value={{ info, setKeys, setStatus, focus, setFocus }}>
       <div className={["app", isMac && "mac", focus && "focus"].filter(Boolean).join(" ")}>
         <div className="app-body">
-          <nav className="side" aria-label="Main" data-tauri-drag-region>
+          <nav className="side" aria-label={t("Main")} data-tauri-drag-region>
             <div className="ws" data-tauri-drag-region>
-              Eksigo
+              {t("Eksigo")}
             </div>
             <button className="search" type="button" onClick={() => navigate("/podcasts", { state: { focus: Date.now() } })}>
               <Icon name="search" size={14} stroke={1.8} />
-              Search
+              {t("Search")}
               <span style={{ flexGrow: 1 }} />
               <Kbd keys="Mod K" />
             </button>
             {NAV.map((n, i) => (
               <NavLink key={n.to} to={n.to} className="nav" title={keyLabel(`Mod ${i + 1}`)}>
                 <Icon name={n.icon} />
-                {n.label}
+                {t(n.label)}
               </NavLink>
             ))}
-            <div className="sect">In progress</div>
+            <div className="sect">{t("In progress")}</div>
             {inProgress.length === 0 ? (
-              <div className="side-empty">Episodes you start appear here.</div>
+              <div className="side-empty">{t("Episodes you start appear here.")}</div>
             ) : (
               inProgress.slice(0, 6).map((p) => (
                 <NavLink key={p.attemptId} to={dictationPath(p.itemId)} className="nav" title={`${p.title} · ${p.source}`}>
@@ -177,7 +178,7 @@ function AppShell() {
             <AccountChip />
             <NavLink to="/settings" className="nav">
               <Icon name="settings" />
-              Settings
+              {t("Settings")}
               <span className="n">{keyLabel("Mod ,")}</span>
             </NavLink>
           </nav>
@@ -188,18 +189,18 @@ function AppShell() {
         <footer className="statusbar">
           <span>
             <span className={info?.whisperBackend === "—" ? "dot" : "dot dot-ok"} aria-hidden="true" />
-            {info?.whisperBackend === "—" ? "Browser preview · no speech engine" : `Whisper · ${info?.whisperBackend ?? "…"} on this computer`}
+            {info?.whisperBackend === "—" ? t("Browser preview · no speech engine") : t("Whisper · {backend} on this computer", { backend: info?.whisperBackend ?? "…" })}
           </span>
           {downloads.size > 0 && <DownloadStatus />}
           <TranscriptActivity />
           <UpdateStatus />
           <AiStatusLine />
-          {status && <span>{status}</span>}
+          {status && <span>{t(status)}</span>}
           <span style={{ flexGrow: 1 }} />
           {keys.map(([k, label]) => (
             <span key={k}>
               <Kbd keys={k} />
-              {label}
+              {t(label)}
             </span>
           ))}
           <span className="mono" style={{ fontSize: 11 }}>
@@ -222,7 +223,7 @@ function AccountChip() {
     return (
       <NavLink to={to} className={() => "nav"} style={{ color: "var(--ink-subtle)" }}>
         <Icon name="user" />
-        Sign in to sync
+        {t("Sign in to sync")}
       </NavLink>
     );
   const name = displayName(account);
@@ -241,7 +242,7 @@ function AccountChip() {
           ) : (
             <span className={sync.state === "failed" ? "dot dot-ring" : "dot dot-ok"} aria-hidden="true" />
           )}
-          {sync.state === "syncing" ? "Syncing" : sync.state === "failed" ? "Not synced" : "Synced"}
+          {t(sync.state === "syncing" ? "Syncing" : sync.state === "failed" ? "Not synced" : "Synced")}
         </span>
       )}
     </NavLink>
@@ -257,7 +258,7 @@ function AiStatusLine() {
   return (
     <span>
       <span className={limited ? "dot dot-bad" : "dot dot-ok"} aria-hidden="true" />
-      {status.using === "chatgpt" ? (limited ? "ChatGPT limit reached" : "Using ChatGPT plan") : `AI · ${status.key?.name ?? "your key"}`}
+      {status.using === "chatgpt" ? t(limited ? "ChatGPT limit reached" : "Using ChatGPT plan") : `AI · ${status.key?.name ?? t("your key")}`}
     </span>
   );
 }
@@ -267,9 +268,9 @@ function UpdateStatus() {
   if (u.state !== "ready") return null;
   return (
     <span>
-      Version {u.version} is ready
+      {t("Version {v} is ready", { v: u.version ?? "" })}
       <button type="button" className="link-btn" style={{ fontSize: 12 }} onClick={() => restartToUpdate()}>
-        Restart to update
+        {t("Restart to update")}
       </button>
     </span>
   );
@@ -296,7 +297,7 @@ function TranscriptActivity() {
     return (
       <span>
         <Bar fraction={model.received / model.total} />
-        Downloading the speech model · {Math.round((model.received / model.total) * 100)}%
+        {t("Downloading the speech model · {pct}%", { pct: Math.round((model.received / model.total) * 100) })}
       </span>
     );
   }
@@ -308,7 +309,7 @@ function TranscriptActivity() {
     return (
       <span>
         <Bar fraction={translation.received / translation.total} />
-        Downloading the phrase translator · {Math.round((translation.received / translation.total) * 100)}%
+        {t("Downloading the phrase translator · {pct}%", { pct: Math.round((translation.received / translation.total) * 100) })}
       </span>
     );
   }
@@ -317,9 +318,9 @@ function TranscriptActivity() {
     <span title={running.title}>
       <Bar fraction={f} />
       <span className="ell" style={{ maxWidth: 260 }}>
-        Transcribing {running.title}
+        {t("Transcribing {title}", { title: running.title })}
       </span>
-      · {Math.round(f * 100)}%{busy.length > 1 && ` · ${busy.length - 1} waiting`}
+      · {Math.round(f * 100)}%{busy.length > 1 && " · " + t("{n} waiting", { n: busy.length - 1 })}
     </span>
   );
 }
@@ -363,7 +364,7 @@ export function Page({
     <>
       <div className="topbar" data-tauri-drag-region>
         {crumbs.map((c, i) => {
-          const label = typeof c === "string" ? c : c.label;
+          const label = t(typeof c === "string" ? c : c.label);
           return (
             <span key={i} style={{ display: "contents" }}>
               {i > 0 && <span aria-hidden="true">/</span>}

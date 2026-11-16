@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { backend, on, type SyncStatus } from "./backend";
+import { t, tn, locale } from "./i18n";
 
 let current: SyncStatus | null = null;
 const subscribers = new Set<(s: SyncStatus | null) => void>();
@@ -39,12 +40,12 @@ export const syncNow = () => backend.syncNow().then(set);
 /** "just now", "2 minutes ago", "today, 21:40", "yesterday, 21:40", "10 Nov, 21:40". */
 export function syncedAgo(ms: number, now = Date.now()): string {
   const min = Math.floor((now - ms) / 60_000);
-  if (min < 1) return "just now";
-  if (min < 60) return min === 1 ? "1 minute ago" : `${min} minutes ago`;
+  if (min < 1) return t("just now");
+  if (min < 60) return tn(min, "{n} minute ago", "{n} minutes ago");
   const d = new Date(ms);
-  const time = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  const time = d.toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" });
   const days = Math.round((new Date(new Date(now).toDateString()).getTime() - new Date(d.toDateString()).getTime()) / 86_400_000);
-  if (days === 0) return `today, ${time}`;
-  if (days === 1) return `yesterday, ${time}`;
-  return `${d.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}, ${time}`;
+  if (days === 0) return t("today, {time}", { time });
+  if (days === 1) return t("yesterday, {time}", { time });
+  return `${d.toLocaleDateString(locale(), { day: "numeric", month: "short" })}, ${time}`;
 }
