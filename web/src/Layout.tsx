@@ -2,12 +2,23 @@ import { LANGS, type Lang, type Strings } from "./i18n";
 
 export const GITHUB = "https://github.com/jomojas/eksigo";
 
+/** The Eksigo mark (brand/mark.svg): a line of text, a word, and the dashed box of a missed word. */
+export function Mark({ size = 22 }: { size?: number }) {
+  return (
+    <svg className="mark" viewBox="0 0 100 100" width={size} height={size} aria-hidden="true">
+      <rect width="100" height="100" rx="22.5" fill="#fff" />
+      <rect x="22" y="31" width="56" height="10" rx="5" fill="#0b0b0d" />
+      <rect x="22" y="56" width="20" height="10" rx="5" fill="#0b0b0d" />
+      <rect x="49.5" y="53.5" width="28" height="15" rx="6" fill="none" stroke="#0b0b0d" strokeWidth="6" strokeLinecap="round" strokeDasharray="6.49 12.434" strokeDashoffset="-4.755" />
+    </svg>
+  );
+}
 /** The header on every page: the name, the language menu and Download. */
 export function Header({ lang, t, setLang }: { lang: Lang; t: Strings; setLang: (l: Lang) => void }) {
   return (
     <header className="top">
       <div className="wrap top-in">
-        <a className="logo" href="/">Eksigo</a>
+        <a className="logo" href="/"><Mark />Eksigo</a>
         <span className="grow" />
         <label className="lang">
           <span className="sr">{t.language}</span>
@@ -26,7 +37,7 @@ export function Header({ lang, t, setLang }: { lang: Lang; t: Strings; setLang: 
 export function Footer({ t }: { t: Strings }) {
   return (
     <footer className="foot wrap">
-      <a className="logo" href="/">Eksigo</a>
+      <a className="logo" href="/"><Mark />Eksigo</a>
       <span className="grow" />
       <a href={GITHUB}>GitHub</a>
       <a href="/privacy.html">{t.privacy}</a>
