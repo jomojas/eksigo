@@ -2,17 +2,17 @@ import { LANGS, type Lang, type Strings } from "./i18n";
 
 export const GITHUB = "https://github.com/jomojas/eksigo";
 
-/** The Eksigo mark (brand/mark.svg): a line of text, a word, and the dashed box of a missed word. */
+/** The Eksigo mark (brand/mark.svg): an open ring around a dot, like an ear turned towards one sound. */
 export function Mark({ size = 22 }: { size?: number }) {
   return (
     <svg className="mark" viewBox="0 0 100 100" width={size} height={size} aria-hidden="true">
       <rect width="100" height="100" rx="22.5" fill="#fff" />
-      <rect x="22" y="31" width="56" height="10" rx="5" fill="#0b0b0d" />
-      <rect x="22" y="56" width="20" height="10" rx="5" fill="#0b0b0d" />
-      <rect x="49.5" y="53.5" width="28" height="15" rx="6" fill="none" stroke="#0b0b0d" strokeWidth="6" strokeLinecap="round" strokeDasharray="6.49 12.434" strokeDashoffset="-4.755" />
+      <path d="M71.85 37.28A24 24 0 1 0 71.85 62.72" fill="none" stroke="#0b0b0d" strokeWidth="11" strokeLinecap="round" />
+      <circle cx="51.5" cy="50" r="10" fill="#0b0b0d" />
     </svg>
   );
 }
+
 /** The header on every page: the name, the language menu and Download. */
 export function Header({ lang, t, setLang }: { lang: Lang; t: Strings; setLang: (l: Lang) => void }) {
   return (
