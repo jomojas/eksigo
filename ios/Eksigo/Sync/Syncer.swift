@@ -1,8 +1,10 @@
 import Foundation
+import Network
 
 /// Sync with the account (DESIGN.md section 7, API.md "Sync"): sends what changed on this phone and takes in what the
 /// other devices changed. It runs by itself: when the app opens, a few seconds after a review, when playback pauses,
-/// and every ten minutes while the app is open.
+/// and every ten minutes while the app is open. A sync that couldn't reach the server is tried again soon (after 15 s,
+/// doubling to 5 minutes), and at once when the phone's connection comes back.
 @Observable
 final class Syncer {
     enum State: Equatable { case off, syncing, synced, failed(String) }
@@ -19,6 +21,9 @@ final class Syncer {
     @ObservationIgnored private var running: Task<Void, Never>?
     @ObservationIgnored private var nudge: Task<Void, Never>?
     @ObservationIgnored private var again = false
+    /// The wait before trying again after a failed sync; 0 after one that worked.
+    @ObservationIgnored private var retryDelay: Double = 0
+    @ObservationIgnored private let network = NWPathMonitor()
 
     /// Changes per request; the server takes at most 500.
     static let chunk = 400
@@ -30,6 +35,21 @@ final class Syncer {
         last = (defaults.object(forKey: "sync.last") as? Double).map(Date.init(timeIntervalSince1970:))
         store.onChange = { [weak self] in self?.soon() }
         account.onSignIn = { [weak self] in self?.now() }
+        // Back online after a failed sync: send what's waiting now, not at the next retry.
+        network.pathUpdateHandler = { [weak self] path in
+            guard path.status == .satisfied else { return }
+            Task { @MainActor in
+                guard let self, case .failed = self.state else { return }
+                self.now()
+            }
+        }
+        network.start(queue: .main)
+    }
+
+    /// After a failed sync: try again in 15 s, then 30 s, 1, 2, 4 and at most 5 minutes.
+    private func retryLater() {
+        retryDelay = min(max(retryDelay * 2, 15), 300)
+        soon(after: retryDelay)
     }
 
     var shown: State { account.isSignedIn ? state : .off }
@@ -113,13 +133,17 @@ final class Syncer {
             last = .now
             defaults.set(Date.now.timeIntervalSince1970, forKey: "sync.last")
             state = .synced
+            retryDelay = 0
         } catch let e as APIError where e.signedOut {
             account.forget()
             state = .off
         } catch let e as APIError {
             state = .failed(e.localizedDescription)
+            // The server had a problem; a full account won't get room by itself.
+            if e.status >= 500 { retryLater() }
         } catch {
             state = .failed(L("Couldn't reach Eksigo. Your changes are kept here and sync when the connection is back."))
+            retryLater()
         }
     }
 }

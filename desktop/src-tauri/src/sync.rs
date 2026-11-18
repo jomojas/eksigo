@@ -706,13 +706,17 @@ impl Syncer {
         received
     }
 
-    /// The loop that syncs by itself: at once, then a few seconds after each nudge, and every ten minutes.
+    /// The loop that syncs by itself: at once, then a few seconds after each nudge, and every ten minutes. After a
+    /// sync that failed (offline, or the server had a problem) it tries again sooner: 15 s, doubling to 5 minutes.
     pub async fn run_forever(&self, db: &Db, on_status: &(dyn Fn(Status) + Send + Sync), on_received: &(dyn Fn() + Send + Sync)) {
+        let mut retry = 0;
         loop {
             if self.now(db, on_status).await.is_some_and(|n| n > 0) {
                 on_received();
             }
-            let _ = tokio::time::timeout(Duration::from_secs(600), self.nudge.notified()).await;
+            retry = if self.status.lock().unwrap().0 == "failed" { retry_after(retry) } else { 0 };
+            let wait = if retry > 0 { retry } else { 600 };
+            let _ = tokio::time::timeout(Duration::from_secs(wait), self.nudge.notified()).await;
             // Let a burst of changes settle.
             loop {
                 if tokio::time::timeout(Duration::from_secs(4), self.nudge.notified()).await.is_err() {
@@ -721,6 +725,11 @@ impl Syncer {
             }
         }
     }
+}
+
+/// The wait before the next try after a failed sync, in seconds: 15, then double the last, at most 5 minutes.
+fn retry_after(last: u64) -> u64 {
+    (last * 2).clamp(15, 300)
 }
 
 /// The phone's listening, newest first, for Today (design D20): episodes heard in the last three days.
@@ -974,5 +983,54 @@ mod tests {
         assert_eq!(total, 960);
         // The phone's days aren't this computer's to send.
         assert!(build(&c, "d").unwrap().iter().all(|r| r.kind != "day" || r.key.ends_with("|d")));
+    }
+
+    #[test]
+    fn a_failed_sync_is_tried_again_after_a_growing_wait() {
+        let mut waits = vec![];
+        let mut r = 0;
+        for _ in 0..7 {
+            r = retry_after(r);
+            waits.push(r);
+        }
+        assert_eq!(waits, [15, 30, 60, 120, 240, 300, 300]);
+    }
+
+    /// The desktop's side of an end-to-end sync test against a server (normally a local one). Skipped in normal
+    /// runs. Keeps its database at E2E_DB between runs, runs the SQL in E2E_SQL first (if set), syncs once with
+    /// E2E_TOKEN and E2E_ACCOUNT, then prints what this "computer" holds.
+    ///   EKSIGO_API=http://localhost:8000 E2E_DB=… E2E_TOKEN=… E2E_ACCOUNT=1 cargo test e2e_sync -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn e2e_sync() {
+        let env = |k: &str| std::env::var(k).unwrap_or_else(|_| panic!("{k} not set"));
+        let db = Db::open(std::path::Path::new(&env("E2E_DB"))).unwrap();
+        if let Ok(sql) = std::env::var("E2E_SQL") {
+            db.conn().execute_batch(&sql).unwrap();
+        }
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let got = rt.block_on(run(&db, &env("E2E_TOKEN"), env("E2E_ACCOUNT").parse().unwrap()));
+        match got {
+            Ok(n) => println!("SYNC ok, received {n}"),
+            Err(Problem::Offline) => println!("SYNC offline"),
+            Err(Problem::SignedOut) => println!("SYNC signed out"),
+            Err(Problem::Failed(e)) => println!("SYNC failed: {e}"),
+        }
+        let c = db.conn();
+        let mut st = c.prepare("SELECT text, level, due_at, note, (SELECT COUNT(*) FROM word_reviews r WHERE r.word_id = w.id) FROM saved_words w ORDER BY text").unwrap();
+        for row in st.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, Option<i64>>(2)?, r.get::<_, String>(3)?, r.get::<_, i64>(4)?))).unwrap() {
+            let (t, l, d, n, rv) = row.unwrap();
+            println!("WORD {t} | level {l} | due {d:?} | note {n:?} | reviews {rv}");
+        }
+        let mut st = c.prepare("SELECT kind, key FROM synced ORDER BY kind, key").unwrap();
+        for row in st.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))).unwrap() {
+            let (k, key) = row.unwrap();
+            println!("KEPT {k} {key}");
+        }
+        let mut st = c.prepare("SELECT day, kind, SUM(seconds) FROM practice_all GROUP BY day, kind ORDER BY day").unwrap();
+        for row in st.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, i64>(2)?))).unwrap() {
+            let (d, k, s) = row.unwrap();
+            println!("DAY {d} {k} {s}s");
+        }
     }
 }
