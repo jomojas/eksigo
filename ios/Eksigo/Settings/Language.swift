@@ -7,6 +7,10 @@ nonisolated enum AppLanguage: String, CaseIterable, Identifiable {
     case system
     case english = "en"
     case chinese = "zh-Hans"
+    case japanese = "ja"
+    case korean = "ko"
+    case french = "fr"
+    case spanish = "es"
 
     var id: String { rawValue }
 
@@ -16,6 +20,10 @@ nonisolated enum AppLanguage: String, CaseIterable, Identifiable {
         case .system: L("Same as the phone")
         case .english: "English"
         case .chinese: "简体中文"
+        case .japanese: "日本語"
+        case .korean: "한국어"
+        case .french: "Français"
+        case .spanish: "Español"
         }
     }
 
@@ -39,11 +47,12 @@ nonisolated enum AppLanguage: String, CaseIterable, Identifiable {
     /// The language in use now: the chosen one, or the phone's if it's one the app has.
     static var current: AppLanguage {
         if chosen != .system { return chosen }
-        let preferred = Bundle.preferredLocalizations(from: ["en", "zh-Hans"], forPreferences: Locale.preferredLanguages)
-        return preferred.first == "zh-Hans" ? .chinese : .english
+        let codes = allCases.filter { $0 != .system }.map(\.rawValue)
+        let preferred = Bundle.preferredLocalizations(from: codes, forPreferences: Locale.preferredLanguages)
+        return preferred.first.flatMap(AppLanguage.init(rawValue:)) ?? .english
     }
 
-    static var locale: Locale { Locale(identifier: current == .chinese ? "zh-Hans" : "en") }
+    static var locale: Locale { Locale(identifier: current.rawValue) }
 
     nonisolated(unsafe) fileprivate static var table: Bundle?
     nonisolated(unsafe) fileprivate static var inEnglish = false

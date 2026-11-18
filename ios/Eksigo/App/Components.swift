@@ -532,3 +532,14 @@ struct CoverTile: View {
         .contentShape(Rectangle())
     }
 }
+
+extension View {
+    /// A card that opens a page on a tap, and only a tap: a finger that drags (to scroll, or sideways) never opens
+    /// it, unlike a NavigationLink, which on iOS 26 and later starts pushing under a sideways drag.
+    func tapToOpen(_ open: Binding<Bool>) -> some View {
+        contentShape(Rectangle())
+            .onTapGesture { open.wrappedValue = true }
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { open.wrappedValue = true }
+    }
+}

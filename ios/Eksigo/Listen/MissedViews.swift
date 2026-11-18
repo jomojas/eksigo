@@ -72,40 +72,41 @@ struct MissedListView: View {
 /// The missed sentences waiting from the computer, to read: a tap opens them.
 struct MissedCard: View {
     @Environment(RecordStore.self) private var store
+    // Opens on a tap only (TapToOpen): as a NavigationLink, a sideways drag on the card pushed the page under the
+    // finger, so Review seemed to move in every direction.
+    @State private var open = false
 
     var body: some View {
         let groups = MissedGroup.groups(store.missed)
         let all = groups.flatMap(\.items)
-        NavigationLink(value: Route.missedList) {
-            VStack(alignment: .leading, spacing: 14) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(MissedGroup.when(groups.first?.latest ?? 0).uppercased())
-                        .font(Theme.text(12, .semibold)).tracking(0.3).foregroundStyle(.white.opacity(0.8))
-                    Text(L(all.count, "%lld sentence you missed", "%lld sentences you missed")).font(Theme.display(22)).foregroundStyle(.white)
-                }
-                HStack {
-                    Text(from(groups)).font(Theme.text(15)).foregroundStyle(.white.opacity(0.85)).lineLimit(2)
-                    Spacer(minLength: 12)
-                    Label("Read", systemImage: "text.alignleft").font(Theme.text(15, .semibold))
-                        .foregroundStyle(Theme.missedInk)
-                        .padding(.horizontal, 16).frame(height: 36)
-                        .background(.white, in: Capsule())
-                }
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(MissedGroup.when(groups.first?.latest ?? 0).uppercased())
+                    .font(Theme.text(12, .semibold)).tracking(0.3).foregroundStyle(.white.opacity(0.8))
+                Text(L(all.count, "%lld sentence you missed", "%lld sentences you missed")).font(Theme.display(22)).foregroundStyle(.white)
             }
-            .padding(18)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background {
-                ZStack(alignment: .topTrailing) {
-                    Theme.missedGradient
-                    Circle().fill(.white.opacity(0.12)).frame(width: 130, height: 130).offset(x: 24, y: -24)
-                }
+            HStack {
+                Text(from(groups)).font(Theme.text(15)).foregroundStyle(.white.opacity(0.85)).lineLimit(2)
+                Spacer(minLength: 12)
+                Label("Read", systemImage: "text.alignleft").font(Theme.text(15, .semibold))
+                    .foregroundStyle(Theme.missedInk)
+                    .padding(.horizontal, 16).frame(height: 36)
+                    .background(.white, in: Capsule())
             }
-            .clipShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            ZStack(alignment: .topTrailing) {
+                Theme.missedGradient
+                Circle().fill(.white.opacity(0.12)).frame(width: 130, height: 130).offset(x: 24, y: -24)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
+        .tapToOpen($open)
+        .navigationDestination(isPresented: $open) { MissedListView(asPage: true) }
         .accessibilityHint("Shows the sentences and what you typed")
-    }
+}
 
     /// "Why do we itch?", "Why do we itch? and 2 more".
     private func from(_ groups: [MissedGroup]) -> String {
