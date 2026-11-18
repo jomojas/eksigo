@@ -106,20 +106,21 @@ struct ReviewView: View {
 /// Words by level, each opening My words with that level.
 struct LevelCells: View {
     let words: [Word]
+    @State private var open: Word.Level?
     var body: some View {
         HStack(spacing: 8) {
             ForEach(Word.Level.allCases, id: \.self) { level in
-                NavigationLink(value: Route.words(level)) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("\(words.filter { $0.level == level.rawValue }.count)").font(Theme.display(22)).foregroundStyle(level.color)
-                        Text(level.label).font(Theme.text(13)).foregroundStyle(Theme.inkSubtle).lineLimit(1).minimumScaleFactor(0.8)
-                    }
-                    .padding(12).frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Theme.surface1, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("\(words.filter { $0.level == level.rawValue }.count)").font(Theme.display(22)).foregroundStyle(level.color)
+                    Text(level.label).font(Theme.text(13)).foregroundStyle(Theme.inkSubtle).lineLimit(1).minimumScaleFactor(0.8)
                 }
-                .buttonStyle(.plain)
+                .padding(12).frame(maxWidth: .infinity, alignment: .leading)
+                .background(Theme.surface1, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                // On a tap only, like MissedCard: a sideways drag mustn't start opening My words.
+                .tapToOpen(Binding(get: { open == level }, set: { if $0 { open = level } }))
             }
         }
+        .navigationDestination(item: $open) { Route.words($0).view }
     }
 }
 
