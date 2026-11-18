@@ -5,7 +5,7 @@ name: backend
 on:
   push:
     branches: [main]
-    paths: ["backend/**", "site/**", ".github/workflows/backend.yml", ".github/workflows/backend-test.yml"]
+    paths: ["backend/**", "web/**", ".github/workflows/backend.yml", ".github/workflows/backend-test.yml"]
 
 jobs:
   test:
@@ -51,6 +51,15 @@ jobs:
       packages: read
     steps:
       - uses: actions/checkout@v4
+      # The website (web/) builds to site/, copied below.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Build the website
+        working-directory: web
+        run: npm ci && npm run build
       - uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.VPS_HOST }}

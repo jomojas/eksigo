@@ -354,7 +354,7 @@ eksigo/
 ├── backend/            # FastAPI: accounts, sync, Premium AI
 ├── desktop/            # Tauri 2 app for Windows and Mac (TypeScript + React, Rust)
 ├── ios/                # iPhone listening companion (SwiftUI)
-└── site/               # eksigo.com
+└── web/                # eksigo.com (builds to site/)
 ```
 
 ---
@@ -362,7 +362,7 @@ eksigo/
 ## 12. Deployment and release
 
 ### Repository
-One Git repo with `backend/`, `desktop/`, `ios/` and `site/` side by side (section 11). An API change and the app change that uses it land in the same commit. GitHub Actions workflows use path filters, so backend CI only runs when `backend/` changes and iOS CI only when `ios/` changes.
+One Git repo with `backend/`, `desktop/`, `ios/` and `web/` side by side (section 11). An API change and the app change that uses it land in the same commit. GitHub Actions workflows use path filters, so backend CI only runs when `backend/` changes and iOS CI only when `ios/` changes.
 
 ### Development workflow (decided 2026-10-31)
 Every change goes through a branch and a pull request; nothing is pushed to `main` directly.
@@ -399,10 +399,10 @@ push to main (backend/**)
 - The deploy job uses its own SSH key (not the developer's), so it can be revoked on its own.
 
 ### Website (decided 2026-10-25)
-`https://eksigo.com` introduces the app and sends people to the App Store. It also holds the pages App Store Connect asks for: privacy policy, terms of use and support.
-- **Static files in `site/`**, no build step: `index.html` (introduction), `privacy.html`, `terms.html`, `support.html`, one stylesheet and the images. Plain HTML loads fast in China; no web fonts or scripts from hosts that are blocked there.
-- **Chinese first, English one tap away.** Each page carries both languages; the reader's browser language picks one and a switch in the header changes it (remembered on the device). Chinese learners are the audience; the English version is for App Review and everyone else.
-- **Served by the same Caddy** on the VPS: `eksigo.com` serves `site/`, `www.eksigo.com` redirects to it. The deploy job copies `site/` to `/opt/eab/site` next to the Caddyfile, so a change to the site deploys like a backend change (the workflow also runs when `site/**` changes).
+`https://eksigo.com` introduces the apps and offers the Mac and Windows downloads. It also holds the pages App Store Connect asks for: privacy policy, terms of use and support.
+- **Rebuilt for v2 (2026-11-18) in `web/`**, React and Vite, built to static files in `site/` by the deploy job: `index.html` (a ~35-second film of the desktop app playing by itself: dictation, review, *Ask why*, a word look-up, an AI explanation, *What you mishear most*; then how it works, the two modes, questions and the downloads), `privacy.html`, `terms.html`, `support.html`. Still no web fonts or scripts from hosts blocked in China. English by default, with Chinese, Japanese, Korean, French and Spanish in the header (remembered in the browser); the legal and support pages are in English and Chinese.
+- **Downloads:** the buttons link to `github.com/jomojas/eksigo/releases/latest/download/Eksigo-mac.dmg` and `Eksigo-windows.exe` (the visitor's own system first); the release workflow uploads each installer under that fixed name as well.
+- **Served by the same Caddy** on the VPS: `eksigo.com` serves `site/`, `www.eksigo.com` redirects to it. The deploy job builds `web/` and copies `site/` to `/opt/eab/site` next to the Caddyfile, so a change to the site deploys like a backend change (the workflow also runs when `web/**` changes).
 - **DNS (done by the owner in Cloudflare):** A records for `eksigo.com` and `www` to the VPS, **DNS only**, like `api`. Caddy gets the certificates itself.
 - **App Store button:** until the app is in the store, it says "Coming soon to the App Store" and doesn't link anywhere. Once there's an App Store ID, it becomes the official "Download on the App Store" badge linking to `https://apps.apple.com/app/id<ID>`; the iPhone also shows Safari's Smart App Banner from the `apple-itunes-app` meta tag.
 - **Support e-mail:** `support@eksigo.com`, forwarded to the owner by Cloudflare Email Routing (free, set up by the owner).
@@ -446,7 +446,7 @@ The detailed milestones are in [ROADMAP.md](ROADMAP.md).
 1. **New repository** (decided 2026-11-10). `jomojas/eksigo`, private until this step is done. Copy from v1 only what still fits, reviewing each part:
    - **server:** sign-in (Apple, Google), accounts, the database setup, Docker, deploy and CI
    - **iPhone:** the playback engine, RSS and podcast search, downloads, local storage, the sign-in client
-   - **website:** `site/`, rewritten for v2 (privacy policy included)
+   - **website:** `web/`, rewritten for v2 (privacy policy included; done 2026-11-18)
 
    Point the VPS at the new server image and delete v1's clips and lesson data there. Choose the licenses, add the README and contribution files, then make the repo public.
 2. **Visual design** (changed 2026-11-10): the Linear-style design system instead of the Claude brand: a dark, IDE-like look with a near-black canvas, grey surfaces and hairlines, one sparing accent, plus a derived light theme. Mockups of the desktop, iPhone and website screens are on the design canvas (https://claude.ai/artifact/9ZrDQTW2L9JBaDHDnwDC6f) and are agreed before code.

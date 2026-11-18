@@ -23,3 +23,6 @@ DerivedData/
 # The phrase translator, built by desktop/scripts/translator.mjs
 desktop/translate/target/
 desktop/src-tauri/binaries/
+
+# The website build (web/), deployed by backend.yml
+/site/
