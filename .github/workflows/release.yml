@@ -124,6 +124,25 @@ jobs:
           releaseId: ${{ needs.release.outputs.id }}
           args: ${{ matrix.args }}
 
+      # The website's download buttons point at releases/latest/download/Eksigo-mac.dmg and Eksigo-windows.exe,
+      # so each release also carries the installer under that fixed name.
+      - name: Upload the installer under a fixed name for the website
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "$RUNNER_OS" = macOS ]; then
+            src=$(ls desktop/src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg | head -1); name=Eksigo-mac.dmg
+          else
+            src=$(ls desktop/src-tauri/target/release/bundle/nsis/*-setup.exe | head -1); name=Eksigo-windows.exe
+          fi
+          test -f "$src"
+          # By the draft's id: a draft can't be found by its tag.
+          curl -sSf -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Content-Type: application/octet-stream" \
+            --data-binary @"$src" \
+            "https://uploads.github.com/repos/$GITHUB_REPOSITORY/releases/${{ needs.release.outputs.id }}/assets?name=$name" > /dev/null
+          echo "uploaded $src as $name"
+
       # A clean Windows has no Visual C++ runtime; the app must not need one. (The installer is already uploaded,
       # but a red run is the signal not to publish this draft.)
       - name: Check the app needs no Visual C++ runtime
