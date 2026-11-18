@@ -92,6 +92,9 @@ a {
 }
 
 .logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
   font-weight: 600;
   font-size: 18px;
   letter-spacing: -0.4px;

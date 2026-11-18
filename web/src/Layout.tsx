@@ -2,12 +2,23 @@ import { LANGS, type Lang, type Strings } from "./i18n";
 
 export const GITHUB = "https://github.com/jomojas/eksigo";
 
+/** The Eksigo mark (brand/mark.svg): an open ring around a dot, like an ear turned towards one sound. */
+export function Mark({ size = 22 }: { size?: number }) {
+  return (
+    <svg className="mark" viewBox="0 0 100 100" width={size} height={size} aria-hidden="true">
+      <rect width="100" height="100" rx="22.5" fill="#fff" />
+      <path d="M71.85 37.28A24 24 0 1 0 71.85 62.72" fill="none" stroke="#0b0b0d" strokeWidth="11" strokeLinecap="round" />
+      <circle cx="51.5" cy="50" r="10" fill="#0b0b0d" />
+    </svg>
+  );
+}
+
 /** The header on every page: the name, the language menu and Download. */
 export function Header({ lang, t, setLang }: { lang: Lang; t: Strings; setLang: (l: Lang) => void }) {
   return (
     <header className="top">
       <div className="wrap top-in">
-        <a className="logo" href="/">Eksigo</a>
+        <a className="logo" href="/"><Mark />Eksigo</a>
         <span className="grow" />
         <label className="lang">
           <span className="sr">{t.language}</span>
@@ -26,7 +37,7 @@ export function Header({ lang, t, setLang }: { lang: Lang; t: Strings; setLang: 
 export function Footer({ t }: { t: Strings }) {
   return (
     <footer className="foot wrap">
-      <a className="logo" href="/">Eksigo</a>
+      <a className="logo" href="/"><Mark />Eksigo</a>
       <span className="grow" />
       <a href={GITHUB}>GitHub</a>
       <a href="/privacy.html">{t.privacy}</a>
