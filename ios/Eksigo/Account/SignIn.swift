@@ -63,27 +63,39 @@ struct WelcomeView: View {
     @State private var error: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            CoverFan().frame(maxWidth: .infinity).padding(.top, 12)
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Listen, then see\nwhat you missed.").font(Theme.display(34)).foregroundStyle(Theme.ink)
-                Text("Dictate on your computer. Then, on your phone, read the sentences you missed, review your words and keep listening.")
-                    .font(Theme.text(17)).lineSpacing(2).foregroundStyle(Theme.inkSubtle)
+        // The text scrolls above the sign-in buttons, so longer languages (French, Spanish) wrap in full instead of
+        // being cut short with "…".
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                CoverFan().frame(maxWidth: .infinity).padding(.top, 12)
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Listen, then see\nwhat you missed.").font(Theme.display(34)).foregroundStyle(Theme.ink)
+                        .minimumScaleFactor(0.8)
+                    Text("Dictate on your computer. Then, on your phone, read the sentences you missed, review your words and keep listening.")
+                        .font(Theme.text(17)).lineSpacing(2).foregroundStyle(Theme.inkSubtle)
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 12) {
+                    welcomeLine("text.alignleft", Theme.missedInk, "Last night's missed sentences, with what you typed")
+                    welcomeLine("rectangle.stack.fill", Color(uiColor: .systemOrange), "Words due today, each with its sentence")
+                    welcomeLine("safari.fill", Color(uiColor: .systemBlue), "Podcasts for learners")
+                }
             }
-            VStack(alignment: .leading, spacing: 12) {
-                welcomeLine("text.alignleft", Theme.missedInk, "Last night's missed sentences, with what you typed")
-                welcomeLine("rectangle.stack.fill", Color(uiColor: .systemOrange), "Words due today, each with its sentence")
-                welcomeLine("safari.fill", Color(uiColor: .systemBlue), "Podcasts for learners")
-            }
-            Spacer(minLength: 0)
+            .padding(.horizontal, 24).padding(.top, 8).padding(.bottom, 16)
+            .containerRelativeFrame(.horizontal)
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(spacing: 10) {
                 Text("Sign in with the account you use on the computer.").font(Theme.text(13)).foregroundStyle(Theme.inkSubtle)
+                    .multilineTextAlignment(.center)
                 SignInButtons(error: $error) { ui.welcomed = true }
                 Button("Not now, just listen") { ui.welcomed = true }.buttonStyle(.eks(.ghost, block: true, height: 44))
                 if let error { Text(error).font(Theme.text(13)).foregroundStyle(Theme.error) }
             }
+            .padding(.horizontal, 24).padding(.top, 8).padding(.bottom, 16)
+            .background(Theme.canvas)
         }
-        .padding(.horizontal, 24).padding(.top, 8).padding(.bottom, 16)
         .canvas()
     }
 
@@ -91,6 +103,7 @@ struct WelcomeView: View {
         HStack(spacing: 12) {
             IconTile(symbol, color: color)
             Text(L(text)).font(Theme.text(16)).foregroundStyle(Theme.ink)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }
