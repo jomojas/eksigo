@@ -18,7 +18,6 @@ export function Header({ lang, t, setLang }: { lang: Lang; t: Strings; setLang: 
             ))}
           </select>
         </label>
-        <a className="btn btn-sm" href="/#download">{t.download}</a>
       </div>
     </header>
   );
