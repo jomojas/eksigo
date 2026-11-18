@@ -98,6 +98,11 @@ struct ReviewView: View {
         if Calendar.current.isDateInTomorrow(date) {
             return L(n, "Nothing due today. The next %lld comes back tomorrow.", "Nothing due today. The next %lld come back tomorrow.")
         }
+        // A weekday only says when within the week; further off it reads as this week ("Thursday" for next year).
+        if next - now > 6 * 86400 {
+            return L(n == 1 ? "Nothing due today. The next %lld comes back in %@." : "Nothing due today. The next %lld come back in %@.",
+                     n, intervalText(next - now))
+        }
         return L(n == 1 ? "Nothing due today. The next %lld comes back on %@." : "Nothing due today. The next %lld come back on %@.",
                  n, date.formatted(Date.FormatStyle(locale: AppLanguage.locale).weekday(.wide)))
     }
