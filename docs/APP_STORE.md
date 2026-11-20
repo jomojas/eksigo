@@ -13,7 +13,7 @@ Limits are Apple's: name and subtitle 30 characters, promotional text 170, keywo
 **Subtitle:** Hear the English you missed
 
 **Promotional text:**
-Dictate an episode on your computer at night. In the morning your phone plays back the sentences you missed and reviews the words you saved.
+Dictate an episode on your computer at night. In the morning your phone shows the sentences you missed and reviews the words you saved.
 
 **Keywords:**
 english,listening,podcast,dictation,learn english,esl,vocabulary,flashcards,ielts,toefl,practice
@@ -25,7 +25,7 @@ Eksigo is a podcast player for English learners, and the phone half of a simple 
 At night, on your Mac or Windows computer, you dictate an episode you listened to: play a sentence, type what you heard, and see exactly where your ears let you down. The next day Eksigo on your iPhone brings that back to you.
 
 MISSED SENTENCES
-The sentences you got wrong, with what you typed next to what was said. Play each one again, as often as you like, at the speed you need.
+The sentences you got wrong, with what you typed under what was said and the missed words marked. Read them over on the way to work, then listen again on your computer.
 
 YOUR WORDS
 Words you saved on the computer come with the sentence and audio you found them in. Review the ones that are due each day; the app spaces them out so you see each word just before you would forget it.
@@ -55,7 +55,7 @@ Listening needs no account. The desktop app is free at eksigo.com.
 **副标题：** 听回你没听懂的英语
 
 **推广文本：**
-晚上在电脑上听写一集播客，第二天手机会帮你重听没听懂的句子，复习你收藏的生词。
+晚上在电脑上听写一集播客，第二天在手机上看你没听懂的句子，复习你收藏的生词。
 
 **关键词：**
 英语听力,播客,听写,英语学习,背单词,生词本,精听,雅思,托福,四六级,口语
@@ -67,7 +67,7 @@ Eksigo 是为英语学习者做的播客播放器，也是一个简单的每日�
 晚上，在 Mac 或 Windows 电脑上，你把白天听过的一集播客逐句听写：播放一句，打出你听到的内容，看清自己到底哪里没听出来。第二天，iPhone 上的 Eksigo 把这些带回给你。
 
 没听懂的句子
-你听错的句子，你打的内容和原文并排显示。每句都可以反复播放，速度随你调。
+你听错的句子，原文和你打的内容上下对照，没听出来的词都标了出来。通勤路上看一遍，回到电脑上再听。
 
 我的生词
 在电脑上收藏的生词，连同它出现的句子和音频一起同步过来。每天复习到期的词，App 会在你快要忘记的时候安排复习。
@@ -132,4 +132,4 @@ Everything else: **Not collected** (no location, contacts, audio, photos, diagno
 - **Encryption:** already answered in the build (`ITSAppUsesNonExemptEncryption = NO`).
 - **Age rating:** the app plays any podcast from Apple's directory, including ones marked explicit. Answer the questionnaire for that (unrestricted content from the web and mature themes, infrequent) rather than claiming none.
 - **Price:** free, no in-app purchases.
-- **Screenshots:** 6.9-inch iPhone (1320 × 2868) are required; the other sizes are scaled from them. Suggested five: Listen with the missed-sentences card, a missed sentence open, Review with words due, a word review card, Discover.
+- **Screenshots:** in `ios/AppStore/screenshots/`, 6.9-inch iPhone (1320 × 2868), four for each listing: `en-1…4` for English and `zh-1…4` for Simplified Chinese, uploaded in that order. App Store Connect scales them for the smaller iPhones. How they are made: `ios/AppStore/README.md`.

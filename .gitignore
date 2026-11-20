@@ -26,3 +26,6 @@ desktop/src-tauri/binaries/
 
 # The website build (web/), deployed by backend.yml
 /site/
+
+# App Store: the simulator screenshots behind the framed images
+ios/AppStore/screenshots/*-raw.png
