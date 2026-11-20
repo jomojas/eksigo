@@ -366,10 +366,25 @@ struct SettingsView: View {
                 RowGroup {
                     pickerRow("Language", selection: $s.language, options: AppLanguage.allCases.map { ($0, $0.label) })
                     pickerRow("Appearance", selection: $s.appearance, options: AppSettings.Appearance.allCases.map { ($0, $0.label) })
-                    Row("About Eksigo") { RowValue(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") }
+                }
+            }
+            Block("About Eksigo") {
+                RowGroup {
+                    Row("Version") { RowValue(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") }
+                    webRow("Privacy policy", "privacy")
+                    webRow("Terms of use", "terms")
+                    webRow("Help and contact", "support")
                 }
             }
         }
+    }
+
+    /// A page on eksigo.com, opened in Safari.
+    private func webRow(_ title: String, _ page: String) -> some View {
+        Link(destination: URL(string: "https://eksigo.com/\(page).html")!) {
+            Row(title, chevron: true)
+        }
+        .buttonStyle(.plain)
     }
 
     private func pickerRow<V: Hashable>(_ title: String, selection: Binding<V>, options: [(V, String)]) -> some View {
