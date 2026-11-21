@@ -962,4 +962,9 @@ export const zh: Record<string, string> = {
   // Clearer wording
   "up {n} points from last month": "比上月高 {n} 个百分点",
   "down {n} points from last month": "比上月低 {n} 个百分点",
+  // Full screen on Watch
+  "Full screen": "全屏",
+  "Exit full screen": "退出全屏",
+  "Full screen (F)": "全屏（F）",
+  "Exit full screen (F)": "退出全屏（F）",
 };

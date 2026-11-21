@@ -12,13 +12,14 @@ import { LookupCard, type Selection } from "../components/LookupCard";
 import { IndexedText, selectedWords } from "../components/Marks";
 import { Kbd, Page } from "../components/Shell";
 import { useAi } from "../lib/ai";
-import { backend, type Item, type Sentence, type Show, type TranscriptStatus } from "../lib/backend";
+import { backend, inApp, type Item, type Sentence, type Show, type TranscriptStatus } from "../lib/backend";
 import { dictationPath } from "../lib/dictation";
 import { useLibraryChanged } from "../lib/downloads";
 import { clock, plural } from "../lib/format";
 import { sentenceAt, SPEEDS, usePlayer } from "../lib/playback";
 import { isBusy, transcribed, useTranscript } from "../lib/transcripts";
 import { t } from "../lib/i18n";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { isVideo, makeThumbnail, useVideoPlayer, useVideoSrc } from "../lib/video";
 
 export const listenPath = (itemId: number) => `/library/${itemId}/listen`;
@@ -98,6 +99,23 @@ function ListenPage() {
   const video = isVideo(item);
   const src = useVideoSrc(itemId, video);
   const [videoEl, setVideoEl] = useState<HTMLVideoElement | null>(null);
+  // Full screen (F): the video fills the window and the window fills the screen; the subtitle stays clickable
+  // and the word card floats over the picture. Esc or F again comes back.
+  const [full, setFull] = useState(false);
+  const setFullScreen = useCallback((on: boolean) => {
+    setFull(on);
+    document.body.classList.toggle("watch-full", on);
+    if (inApp) getCurrentWindow().setFullscreen(on).catch(() => {});
+  }, []);
+  useEffect(
+    () => () => {
+      if (document.body.classList.contains("watch-full")) {
+        document.body.classList.remove("watch-full");
+        if (inApp) getCurrentWindow().setFullscreen(false).catch(() => {});
+      }
+    },
+    [],
+  );
   // A video with no thumbnail yet gets one, shown before it plays and in the Library.
   useEffect(() => {
     if (video && item?.state === "ready" && !item.artworkUrl) makeThumbnail(itemId);
@@ -380,7 +398,8 @@ function ListenPage() {
     if ((e.target as HTMLElement | null)?.closest?.("input, textarea")) return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     const k = e.key;
-    if (k === " ") toggle();
+    if (video && (k.toLowerCase() === "f" || (k === "Escape" && full && !lookup))) setFullScreen(!full);
+    else if (k === " ") toggle();
     else if (k === "ArrowUp" || k === "ArrowDown") step(k === "ArrowUp" ? -1 : 1);
     else if (k === "ArrowLeft" || k === "ArrowRight") playFrom(pos + (k === "ArrowLeft" ? -5000 : 5000));
     else if (k.toLowerCase() === "r") replay();
@@ -415,7 +434,7 @@ function ListenPage() {
   const shownCount = allShown ? sentences.length : shown.size;
 
   return (
-    <Page crumbs={crumbs} keys={KEYS} actions={actions}>
+    <Page crumbs={crumbs} keys={video ? [...KEYS, ["F", "Full screen"]] : KEYS} actions={actions}>
       <div style={{ display: "flex", minHeight: "100%" }}>
         <section aria-label={t(video ? "Watch" : "Listen")} className="page" style={{ flexGrow: 1, minWidth: 0, gap: 16, paddingTop: 20 }}>
           {item && item.state === "missing" && (
@@ -436,12 +455,26 @@ function ListenPage() {
           {/* Stays at the top while the sentences scroll under it. */}
           <div ref={bar} style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--canvas)", padding: "12px 0", margin: "-12px 0" }}>
             {video && (
-              <div className="video">
+              <div className={full ? "video video-full" : "video"}>
                 <video ref={setVideoEl} src={src ?? undefined} poster={item?.artworkUrl ?? undefined} preload="auto" playsInline onClick={toggle} />
                 {!player.playing && !held && !lookup && (
                   <button type="button" className="video-play" onClick={toggle} aria-label={t("Play")}>
                     <Icon name="play" size={26} stroke={1.6} />
                   </button>
+                )}
+                <button
+                  type="button"
+                  className="video-full-btn"
+                  onClick={() => setFullScreen(!full)}
+                  aria-label={t(full ? "Exit full screen" : "Full screen")}
+                  title={t(full ? "Exit full screen (F)" : "Full screen (F)")}
+                >
+                  <Icon name={full ? "x" : "focus"} size={16} stroke={1.8} />
+                </button>
+                {full && lookup && (
+                  <div className="video-card">
+                    <LookupCard key={`${lookup.idx}-${lookup.from}-${lookup.to}`} sel={lookup} path={item?.path ?? null} docked onClose={closeLookup} onSaved={(t) => setSaved((s) => (s.includes(t) ? s : [...s, t]))} />
+                  </div>
                 )}
                 {held && (
                   <div className="video-held">
@@ -625,7 +658,7 @@ function ListenPage() {
               onClose={closeAsk}
               docked
             />
-          ) : lookup ? (
+          ) : lookup && !full ? (
             <LookupCard key={`${lookup.idx}-${lookup.from}-${lookup.to}`} sel={lookup} path={item?.path ?? null} docked onClose={closeLookup} onSaved={(t) => setSaved((s) => (s.includes(t) ? s : [...s, t]))} />
           ) : (
             <p style={{ fontSize: 13, lineHeight: 1.5 }}>
