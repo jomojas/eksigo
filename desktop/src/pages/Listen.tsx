@@ -1,6 +1,8 @@
 // Listen (design D07, DESIGN.md "Listen"): the episode straight through, with its sentences hidden until the
 // learner shows them, to test their ears before their eyes. A shown sentence stays shown; select words in it to
 // look them up and save them. Time listening counts towards the streak, like dictation.
+// A video of the learner's own is the same page, called Watch: the picture plays above the sentences, with the
+// sentence being said as a subtitle on it. The mouse on the subtitle pauses the video, so its words can be picked.
 
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
@@ -17,6 +19,7 @@ import { clock, plural } from "../lib/format";
 import { sentenceAt, SPEEDS, usePlayer } from "../lib/playback";
 import { isBusy, transcribed, useTranscript } from "../lib/transcripts";
 import { t } from "../lib/i18n";
+import { isVideo, useVideoPlayer, useVideoSrc } from "../lib/video";
 
 export const listenPath = (itemId: number) => `/library/${itemId}/listen`;
 
@@ -78,7 +81,13 @@ export function ListenScreen() {
     }
   }, [item?.state, status?.state, itemId]);
 
-  const player = usePlayer(item?.state === "ready" ? item.path : null);
+  const video = isVideo(item);
+  const src = useVideoSrc(itemId, video);
+  const [videoEl, setVideoEl] = useState<HTMLVideoElement | null>(null);
+  const [videoReady, setVideoReady] = useState(false);
+  const audio = usePlayer(item?.state === "ready" && !video ? item.path : null);
+  const film = useVideoPlayer(videoEl);
+  const player = video ? film : audio;
   const [speed, setSpeed] = useState(1);
   const [at, setAt] = useState(startAt ?? 0);
   const durMs = (item?.durationS ?? 0) * 1000;
@@ -119,6 +128,14 @@ export function ListenScreen() {
     [player, speed, durMs],
   );
   const [follow, setFollow] = useState(true);
+  // Opening Listen or Watch starts playing at once: from the beginning, or from the sentence opened from My words.
+  const started = useRef(false);
+  useEffect(() => {
+    if (started.current || item?.state !== "ready" || !item.path) return;
+    if (video && !videoReady) return;
+    started.current = true;
+    playFrom(startAt ?? 0);
+  }, [item?.state, item?.path, video, videoReady, startAt, playFrom]);
   const toggle = useCallback(() => {
     if (player.playing) return player.stop();
     setFollow(true);
@@ -165,6 +182,18 @@ export function ListenScreen() {
   // Looking a word up pauses playback; closing the card carries on if it was playing.
   const [lookup, setLookup] = useState<Selection | null>(null);
   const resume = useRef(false);
+  // The mouse on a video's subtitle pauses it, so the line stays while a word is picked; moving away carries on.
+  const [held, setHeld] = useState(false);
+  const holdSubtitle = () => {
+    if (!player.playing) return;
+    player.stop();
+    setHeld(true);
+  };
+  const releaseSubtitle = () => {
+    if (!held) return;
+    setHeld(false);
+    if (!lookup && asking === null) playFrom(pos);
+  };
   const onSelect = (i: number, e: MouseEvent<HTMLElement>) => {
     const root = e.currentTarget;
     window.setTimeout(() => {
@@ -172,9 +201,10 @@ export function ListenScreen() {
       const r = window.getSelection()?.rangeCount ? window.getSelection()?.getRangeAt(0) : null;
       if (!range || !r) return;
       const words = sentences[i].text.split(/\s+/).filter(Boolean);
-      if (player.playing) {
+      if (player.playing || held) {
         resume.current = true;
         player.stop();
+        setHeld(false);
       }
       setAsking(null);
       setLookup({
@@ -187,6 +217,8 @@ export function ListenScreen() {
         sentence: sentences[i].text,
         rect: r.getBoundingClientRect(),
       });
+      // The picked words are marked in the subtitle and in the sentence list alike, instead of the selection.
+      if (video) window.getSelection()?.removeAllRanges();
     }, 0);
   };
   // Asking the AI about a sentence (design D17) also pauses playback, in the same side panel.
@@ -195,9 +227,10 @@ export function ListenScreen() {
   const openAsk = (i: number) => {
     if (i < 0 || !sentences[i]) return;
     if (!isShown(i)) toggleShown(i);
-    if (player.playing) {
+    if (player.playing || held) {
       resume.current = true;
       player.stop();
+      setHeld(false);
     }
     setLookup(null);
     setAsking(i);
@@ -310,7 +343,7 @@ export function ListenScreen() {
     { label: "Library", to: "/library" },
     ...(show ? [{ label: show.title, to: `/podcasts/show/${show.id}` }] : []),
     { label: title, to: `/library/${itemId}` },
-    "Listen",
+    video ? "Watch" : "Listen",
   ];
   const actions = (
     <button type="button" className="btn btn-sm" onClick={() => navigate(dictationPath(itemId))}>
@@ -318,16 +351,51 @@ export function ListenScreen() {
     </button>
   );
   const busy = isBusy(status?.state);
+  // The subtitle: the sentence being said, gone in a long pause after it.
+  const line = video && current >= 0 && sentences[current] && pos <= sentences[current].endMs + 1500 ? current : -1;
+  const picked = (idx: number): [number, number] | null => (lookup && lookup.idx === idx ? [lookup.from, lookup.to] : null);
   const shownCount = allShown ? sentences.length : shown.size;
 
   return (
     <Page crumbs={crumbs} keys={KEYS} actions={actions}>
       <div style={{ display: "flex", minHeight: "100%" }}>
-        <section aria-label={t("Listen")} className="page" style={{ flexGrow: 1, minWidth: 0, gap: 16, paddingTop: 20 }}>
+        <section aria-label={t(video ? "Watch" : "Listen")} className="page" style={{ flexGrow: 1, minWidth: 0, gap: 16, paddingTop: 20 }}>
           {item && item.state !== "ready" && <div className="notice">{t("This episode isn’t downloaded. Download it on its page first.")}</div>}
 
           {/* Stays at the top while the sentences scroll under it. */}
           <div ref={bar} style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--canvas)", padding: "12px 0", margin: "-12px 0" }}>
+            {video && (
+              <div className="video">
+                <video ref={setVideoEl} src={src ?? undefined} preload="auto" playsInline onClick={toggle} onLoadedMetadata={() => setVideoReady(true)} />
+                {held && (
+                  <div className="video-held">
+                    <Icon name="pause" size={12} stroke={2.2} />
+                    {t("Paused while you look")}
+                  </div>
+                )}
+                {line >= 0 && (
+                  <div className="subtitle">
+                    {isShown(line) ? (
+                      <p className="selectable" onMouseEnter={holdSubtitle} onMouseLeave={releaseSubtitle} onMouseUp={(e) => onSelect(line, e)}>
+                        <Words text={sentences[line].text} picked={picked(sentences[line].idx)} />
+                      </p>
+                    ) : (
+                      <p className="subtitle-hidden" onClick={() => toggleShown(line)} role="button" aria-label={t("Show this subtitle")}>
+                        <span className="bars" aria-hidden="true">
+                          {sentences[line].text
+                            .split(/\s+/)
+                            .filter(Boolean)
+                            .map((w, k) => (
+                              <i key={k} className={k < heard ? "heard" : undefined} style={{ width: Math.min(120, w.replace(/[^\p{L}\p{N}']/gu, "").length * 7 + 6) }} />
+                            ))}
+                        </span>
+                        <span>{t("Press S to show")}</span>
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
             <div className="panel" style={{ padding: "12px 16px", display: "flex", alignItems: "center", gap: 12 }}>
               <button
                 type="button"
@@ -392,7 +460,7 @@ export function ListenScreen() {
                 ))}
               </div>
             </div>
-            {player.error && <p style={{ color: "var(--semantic-error)", marginTop: 8 }}>{player.error}</p>}
+            {player.error && <p style={{ color: "var(--semantic-error)", marginTop: 8 }}>{t(player.error)}</p>}
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
@@ -419,7 +487,7 @@ export function ListenScreen() {
               <span className="track" style={{ width: 120 }}>
                 <span className="fill" style={{ display: "block", width: `${Math.round(transcribed(status) * 100)}%` }} />
               </span>
-              {t("More sentences arrive as the episode is transcribed.")}
+              {t(video ? "More sentences arrive as the video is transcribed." : "More sentences arrive as the episode is transcribed.")}
             </div>
           )}
           {status?.state === "failed" && (
@@ -444,7 +512,7 @@ export function ListenScreen() {
                     <div className="lrow-body">
                       {open ? (
                         <span className="selectable" style={{ cursor: "text" }} onMouseUp={(e) => onSelect(i, e)}>
-                          <IndexedText text={s.text} />
+                          {video ? <Words text={s.text} picked={picked(s.idx)} /> : <IndexedText text={s.text} />}
                         </span>
                       ) : (
                         <span className="bars" role="img" aria-label={t("Hidden sentence")} onClick={() => playSentence(i)}>
@@ -502,12 +570,16 @@ export function ListenScreen() {
             <LookupCard key={`${lookup.idx}-${lookup.from}-${lookup.to}`} sel={lookup} path={item?.path ?? null} docked onClose={closeLookup} onSaved={(t) => setSaved((s) => (s.includes(t) ? s : [...s, t]))} />
           ) : (
             <p style={{ fontSize: 13, lineHeight: 1.5 }}>
-              {t("Show a sentence, then select a word or phrase in it to see its meaning and save it to My words. Playback pauses while you look, and carries on when you close the card.")}
+              {t(
+                video
+                  ? "Show a subtitle, then click a word or drag across a phrase, on the video or in the sentences below, to see its meaning and save it to My words. The video pauses while your mouse is on the subtitle, and carries on when you move away."
+                  : "Show a sentence, then select a word or phrase in it to see its meaning and save it to My words. Playback pauses while you look, and carries on when you close the card.",
+              )}
             </p>
           )}
           {saved.length > 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <div className="eyebrow">{t("Saved while listening")}</div>
+              <div className="eyebrow">{t(video ? "Saved while watching" : "Saved while listening")}</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                 {saved.map((t) => (
                   <span key={t} className="badge">
@@ -524,13 +596,32 @@ export function ListenScreen() {
               <b className="mono">{allShown ? t("All") : t("{a} of {b}", { a: shownCount, b: sentences.length })}</b>
             </div>
             <div className="prop">
-              {t("Listened today")}
+              {t(video ? "Watched today" : "Listened today")}
               <b className="mono">{today === null ? "—" : t("{n} min", { n: Math.round(today / 60) })}</b>
             </div>
           </div>
         </aside>
       </div>
     </Page>
+  );
+}
+
+/** A sentence's words, numbered for selecting like `IndexedText`, with the ones picked for the word card marked. */
+function Words({ text, picked }: { text: string; picked: [number, number] | null }) {
+  return (
+    <span className="marked">
+      {text
+        .split(/\s+/)
+        .filter(Boolean)
+        .map((w, i) => (
+          <span key={i}>
+            {i > 0 && " "}
+            <span data-i={i} className={picked && i >= picked[0] && i <= picked[1] ? "picked" : undefined}>
+              {w}
+            </span>
+          </span>
+        ))}
+    </span>
   );
 }
 

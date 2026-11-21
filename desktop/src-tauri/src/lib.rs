@@ -22,7 +22,7 @@ mod translate;
 pub mod whisper;
 
 use std::{
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::atomic::{AtomicBool, Ordering},
 };
 
@@ -656,6 +656,16 @@ fn library_item(db: State<Db>, id: i64) -> CmdResult<Item> {
     library::item(&db.conn(), id).map_err(err)
 }
 
+/// Lets the window play one of the learner's own videos. Nothing else on the computer can be read this way: each
+/// file is allowed when its page opens, and only if it is a video in the Library.
+#[tauri::command]
+fn video_open(app: AppHandle, db: State<Db>, id: i64) -> CmdResult<String> {
+    let item = library::item(&db.conn(), id).map_err(err)?;
+    let path = item.path.filter(|p| item.own_file && audio::is_video(Path::new(p))).ok_or_else(|| err("That item isn't a video."))?;
+    app.asset_protocol_scope().allow_file(&path).map_err(err)?;
+    Ok(path)
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Added {
@@ -673,7 +683,9 @@ async fn library_add_files(app: AppHandle, paths: Vec<String>) -> CmdResult<Adde
             .map(|p| {
                 let path = PathBuf::from(&p);
                 let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
-                let result = if !audio::EXTENSIONS.contains(&ext.as_str()) {
+                let result = if audio::UNSUPPORTED_VIDEO.contains(&ext.as_str()) {
+                    Err("Eksigo plays MP4, MOV and M4V videos. Convert it to MP4 and add it again".to_string())
+                } else if !audio::EXTENSIONS.contains(&ext.as_str()) {
                     Err("not an audio or video file Eksigo can read".to_string())
                 } else {
                     audio::duration(&path).map_err(|e| format!("{e:#}"))
@@ -1141,6 +1153,7 @@ pub fn run() {
             library_items,
             library_item,
             library_add_files,
+            video_open,
             library_remove,
             dictation_start,
             dictation_answer,

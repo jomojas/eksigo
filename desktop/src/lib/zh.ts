@@ -527,7 +527,7 @@ export const zh: Record<string, string> = {
   "Nothing matches these filters.": "没有符合这些筛选条件的内容。",
   "Download an episode from Podcasts, or add an audio or video file of your own. Everything you can practise lives here.":
     "从播客下载一集，或添加你自己的音频或视频文件。所有可以练习的内容都在这里。",
-  "MP3, M4A, WAV, MP4 and more. Files stay where they are on this computer.": "支持 MP3、M4A、WAV、MP4 等。文件会留在这台电脑上的原处。",
+  "MP3, M4A, WAV, MP4, MOV and more. Files stay where they are on this computer.": "支持 MP3、M4A、WAV、MP4、MOV 等。文件会留在这台电脑上的原处。",
   "Needs attention": "需要处理",
   "Not started": "未开始",
   "Your own files": "你自己的文件",
@@ -929,4 +929,21 @@ export const zh: Record<string, string> = {
   "You've used this week's ChatGPT limit for Eksigo.": "你本周给 Eksigo 的 ChatGPT 额度已用完。",
   "Your ChatGPT plan has no models for apps right now.": "你的 ChatGPT 套餐目前没有可供 App 使用的模型。",
   "Couldn't reach Eksigo. Your changes are kept here and sync when the connection is back.": "无法连接 Eksigo。你的更改会保存在这里，网络恢复后自动同步。",
+  // Watching a video of the learner's own
+  Watch: "看视频",
+  "Watch:": "看视频：",
+  Video: "视频",
+  "the video with its subtitles, hidden until you show them; click words to save them.": "边看视频边看字幕，字幕先隐藏，显示后点单词即可收藏。",
+  "Paused while you look": "查词时已暂停",
+  "Show this subtitle": "显示这条字幕",
+  "Press S to show": "按 S 显示",
+  "More sentences arrive as the video is transcribed.": "视频转写过程中，更多句子会陆续出现。",
+  "Show a subtitle, then click a word or drag across a phrase, on the video or in the sentences below, to see its meaning and save it to My words. The video pauses while your mouse is on the subtitle, and carries on when you move away.":
+    "先显示字幕，再在视频上或下方句子里点一个单词、或拖选一个短语，即可查看释义并收藏到我的生词。鼠标放在字幕上时视频会暂停，移开后继续播放。",
+  "Saved while watching": "看视频时收藏",
+  "Watched today": "今天观看",
+  "This video can't be played on this computer.": "这个视频无法在这台电脑上播放。",
+  "Eksigo plays MP4, MOV and M4V videos. Convert it to MP4 and add it again": "Eksigo 支持 MP4、MOV 和 M4V 视频。请转换为 MP4 后再添加",
+  "That item isn't a video.": "这一项不是视频。",
+  "As said in the video": "视频里的读法",
 };

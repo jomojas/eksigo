@@ -12,6 +12,7 @@ const PATHS = {
   plus: '<path d="M12 5v14M5 12h14"/>',
   file: '<path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z"/><path d="M14 3v5h5"/>',
   play: '<path d="M7 4l13 8-13 8z"/>',
+  video: '<rect x="3" y="5" width="13" height="14" rx="2"/><path d="M16 10l5-3v10l-5-3"/>',
   book: '<path d="M5 4h11a3 3 0 013 3v13H8a3 3 0 01-3-3z"/>',
   ear: '<path d="M6 9a6 6 0 1112 0c0 3-3 4-3 7a3 3 0 01-6 0"/>',
   pencil: '<path d="M4 20l4-1 11-11-3-3L5 16z"/>',
