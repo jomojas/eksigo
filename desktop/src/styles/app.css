@@ -886,6 +886,19 @@ select.btn {
   text-decoration-color: var(--hairline-strong);
   text-underline-offset: 3px;
 }
+/* Where a word was heard: lines start at the same edge as the sentence above, and a long file name breaks
+   anywhere and stops after two lines (the whole name is in the tooltip). */
+.source-name {
+  min-width: 0;
+  max-width: 100%;
+  text-align: start;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
 .select {
   font: 500 13px/1 var(--font-text);
   color: var(--ink);
@@ -1462,6 +1475,94 @@ select.btn {
 }
 .bars i.heard {
   background: var(--ink-subtle);
+}
+
+/* ---------- Watch: a video of the learner's own, with the sentence being said as a subtitle ---------- */
+.video {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  margin-bottom: 12px;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  /* The picture's own black, in both themes. */
+  background: #000;
+}
+.video video {
+  display: block;
+  width: 100%;
+  /* About three fifths of the page, the sentences under it the rest. */
+  max-height: 60cqh;
+  object-fit: contain;
+  cursor: pointer;
+}
+.video-held {
+  position: absolute;
+  top: 12px;
+  left: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  background: rgba(10, 10, 12, 0.72);
+  color: #f7f8f8;
+  font-size: 12px;
+  pointer-events: none;
+}
+.subtitle {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 5%;
+  display: flex;
+  justify-content: center;
+  padding: 0 6%;
+  pointer-events: none;
+}
+.subtitle p {
+  pointer-events: auto;
+  margin: 0;
+  padding: 6px 14px;
+  border-radius: var(--radius-md);
+  background: rgba(10, 10, 12, 0.72);
+  color: #f7f8f8;
+  font: 500 clamp(15px, 1.7cqw, 22px) / 1.45 var(--font-text);
+  text-align: center;
+  cursor: text;
+}
+.subtitle p [data-i]:hover {
+  text-decoration: underline;
+  text-decoration-color: rgba(247, 248, 248, 0.6);
+  text-underline-offset: 4px;
+}
+.subtitle p ::selection {
+  background: rgba(130, 143, 255, 0.55);
+}
+.subtitle .picked {
+  background: rgba(130, 143, 255, 0.55);
+  border-radius: var(--radius-xs);
+}
+.subtitle-hidden {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer !important;
+  font-size: 12px !important;
+  color: #c9ccd4 !important;
+}
+.subtitle-hidden > span:last-child {
+  white-space: nowrap;
+}
+.subtitle-hidden .bars i {
+  background: rgba(247, 248, 248, 0.3);
+}
+.subtitle-hidden .bars i.heard {
+  background: rgba(247, 248, 248, 0.75);
+}
+.lrow .picked {
+  background: var(--select-fill);
+  border-radius: 3px;
 }
 .playing {
   display: inline-flex;

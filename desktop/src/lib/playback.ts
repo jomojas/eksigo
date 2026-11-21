@@ -21,7 +21,10 @@ export function usePlayer(path: string | null) {
     () =>
       on("playback", (e) => {
         if (e.id !== mine.current || e.id !== current) return;
-        setState({ playing: e.playing, positionMs: e.positionMs, error: e.error });
+        // The core reports every 20 ms; about 20 times a second is plenty for the page.
+        setState((s) =>
+          s.playing === e.playing && s.error === e.error && Math.abs(s.positionMs - e.positionMs) < 50 ? s : { playing: e.playing, positionMs: e.positionMs, error: e.error },
+        );
       }),
     [],
   );

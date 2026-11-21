@@ -21,6 +21,16 @@ pub const WHISPER_RATE: u32 = 16_000;
 /// The file extensions the app accepts as audio or video.
 pub const EXTENSIONS: &[&str] = &["mp3", "m4a", "mp4", "m4v", "mov", "aac", "wav", "flac", "ogg", "oga"];
 
+/// The ones among them that have a picture, played on the Watch page.
+pub const VIDEO_EXTENSIONS: &[&str] = &["mp4", "m4v", "mov"];
+
+/// Video files the window can't play (and whose sound is often in a format the decoder doesn't read).
+pub const UNSUPPORTED_VIDEO: &[&str] = &["mkv", "webm", "avi", "wmv", "flv", "ts"];
+
+pub fn is_video(path: &Path) -> bool {
+    path.extension().and_then(|e| e.to_str()).is_some_and(|e| VIDEO_EXTENSIONS.contains(&e.to_ascii_lowercase().as_str()))
+}
+
 /// An open audio file, decoded to mono one packet at a time.
 pub struct Reader {
     format: Box<dyn FormatReader>,
@@ -239,6 +249,15 @@ pub(crate) mod tests {
         let one_second: Vec<f32> = (0..44_100).map(|i| (i as f32 * 0.05).sin() * 0.5).collect();
         let out = resample(one_second, 44_100, WHISPER_RATE).unwrap();
         assert!((out.len() as i64 - 16_000).abs() < 32, "got {} samples", out.len());
+    }
+
+    #[test]
+    fn videos_are_told_by_their_extension() {
+        assert!(is_video(Path::new("/x/Talk.MP4")));
+        assert!(is_video(Path::new("/x/a.mov")));
+        assert!(!is_video(Path::new("/x/a.m4a")));
+        assert!(!is_video(Path::new("/x/a.mkv")));
+        assert!(!is_video(Path::new("/x/mp4")));
     }
 
     #[test]

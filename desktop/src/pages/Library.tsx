@@ -12,6 +12,7 @@ import { bytes, clock, plural, whenDay } from "../lib/format";
 import { isBusy, transcribed, useTranscript } from "../lib/transcripts";
 import { PracticeStatus } from "./Show";
 import { t } from "../lib/i18n";
+import { isVideo } from "../lib/video";
 
 const COLS = "minmax(0,1fr) 160px 64px 190px 72px 110px";
 
@@ -137,7 +138,7 @@ export function Library() {
           </label>
           <button type="button" className="btn btn-primary" onClick={() => add()} disabled={!inApp} title={inApp ? undefined : t("Only in the app")}>
             <Icon name="plus" size={14} stroke={2} />
-            {t("Add audio")}
+            {t("Add audio or video")}
             <Kbd keys="Mod O" />
           </button>
         </div>
@@ -189,12 +190,12 @@ export function Library() {
                 onMouseEnter={() => setSelected(i)}
               >
                 <span style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                  <Art url={it.artworkUrl} size={28} file={it.ownFile} />
+                  <Art url={it.artworkUrl} size={28} file={it.ownFile} video={isVideo(it)} />
                   <b className="ell" title={it.title}>
                     {it.title}
                   </b>
                 </span>
-                <span className="ell">{t(it.source)}</span>
+                <span className="ell">{isVideo(it) ? `${t(it.source)} · ${t("Video")}` : t(it.source)}</span>
                 <span className="mono" style={{ fontSize: 12 }}>
                   {clock(it.durationS)}
                 </span>
@@ -221,7 +222,7 @@ export function Library() {
             <div style={{ font: "500 13px/1.3 var(--font-text)", color: "var(--ink-muted)" }}>
               {t(dragging ? "Drop to add to your library" : "Drop audio or video files here")}
             </div>
-            <div style={{ fontSize: 12, marginTop: 4 }}>{t("MP3, M4A, WAV, MP4 and more. Files stay where they are on this computer.")}</div>
+            <div style={{ fontSize: 12, marginTop: 4 }}>{t("MP3, M4A, WAV, MP4, MOV and more. Files stay where they are on this computer.")}</div>
           </div>
         </div>
       </div>

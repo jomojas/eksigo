@@ -245,8 +245,8 @@ function Context({ c, text }: { c: WordContext; text: string }) {
         {c.itemTitle && c.itemId ? (
           <button
             type="button"
-            className="link-btn"
-            title={t("Listen from this sentence")}
+            className="link-btn source-name"
+            title={`${c.itemTitle}\n${t("Listen from this sentence")}`}
             onClick={() => navigate(listenPath(c.itemId ?? 0), { state: { at: c.sentenceStartMs } })}
           >
             {c.itemTitle}
