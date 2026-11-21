@@ -453,10 +453,11 @@ function ListenPage() {
           )}
 
           {/* Stays at the top while the sentences scroll under it. */}
-          <div ref={bar} style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--canvas)", padding: "12px 0", margin: "-12px 0" }}>
+          <div ref={bar} style={{ position: "sticky", top: 0, zIndex: full ? 100 : 2, background: "var(--canvas)", padding: "12px 0", margin: "-12px 0" }}>
             {video && (
-              <div className={full ? "video video-full" : "video"}>
-                <video ref={setVideoEl} src={src ?? undefined} poster={item?.artworkUrl ?? undefined} preload="auto" playsInline onClick={toggle} />
+              <div className={full ? (lookup ? "video video-full video-full-card" : "video video-full") : "video"}>
+                {/* With a word card open, a click on the picture leaves the card (and the pause) as they are. */}
+                <video ref={setVideoEl} src={src ?? undefined} poster={item?.artworkUrl ?? undefined} preload="auto" playsInline onClick={() => !lookup && asking === null && toggle()} />
                 {!player.playing && !held && !lookup && (
                   <button type="button" className="video-play" onClick={toggle} aria-label={t("Play")}>
                     <Icon name="play" size={26} stroke={1.6} />
