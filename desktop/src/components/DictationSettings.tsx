@@ -25,7 +25,8 @@ function Stepper({ value, label, onDown, onUp, downOff, upOff }: { value: string
 
 export function SpeedSlider({ speed, onSpeed }: { speed: number; onSpeed: (s: number) => void }) {
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 10, marginLeft: "auto" }}>
+    // The slider gives way in a narrow panel, so a longer label ("Vitesse", "Velocidad") never pushes the value out.
+    <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "flex-end", gap: 10, marginLeft: "auto", flex: "1 1 auto", minWidth: 0 }}>
       <input
         className="scrub"
         type="range"
@@ -36,9 +37,9 @@ export function SpeedSlider({ speed, onSpeed }: { speed: number; onSpeed: (s: nu
         onChange={(e) => onSpeed(clampSpeed(Number(e.target.value)))}
         aria-label={t("Speed")}
         aria-valuetext={speedLabel(speed)}
-        style={{ width: 110, background: `linear-gradient(to right, var(--ink-muted) ${((speed - SPEED_MIN) / (SPEED_MAX - SPEED_MIN)) * 100}%, var(--hairline) 0)` }}
+        style={{ flex: "0 1 110px", minWidth: 56, width: 110, background: `linear-gradient(to right, var(--ink-muted) ${((speed - SPEED_MIN) / (SPEED_MAX - SPEED_MIN)) * 100}%, var(--hairline) 0)` }}
       />
-      <span className="mono" style={{ width: 42, textAlign: "right", color: "var(--ink)", fontSize: 12 }}>
+      <span className="mono" style={{ width: 42, flexShrink: 0, textAlign: "right", color: "var(--ink)", fontSize: 12 }}>
         {speedLabel(speed)}
       </span>
     </span>

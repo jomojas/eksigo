@@ -3,47 +3,65 @@
 // (a show's name, a word) comes back as it is.
 
 import { useEffect, useState } from "react";
+import { es } from "./es";
+import { fr } from "./fr";
+import { ja } from "./ja";
+import { ko } from "./ko";
 import { zh } from "./zh";
 
-export type UiLanguage = "system" | "en" | "zh";
+/** The languages the screens are in, the same six as the iPhone app. */
+type Language = "en" | "zh" | "ja" | "ko" | "fr" | "es";
+export type UiLanguage = "system" | Language;
 
 /** Each language in its own words, so a learner who can't read the current one still finds theirs. */
 export const UI_LANGUAGES: [UiLanguage, string][] = [
   ["system", "Same as the computer"],
   ["en", "English"],
   ["zh", "简体中文"],
+  ["ja", "日本語"],
+  ["ko", "한국어"],
+  ["fr", "Français"],
+  ["es", "Español"],
 ];
 
 const KEY = "eksigo.uiLanguage";
-const TABLES: Record<string, Record<string, string>> = { zh };
+const TABLES: Record<string, Record<string, string>> = { zh, ja, ko, fr, es };
+/** For dates, numbers and the page's `lang`. */
+const LOCALES: Record<Language, string> = { en: "en-GB", zh: "zh-CN", ja: "ja-JP", ko: "ko-KR", fr: "fr-FR", es: "es-ES" };
+const isLanguage = (v: string | null): v is Language => !!v && v in LOCALES;
 
 function stored(): UiLanguage {
   try {
     const v = localStorage.getItem(KEY);
-    return v === "en" || v === "zh" ? v : "system";
+    return isLanguage(v) ? v : "system";
   } catch {
     return "system";
   }
 }
 
-function resolve(l: UiLanguage): "en" | "zh" {
+/** "system": the computer's first language Eksigo has, else English. */
+function resolve(l: UiLanguage): Language {
   if (l !== "system") return l;
   const langs = typeof navigator === "undefined" ? [] : navigator.languages?.length ? navigator.languages : [navigator.language];
-  return langs[0]?.toLowerCase().startsWith("zh") ? "zh" : "en";
+  for (const tag of langs) {
+    const code = tag.toLowerCase().split(/[-_]/)[0];
+    if (isLanguage(code)) return code;
+  }
+  return "en";
 }
 
 let chosen = stored();
 let current = resolve(chosen);
 const subscribers = new Set<() => void>();
 
-/** The language in use: "en" or "zh". */
-export function uiLanguage(): "en" | "zh" {
+/** The language in use. */
+export function uiLanguage(): Language {
   return current;
 }
 
 /** For dates and numbers. */
 export function locale(): string {
-  return current === "zh" ? "zh-CN" : "en-GB";
+  return LOCALES[current];
 }
 
 /** The text in the language in use, with `{name}` filled in from `vars`. */
@@ -78,7 +96,7 @@ export function setUiLanguage(l: UiLanguage) {
   }
   chosen = l;
   current = resolve(l);
-  document.documentElement.lang = current === "zh" ? "zh-CN" : "en";
+  document.documentElement.lang = LOCALES[current];
   subscribers.forEach((f) => f());
 }
 
@@ -88,4 +106,4 @@ export function useLanguageKey(): string {
   return current;
 }
 
-if (typeof document !== "undefined") document.documentElement.lang = current === "zh" ? "zh-CN" : "en";
+if (typeof document !== "undefined") document.documentElement.lang = LOCALES[current];

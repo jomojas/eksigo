@@ -529,7 +529,7 @@ function ListenPage() {
                       </span>
                     </>
                   ) : (
-                    <span>{sentences.length > 0 ? plural(sentences.length, "sentence") : busy ? t("Transcribing…") : ""}</span>
+                    <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{sentences.length > 0 ? plural(sentences.length, "sentence") : busy ? t("Transcribing…") : ""}</span>
                   )}
                   <span style={{ flexGrow: 1 }} />
                   <span className="mono" style={{ fontSize: 12, flexShrink: 0 }}>
