@@ -297,6 +297,12 @@ function ListenPage() {
       if (!player.playing) playFrom(at);
     }
   }, [playFrom, at, player.playing]);
+  const playOrPause = useCallback(() => {
+    // Carrying on by hand: closing the card later doesn't start it again.
+    resume.current = false;
+    setHeld(false);
+    toggle();
+  }, [toggle]);
   const [saved, setSaved] = useState<string[]>([]);
 
   // Time listening: counted while playing, saved every few seconds and when playback stops or the page closes.
@@ -399,7 +405,7 @@ function ListenPage() {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     const k = e.key;
     if (video && (k.toLowerCase() === "f" || (k === "Escape" && full && !lookup))) setFullScreen(!full);
-    else if (k === " ") toggle();
+    else if (k === " ") playOrPause();
     else if (k === "ArrowUp" || k === "ArrowDown") step(k === "ArrowUp" ? -1 : 1);
     else if (k === "ArrowLeft" || k === "ArrowRight") playFrom(pos + (k === "ArrowLeft" ? -5000 : 5000));
     else if (k.toLowerCase() === "r") replay();
@@ -453,10 +459,11 @@ function ListenPage() {
           )}
 
           {/* Stays at the top while the sentences scroll under it. */}
-          <div ref={bar} style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--canvas)", padding: "12px 0", margin: "-12px 0" }}>
+          <div ref={bar} style={{ position: "sticky", top: 0, zIndex: full ? 100 : 2, background: "var(--canvas)", padding: "12px 0", margin: "-12px 0" }}>
             {video && (
-              <div className={full ? "video video-full" : "video"}>
-                <video ref={setVideoEl} src={src ?? undefined} poster={item?.artworkUrl ?? undefined} preload="auto" playsInline onClick={toggle} />
+              <div className={full ? (lookup ? "video video-full video-full-card" : "video video-full") : "video"}>
+                {/* A click on the picture plays or pauses, like Space. An open word card stays, with the word it shows. */}
+                <video ref={setVideoEl} src={src ?? undefined} poster={item?.artworkUrl ?? undefined} preload="auto" playsInline onClick={playOrPause} />
                 {!player.playing && !held && !lookup && (
                   <button type="button" className="video-play" onClick={toggle} aria-label={t("Play")}>
                     <Icon name="play" size={26} stroke={1.6} />

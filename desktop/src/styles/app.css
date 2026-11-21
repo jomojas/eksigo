@@ -1527,6 +1527,13 @@ select.btn {
 body.watch-full .content {
   /* A size container would hold the fixed video inside the page area. */
   container-type: normal;
+  overflow: hidden;
+}
+/* Nothing of the app around it: no sidebar, top bar or status bar over the picture. */
+body.watch-full .side,
+body.watch-full .topbar,
+body.watch-full .statusbar {
+  display: none;
 }
 .video-full {
   position: fixed;
@@ -1537,11 +1544,20 @@ body.watch-full .content {
   align-items: center;
 }
 .video-full video {
+  width: 100%;
+  min-width: 0;
   max-height: 100vh;
   height: 100vh;
 }
 .video-full .subtitle {
   bottom: 7%;
+}
+/* With the word card open, the picture moves left of it, so none of it is covered. */
+.video-full-card {
+  padding-right: calc(min(360px, 40vw) + 32px);
+}
+.video-full-card .subtitle {
+  right: calc(min(360px, 40vw) + 32px);
 }
 .video-full .subtitle p {
   font-size: clamp(20px, 2.4vw, 34px);
