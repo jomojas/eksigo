@@ -32,7 +32,7 @@ function change(now: number | null, before: number | null): string {
   if (now == null) return t("no dictation yet");
   if (before == null) return t("first month");
   const d = Math.round(now * 100) - Math.round(before * 100);
-  return d > 0 ? t("up {n}", { n: d }) : d < 0 ? t("down {n}", { n: -d }) : t("same as last month");
+  return d > 0 ? t("up {n} points from last month", { n: d }) : d < 0 ? t("down {n} points from last month", { n: -d }) : t("same as last month");
 }
 
 /** Total time, for the year grid's heading. */
