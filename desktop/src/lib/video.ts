@@ -45,7 +45,8 @@ export function useVideoPlayer(v: HTMLVideoElement | null) {
         end.current = null;
         v.pause();
       }
-      setState((s) => (Math.abs(s.positionMs - ms) < 1 && s.playing === !v.paused ? s : { ...s, positionMs: ms, playing: !v.paused }));
+      // About 20 times a second is enough for the subtitle and keeps a long transcript light to redraw.
+      setState((s) => (Math.abs(s.positionMs - ms) < 50 && s.playing === !v.paused ? s : { ...s, positionMs: ms, playing: !v.paused }));
       if (!v.paused) frame = requestAnimationFrame(tick);
     };
     const onPlay = () => {

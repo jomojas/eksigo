@@ -4,7 +4,7 @@
 // A video of the learner's own is the same page, called Watch: the picture plays above the sentences, with the
 // sentence being said as a subtitle on it. The mouse on the subtitle pauses the video, so its words can be picked.
 
-import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { AskPanel } from "../components/Ask";
 import { Icon } from "../components/Icon";
@@ -317,6 +317,20 @@ export function ListenScreen() {
     };
   }, [sentences.length > 0]);
 
+  // The sentence rows only change when their own props do: playback moves on many times a second, and a long
+  // episode has well over a thousand of them.
+  const act = useRef<RowActions | null>(null);
+  act.current = { play: playSentence, select: onSelect, toggle: toggleShown, ask: openAsk };
+  const rowActions = useMemo<RowActions>(
+    () => ({
+      play: (i) => act.current?.play(i),
+      select: (i, e) => act.current?.select(i, e),
+      toggle: (i) => act.current?.toggle(i),
+      ask: (i) => act.current?.ask(i),
+    }),
+    [],
+  );
+
   const keys = useRef<(e: KeyboardEvent) => void>(() => {});
   keys.current = (e) => {
     if ((e.target as HTMLElement | null)?.closest?.("input, textarea")) return;
@@ -503,49 +517,23 @@ export function ListenScreen() {
             <ol ref={list} className="panel listen" aria-label={t("Sentences")}>
               {sentences.map((s, i) => {
                 const on = i === current;
-                const open = isShown(i);
+                const p = picked(s.idx);
                 return (
-                  <li key={s.idx} id={`listen-${i}`} className={on ? "lrow lrow-on" : "lrow"} aria-current={on ? "true" : undefined}>
-                    <button type="button" className="lrow-num" onClick={() => playSentence(i)} aria-label={t("Play sentence {n}", { n: i + 1 })} title={t("Play from here")}>
-                      {on && player.playing ? <span className="playing" aria-hidden="true"><i /><i /><i /></span> : i + 1}
-                    </button>
-                    <div className="lrow-body">
-                      {open ? (
-                        <span className="selectable" style={{ cursor: "text" }} onMouseUp={(e) => onSelect(i, e)}>
-                          {video ? <Words text={s.text} picked={picked(s.idx)} /> : <IndexedText text={s.text} />}
-                        </span>
-                      ) : (
-                        <span className="bars" role="img" aria-label={t("Hidden sentence")} onClick={() => playSentence(i)}>
-                          {s.text
-                            .split(/\s+/)
-                            .filter(Boolean)
-                            .map((w, k) => (
-                              <i key={k} className={on && k < heard ? "heard" : undefined} style={{ width: Math.min(120, w.replace(/[^\p{L}\p{N}']/gu, "").length * 7 + 6) }} />
-                            ))}
-                        </span>
-                      )}
-                    </div>
-                    <div className="lrow-end">
-                      {on && open && ai?.using && (
-                        <button type="button" className="btn btn-sm btn-ghost peek" onClick={() => openAsk(i)} aria-label={t("Ask about sentence {n}", { n: i + 1 })} title={t("Ask the AI about this sentence (?)")}>
-                          <Icon name="chat" size={13} />
-                          {t("Ask")}
-                        </button>
-                      )}
-                      {!allShown && (
-                        <button
-                          type="button"
-                          className={on && !open ? "btn btn-sm peek" : "btn btn-sm btn-ghost peek"}
-                          onClick={() => toggleShown(i)}
-                          aria-label={t(open ? "Hide sentence {n}" : "Show sentence {n}", { n: i + 1 })}
-                        >
-                          <Icon name={open ? "eye-off" : "eye"} size={13} />
-                          {t(open ? "Hide" : "Show")}
-                          {on && <Kbd keys="S" />}
-                        </button>
-                      )}
-                    </div>
-                  </li>
+                  <Row
+                    key={s.idx}
+                    s={s}
+                    i={i}
+                    on={on}
+                    open={isShown(i)}
+                    playing={on && player.playing}
+                    heard={on ? heard : 0}
+                    pickFrom={video && p ? p[0] : -1}
+                    pickTo={video && p ? p[1] : -1}
+                    video={video}
+                    allShown={allShown}
+                    canAsk={!!ai?.using}
+                    act={rowActions}
+                  />
                 );
               })}
             </ol>
@@ -605,6 +593,75 @@ export function ListenScreen() {
     </Page>
   );
 }
+
+type RowActions = {
+  play: (i: number) => void;
+  select: (i: number, e: MouseEvent<HTMLElement>) => void;
+  toggle: (i: number) => void;
+  ask: (i: number) => void;
+};
+
+type RowProps = {
+  s: Sentence;
+  i: number;
+  on: boolean;
+  open: boolean;
+  playing: boolean;
+  heard: number;
+  pickFrom: number;
+  pickTo: number;
+  video: boolean;
+  allShown: boolean;
+  canAsk: boolean;
+  act: RowActions;
+};
+
+/** One sentence in the list. */
+const Row = memo(function Row({ s, i, on, open, playing, heard, pickFrom, pickTo, video, allShown, canAsk, act }: RowProps) {
+  return (
+    <li id={`listen-${i}`} className={on ? "lrow lrow-on" : "lrow"} aria-current={on ? "true" : undefined}>
+      <button type="button" className="lrow-num" onClick={() => act.play(i)} aria-label={t("Play sentence {n}", { n: i + 1 })} title={t("Play from here")}>
+        {playing ? <span className="playing" aria-hidden="true"><i /><i /><i /></span> : i + 1}
+      </button>
+      <div className="lrow-body">
+        {open ? (
+          <span className="selectable" style={{ cursor: "text" }} onMouseUp={(e) => act.select(i, e)}>
+            {video ? <Words text={s.text} picked={pickFrom >= 0 ? [pickFrom, pickTo] : null} /> : <IndexedText text={s.text} />}
+          </span>
+        ) : (
+          <span className="bars" role="img" aria-label={t("Hidden sentence")} onClick={() => act.play(i)}>
+            {s.text
+              .split(/\s+/)
+              .filter(Boolean)
+              .map((w, k) => (
+                <i key={k} className={on && k < heard ? "heard" : undefined} style={{ width: Math.min(120, w.replace(/[^\p{L}\p{N}']/gu, "").length * 7 + 6) }} />
+              ))}
+          </span>
+        )}
+      </div>
+      <div className="lrow-end">
+        {on && open && canAsk && (
+          <button type="button" className="btn btn-sm btn-ghost peek" onClick={() => act.ask(i)} aria-label={t("Ask about sentence {n}", { n: i + 1 })} title={t("Ask the AI about this sentence (?)")}>
+            <Icon name="chat" size={13} />
+            {t("Ask")}
+          </button>
+        )}
+        {!allShown && (
+          <button
+            type="button"
+            className={on && !open ? "btn btn-sm peek" : "btn btn-sm btn-ghost peek"}
+            onClick={() => act.toggle(i)}
+            aria-label={t(open ? "Hide sentence {n}" : "Show sentence {n}", { n: i + 1 })}
+          >
+            <Icon name={open ? "eye-off" : "eye"} size={13} />
+            {t(open ? "Hide" : "Show")}
+            {on && <Kbd keys="S" />}
+          </button>
+        )}
+      </div>
+    </li>
+  );
+});
 
 /** A sentence's words, numbered for selecting like `IndexedText`, with the ones picked for the word card marked. */
 function Words({ text, picked }: { text: string; picked: [number, number] | null }) {
