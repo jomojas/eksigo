@@ -314,10 +314,10 @@ function TranscriptPanel({ item }: { item: Item }) {
   );
 }
 
-function transcriptLabel(state: string | undefined): string {
+function transcriptLabel(state: string | undefined, fromSubtitles = false): string {
   switch (state) {
     case "done":
-      return "Whisper Fast";
+      return fromSubtitles ? t("Subtitles file") : "Whisper Fast";
     case "running":
     case "queued":
     case "model":
@@ -432,7 +432,7 @@ function Details({ episode, item, onRemoved }: { episode: Episode | null; item: 
           <b className="mono">{item?.state === "ready" ? bytes(item.bytes) : episode?.audioBytes ? bytes(episode.audioBytes) : "—"}</b>
         </div>
         <div className="prop">
-          {t("Transcript")}<b>{transcriptLabel(liveTranscript?.state ?? item?.transcriptState)}</b>
+          {t("Transcript")}<b>{transcriptLabel(liveTranscript?.state ?? item?.transcriptState, !!item?.transcriptFromSubtitles)}</b>
         </div>
         {item?.ownFile && item.path && (
           <div className="prop" style={{ flexDirection: "column", alignItems: "flex-start", gap: 6 }}>

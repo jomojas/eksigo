@@ -527,7 +527,8 @@ export const zh: Record<string, string> = {
   "Nothing matches these filters.": "没有符合这些筛选条件的内容。",
   "Download an episode from Podcasts, or add an audio or video file of your own. Everything you can practise lives here.":
     "从播客下载一集，或添加你自己的音频或视频文件。所有可以练习的内容都在这里。",
-  "MP3, M4A, WAV, MP4, MOV and more. Files stay where they are on this computer.": "支持 MP3、M4A、WAV、MP4、MOV 等。文件会留在这台电脑上的原处。",
+  "MP3, M4A, WAV, MP4, MOV and more. Files stay where they are on this computer. English subtitles (.srt) beside a video are used as its transcript.":
+    "支持 MP3、M4A、WAV、MP4、MOV 等。文件会留在这台电脑上的原处。视频旁边的英文字幕（.srt）会直接用作文字稿。",
   "Needs attention": "需要处理",
   "Not started": "未开始",
   "Your own files": "你自己的文件",
@@ -967,4 +968,5 @@ export const zh: Record<string, string> = {
   "Exit full screen": "退出全屏",
   "Full screen (F)": "全屏（F）",
   "Exit full screen (F)": "退出全屏（F）",
+  "Subtitles file": "字幕文件",
 };
