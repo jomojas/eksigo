@@ -230,6 +230,9 @@ const MIGRATIONS: &[&str] = &[
     // 16: missed sentences sent again after being taken off the phone went with their old time, so the server
     // kept the deletion. Sending them all once more, with the time of sending (sync.rs `changes`), mends that.
     "UPDATE sync_sent SET hash = '' WHERE kind = 'missed';",
+    // 17: where Listen or Watch was left, to carry on from there; a video's thumbnail, as a small JPEG data URL.
+    "ALTER TABLE items ADD COLUMN listen_ms INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE items ADD COLUMN thumbnail TEXT;",
 ];
 
 pub struct Db(pub Mutex<Connection>);

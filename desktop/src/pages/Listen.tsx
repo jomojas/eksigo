@@ -19,7 +19,7 @@ import { clock, plural } from "../lib/format";
 import { sentenceAt, SPEEDS, usePlayer } from "../lib/playback";
 import { isBusy, transcribed, useTranscript } from "../lib/transcripts";
 import { t } from "../lib/i18n";
-import { isVideo, useVideoPlayer, useVideoSrc } from "../lib/video";
+import { isVideo, makeThumbnail, useVideoPlayer, useVideoSrc } from "../lib/video";
 
 export const listenPath = (itemId: number) => `/library/${itemId}/listen`;
 
@@ -34,12 +34,20 @@ const KEYS: [string, string][] = [
 
 /** Within this long of a sentence's start, Replay and ↑ go to the sentence before. */
 const RESTART_MS = 1200;
+/** Left less than this far in, or this close to the end, it starts from the beginning next time. */
+const RESUME_MIN_MS = 5000;
+const RESUME_END_MS = 15000;
 /** Listening time is saved this often while playing, and when playback stops. */
 const SAVE_EVERY_S = 15;
 /** After the learner scrolls away, the sentence being heard comes back to the middle this long after they stop. */
 const BACK_AFTER_MS = 2500;
 
+/** A fresh page for each episode, so going straight from one to another (search, My words) starts clean. */
 export function ListenScreen() {
+  return <ListenPage key={useParams().itemId} />;
+}
+
+function ListenPage() {
   const itemId = Number(useParams().itemId);
   const navigate = useNavigate();
   // Opened from My words at a sentence (`state.at`, ms): playback starts there, with that sentence shown.
@@ -90,7 +98,10 @@ export function ListenScreen() {
   const video = isVideo(item);
   const src = useVideoSrc(itemId, video);
   const [videoEl, setVideoEl] = useState<HTMLVideoElement | null>(null);
-  const [videoReady, setVideoReady] = useState(false);
+  // A video with no thumbnail yet gets one, shown before it plays and in the Library.
+  useEffect(() => {
+    if (video && item?.state === "ready" && !item.artworkUrl) makeThumbnail(itemId);
+  }, [video, item?.state, item?.artworkUrl, itemId]);
   const audio = usePlayer(item?.state === "ready" && !video ? item.path : null);
   const film = useVideoPlayer(videoEl);
   const player = video ? film : audio;
@@ -134,14 +145,26 @@ export function ListenScreen() {
     [player, speed, durMs],
   );
   const [follow, setFollow] = useState(true);
-  // Opening Listen or Watch starts playing at once: from the beginning, or from the sentence opened from My words.
+  // Listen starts playing as soon as it opens; Watch shows the video's thumbnail and waits for Play. Both carry on
+  // from where they were left last time (or the sentence opened from My words), with Start over beside it.
+  const [resumedFrom, setResumedFrom] = useState<number | null>(null);
   const started = useRef(false);
   useEffect(() => {
-    if (started.current || item?.state !== "ready" || !item.path) return;
-    if (video && !videoReady) return;
+    if (started.current || !item || item.state !== "ready" || !item.path) return;
     started.current = true;
-    playFrom(startAt ?? 0);
-  }, [item?.state, item?.path, video, videoReady, startAt, playFrom]);
+    const left = item.listenMs;
+    const resume = left > RESUME_MIN_MS && (!durMs || left < durMs - RESUME_END_MS) ? left : 0;
+    const from = startAt ?? resume;
+    if (startAt === null && resume > 0) setResumedFrom(resume);
+    if (video) setAt(from);
+    else playFrom(from);
+  }, [item, video, startAt, durMs, playFrom]);
+  const startOver = () => {
+    setResumedFrom(null);
+    setFollow(true);
+    if (video && !player.playing) setAt(0);
+    else playFrom(0);
+  };
   const toggle = useCallback(() => {
     if (player.playing) return player.stop();
     setFollow(true);
@@ -270,17 +293,32 @@ export function ListenScreen() {
     flush();
     return flush;
   }, [flush]);
+  // Where it was left, saved with the listening time and whenever playback stops (the page closing too).
+  // Near the end counts as finished: next time starts from the beginning.
+  const posRef = useRef(0);
+  posRef.current = pos;
+  const durRef = useRef(0);
+  durRef.current = durMs;
+  const savePosition = useCallback(() => {
+    const ms = posRef.current;
+    const done = durRef.current > 0 && ms > durRef.current - RESUME_END_MS;
+    backend.saveListenPosition(itemId, done ? 0 : ms).catch(() => {});
+  }, [itemId]);
   useEffect(() => {
     if (!player.playing) return;
     const t = window.setInterval(() => {
       pending.current += 1;
-      if (pending.current >= SAVE_EVERY_S) flush();
+      if (pending.current >= SAVE_EVERY_S) {
+        flush();
+        savePosition();
+      }
     }, 1000);
     return () => {
       window.clearInterval(t);
       if (pending.current > 0) flush();
+      savePosition();
     };
-  }, [player.playing, flush]);
+  }, [player.playing, flush, savePosition]);
 
   // Keeps the sentence being heard in the middle of the space under the player. Scrolling away pauses that;
   // it comes back by itself a few seconds after the scrolling stops, or at once on play, replay or ↑ ↓.
@@ -399,7 +437,12 @@ export function ListenScreen() {
           <div ref={bar} style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--canvas)", padding: "12px 0", margin: "-12px 0" }}>
             {video && (
               <div className="video">
-                <video ref={setVideoEl} src={src ?? undefined} preload="auto" playsInline onClick={toggle} onLoadedMetadata={() => setVideoReady(true)} />
+                <video ref={setVideoEl} src={src ?? undefined} poster={item?.artworkUrl ?? undefined} preload="auto" playsInline onClick={toggle} />
+                {!player.playing && !held && !lookup && (
+                  <button type="button" className="video-play" onClick={toggle} aria-label={t("Play")}>
+                    <Icon name="play" size={26} stroke={1.6} />
+                  </button>
+                )}
                 {held && (
                   <div className="video-held">
                     <Icon name="pause" size={12} stroke={2.2} />
@@ -494,6 +537,15 @@ export function ListenScreen() {
               </div>
             </div>
             {player.error && <p style={{ color: "var(--semantic-error)", marginTop: 8 }}>{t(player.error)}</p>}
+            {resumedFrom !== null && (
+              <div className="resumed">
+                {t("Picking up from {time}, where you stopped last time.", { time: clock(resumedFrom / 1000) })}
+                <button type="button" className="btn btn-sm btn-ghost" onClick={startOver}>
+                  <Icon name="replay" size={13} />
+                  {t("Start over")}
+                </button>
+              </div>
+            )}
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
