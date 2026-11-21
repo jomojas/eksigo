@@ -88,6 +88,8 @@ pub struct Item {
     /// The transcript: "none", "queued", "running", "done" or "failed", and how far it has got.
     pub transcript_state: String,
     pub transcript_done_ms: i64,
+    /// Where Listen or Watch was left; 0 to start from the beginning.
+    pub listen_ms: i64,
     /// The latest dictation of it, when there is one.
     pub practice: Option<Practice>,
 }
@@ -135,8 +137,8 @@ fn episode_from(r: &Row) -> rusqlite::Result<Episode> {
 }
 
 const ITEM_COLS: &str = "i.id, i.episode_id, e.show_id, i.title, i.source, i.own_file, i.path, i.bytes, i.duration_s,
-    i.state, i.error, i.added_at, i.last_practised_at, COALESCE(e.artwork_url, s.artwork_url),
-    COALESCE(t.state, 'none'), COALESCE(t.done_ms, 0)";
+    i.state, i.error, i.added_at, i.last_practised_at, COALESCE(e.artwork_url, s.artwork_url, i.thumbnail),
+    COALESCE(t.state, 'none'), COALESCE(t.done_ms, 0), i.listen_ms";
 const ITEM_FROM: &str = "items i LEFT JOIN episodes e ON e.id = i.episode_id LEFT JOIN shows s ON s.id = e.show_id
     LEFT JOIN transcripts t ON t.item_id = i.id";
 
@@ -164,6 +166,7 @@ fn item_from(r: &Row) -> rusqlite::Result<Item> {
         artwork_url: r.get(13)?,
         transcript_state: r.get(14)?,
         transcript_done_ms: r.get(15)?,
+        listen_ms: r.get(16)?,
         practice: None,
     })
 }
@@ -362,6 +365,21 @@ pub fn add_file(conn: &Connection, path: &Path, duration_s: f64) -> Result<i64> 
         params![title, MY_FILES, p, bytes, duration_s, now()],
     )?;
     Ok(conn.last_insert_rowid())
+}
+
+/// Remembers where Listen or Watch was left.
+pub fn set_listen_ms(conn: &Connection, id: i64, ms: i64) -> Result<()> {
+    conn.execute("UPDATE items SET listen_ms = ?2 WHERE id = ?1", params![id, ms.max(0)])?;
+    Ok(())
+}
+
+/// Keeps a video's thumbnail: a small JPEG as a data URL, made by the window from the video.
+pub fn set_thumbnail(conn: &Connection, id: i64, data_url: &str) -> Result<()> {
+    if !data_url.starts_with("data:image/jpeg;base64,") || data_url.len() > 400_000 {
+        return Err(anyhow!("That isn't a thumbnail."));
+    }
+    conn.execute("UPDATE items SET thumbnail = ?2 WHERE id = ?1 AND own_file = 1", params![id, data_url])?;
+    Ok(())
 }
 
 /// Takes an item out of the Library. Returns the downloaded file to delete; own files are never deleted.
@@ -601,6 +619,22 @@ mod tests {
         assert_eq!(new_from_shows(&conn, 3).unwrap()[0].episode.title, "Episode 1");
         assert_eq!(stale_subscriptions(&conn, i64::MAX).unwrap().len(), 1);
         assert!(stale_subscriptions(&conn, 0).unwrap().is_empty());
+    }
+
+    #[test]
+    fn the_listening_position_and_a_thumbnail_are_kept() {
+        let db = Db::open_in_memory().unwrap();
+        let conn = db.conn();
+        let dir = audio::tests::temp_dir("resume");
+        let wav = audio::tests::ramp_wav(&dir, 8_000, 2);
+        let id = add_file(&conn, &wav, 2.0).unwrap();
+        assert_eq!(item(&conn, id).unwrap().listen_ms, 0);
+        set_listen_ms(&conn, id, 42_100).unwrap();
+        assert_eq!(item(&conn, id).unwrap().listen_ms, 42_100);
+
+        assert!(set_thumbnail(&conn, id, "data:image/png;base64,AAAA").is_err(), "only small JPEGs");
+        set_thumbnail(&conn, id, "data:image/jpeg;base64,AAAA").unwrap();
+        assert_eq!(item(&conn, id).unwrap().artwork_url.as_deref(), Some("data:image/jpeg;base64,AAAA"));
     }
 
     #[test]

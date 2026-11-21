@@ -12,7 +12,7 @@ import { bytes, clock, plural, whenDay } from "../lib/format";
 import { isBusy, transcribed, useTranscript } from "../lib/transcripts";
 import { PracticeStatus } from "./Show";
 import { t } from "../lib/i18n";
-import { isVideo } from "../lib/video";
+import { isVideo, makeThumbnails } from "../lib/video";
 
 const COLS = "minmax(0,1fr) 160px 64px 190px 72px 110px";
 
@@ -39,6 +39,7 @@ export function Library() {
       (p) => {
         setPage(p);
         setLoadError(false);
+        makeThumbnails(p.items);
       },
       () => setLoadError(true),
     );

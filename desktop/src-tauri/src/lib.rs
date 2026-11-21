@@ -666,6 +666,33 @@ fn video_open(app: AppHandle, db: State<Db>, id: i64) -> CmdResult<String> {
     Ok(path)
 }
 
+/// The cover picture stored in one of the learner's videos, as a data URL, when it has one. The window makes
+/// the thumbnail from it, or from a frame of the video when there's none.
+#[tauri::command]
+async fn video_cover(app: AppHandle, id: i64) -> CmdResult<Option<String>> {
+    let path = {
+        let db = app.state::<Db>();
+        let item = library::item(&db.conn(), id).map_err(err)?;
+        item.path.filter(|p| item.own_file && audio::is_video(Path::new(p)))
+    };
+    let Some(path) = path else { return Ok(None) };
+    let art = tauri::async_runtime::spawn_blocking(move || audio::cover_art(Path::new(&path))).await.map_err(err)?;
+    Ok(art.map(|(kind, bytes)| format!("data:{kind};base64,{}", base64::Engine::encode(&base64::engine::general_purpose::STANDARD, bytes))))
+}
+
+#[tauri::command]
+fn video_thumbnail_save(app: AppHandle, db: State<Db>, id: i64, data_url: String) -> CmdResult<()> {
+    library::set_thumbnail(&db.conn(), id, &data_url).map_err(err)?;
+    let _ = app.emit("library", ());
+    Ok(())
+}
+
+/// Where Listen or Watch was left, saved as playback stops and every few seconds while it plays.
+#[tauri::command]
+fn listen_position_save(db: State<Db>, id: i64, ms: i64) -> CmdResult<()> {
+    library::set_listen_ms(&db.conn(), id, ms).map_err(err)
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Added {
@@ -1154,6 +1181,9 @@ pub fn run() {
             library_item,
             library_add_files,
             video_open,
+            video_cover,
+            video_thumbnail_save,
+            listen_position_save,
             library_remove,
             dictation_start,
             dictation_answer,

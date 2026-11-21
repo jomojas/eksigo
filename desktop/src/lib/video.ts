@@ -98,3 +98,95 @@ export function useVideoPlayer(v: HTMLVideoElement | null) {
 
   return { ...state, play, stop };
 }
+
+// ---------- thumbnails ----------
+
+/** Wide enough to stand in for the video on Watch before it plays. */
+const THUMB_WIDTH = 640;
+/** Videos tried this session; one that fails isn't tried again until the app restarts. */
+const tried = new Set<number>();
+
+/** Gives a Library video its thumbnail: the cover picture stored in the file, or else a frame near the start
+ * (a second in, since many videos open on black; further in if that frame is still dark). */
+export async function makeThumbnail(itemId: number): Promise<void> {
+  if (tried.has(itemId)) return;
+  tried.add(itemId);
+  try {
+    const cover = await backend.videoCover(itemId);
+    let url = cover ? await fromImage(cover) : null;
+    if (!url) {
+      const path = await backend.videoOpen(itemId);
+      url = await fromVideo(inApp ? convertFileSrc(path) : path);
+    }
+    if (url) await backend.saveThumbnail(itemId, url);
+  } catch {
+    // No thumbnail: the Library shows the video icon instead.
+  }
+}
+
+/** Thumbnails for the Library videos that have none, one at a time. */
+export async function makeThumbnails(items: Item[]) {
+  for (const it of items) {
+    if (isVideo(it) && it.state === "ready" && !it.artworkUrl) await makeThumbnail(it.id);
+  }
+}
+
+function draw(source: CanvasImageSource, w: number, h: number): { url: string; dark: boolean } | null {
+  if (!w || !h) return null;
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.min(THUMB_WIDTH, w);
+  canvas.height = Math.round((canvas.width * h) / w);
+  const g = canvas.getContext("2d");
+  if (!g) return null;
+  g.drawImage(source, 0, 0, canvas.width, canvas.height);
+  // How dark the frame is, from a coarse sample of its pixels.
+  const px = g.getImageData(0, 0, canvas.width, canvas.height).data;
+  let sum = 0;
+  let n = 0;
+  for (let i = 0; i < px.length; i += 4 * 97) {
+    sum += 0.2126 * px[i] + 0.7152 * px[i + 1] + 0.0722 * px[i + 2];
+    n++;
+  }
+  return { url: canvas.toDataURL("image/jpeg", 0.8), dark: n > 0 && sum / n < 18 };
+}
+
+function fromImage(src: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(draw(img, img.naturalWidth, img.naturalHeight)?.url ?? null);
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+}
+
+function fromVideo(src: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    const v = document.createElement("video");
+    // The file is served from another origin; this lets its pixels be read.
+    v.crossOrigin = "anonymous";
+    v.muted = true;
+    v.preload = "auto";
+    let later = false;
+    const finish = (url: string | null) => {
+      window.clearTimeout(timer);
+      v.removeAttribute("src");
+      v.load();
+      resolve(url);
+    };
+    const timer = window.setTimeout(() => finish(null), 20_000);
+    v.onloadeddata = () => {
+      v.currentTime = Math.min(1, (v.duration || 2) / 2);
+    };
+    v.onseeked = () => {
+      const frame = draw(v, v.videoWidth, v.videoHeight);
+      if (frame?.dark && !later && v.duration > 10) {
+        later = true;
+        v.currentTime = v.duration * 0.1;
+        return;
+      }
+      finish(frame?.url ?? null);
+    };
+    v.onerror = () => finish(null);
+    v.src = src;
+  });
+}

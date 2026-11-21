@@ -138,6 +138,7 @@ function addItem(ep: Episode, state: Item["state"], lastPractisedDaysAgo: number
     artworkUrl: show.artworkUrl,
     transcriptState: "none",
     transcriptDoneMs: 0,
+    listenMs: 0,
   };
   items.push(item);
   ep.itemId = item.id;
@@ -165,7 +166,9 @@ items.push({
   artworkUrl: null,
   transcriptState: "none",
   transcriptDoneMs: 0,
+  listenMs: 0,
 });
+
 
 // ---------- transcripts ----------
 
@@ -748,6 +751,17 @@ export const sample = {
   },
 
   sentences: (itemId: number): Sentence[] => transcripts.get(itemId)?.sentences ?? [],
+
+  saveListenPosition(itemId: number, ms: number) {
+    const item = items.find((i) => i.id === itemId);
+    if (item) item.listenMs = Math.round(ms);
+  },
+
+  saveThumbnail(itemId: number, dataUrl: string) {
+    const item = items.find((i) => i.id === itemId);
+    if (item) item.artworkUrl = dataUrl;
+    emit("library", null);
+  },
 
   async transcribe(itemId: number) {
     const item = items.find((i) => i.id === itemId);

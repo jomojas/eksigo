@@ -163,6 +163,8 @@ export type Item = {
   artworkUrl: string | null;
   transcriptState: TranscriptState;
   transcriptDoneMs: number;
+  /** Where Listen or Watch was left; 0 to start from the beginning. */
+  listenMs: number;
   practice?: Practice | null;
 };
 
@@ -522,6 +524,10 @@ export const backend = {
   item: (id: number) => call<Item>("library_item", { id }, () => sample.item(id)),
   /** Allows the window to play one of the learner's own videos; returns its path. */
   videoOpen: (id: number) => call<string>("video_open", { id }, async () => (await sample.item(id)).path ?? ""),
+  /** The cover picture stored in a video file, as a data URL, or null. */
+  videoCover: (id: number) => call<string | null>("video_cover", { id }, () => null),
+  saveThumbnail: (id: number, dataUrl: string) => call<void>("video_thumbnail_save", { id, dataUrl }, () => sample.saveThumbnail(id, dataUrl)),
+  saveListenPosition: (id: number, ms: number) => call<void>("listen_position_save", { id, ms: Math.round(ms) }, () => sample.saveListenPosition(id, ms)),
   addFiles: (paths: string[]) => call<Added>("library_add_files", { paths }, () => ({ ids: [], skipped: [] })),
   remove: (id: number) => call<void>("library_remove", { id }, () => sample.remove(id)),
 

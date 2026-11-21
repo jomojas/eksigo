@@ -956,4 +956,7 @@ export const zh: Record<string, string> = {
   "Couldn't load the transcript.": "无法载入文字稿。",
   "Couldn't load your library.": "无法载入资料库。",
   "Couldn't work out how much space Eksigo uses.": "无法计算 Eksigo 占用的空间。",
+  // Carrying on where Listen or Watch was left
+  "Picking up from {time}, where you stopped last time.": "从上次停下的 {time} 继续。",
+  "Start over": "从头开始",
 };

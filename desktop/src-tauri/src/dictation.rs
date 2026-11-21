@@ -261,7 +261,7 @@ pub struct MissedSentence {
 pub fn missed(conn: &Connection) -> Result<Vec<MissedSentence>> {
     let mut st = conn.prepare(&format!(
         "SELECT n.idx, n.kind, n.original, n.typed, n.plays, n.credit, n.total, n.spelling, n.marks,
-                i.id, a.id, i.title, i.source, COALESCE(e.artwork_url, s.artwork_url), i.path, se.start_ms, se.end_ms,
+                i.id, a.id, i.title, i.source, COALESCE(e.artwork_url, s.artwork_url, i.thumbnail), i.path, se.start_ms, se.end_ms,
                 n.answered_at, a.started_at
          FROM attempts a
          JOIN items i ON i.id = a.item_id
@@ -431,7 +431,7 @@ pub struct InProgress {
 
 pub fn in_progress(conn: &Connection) -> Result<Vec<InProgress>> {
     let mut st = conn.prepare(
-        "SELECT i.id, a.id, i.title, i.source, COALESCE(e.artwork_url, s.artwork_url), a.position,
+        "SELECT i.id, a.id, i.title, i.source, COALESCE(e.artwork_url, s.artwork_url, i.thumbnail), a.position,
                 (SELECT count(*) FROM answers x WHERE x.attempt_id = a.id AND x.kind != 'ad'),
                 (SELECT count(*) FROM sentences x WHERE x.item_id = i.id),
                 COALESCE(t.state = 'done', 0), a.updated_at

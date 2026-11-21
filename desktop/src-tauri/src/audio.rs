@@ -27,6 +27,28 @@ pub const VIDEO_EXTENSIONS: &[&str] = &["mp4", "m4v", "mov"];
 /// Video files the window can't play (and whose sound is often in a format the decoder doesn't read).
 pub const UNSUPPORTED_VIDEO: &[&str] = &["mkv", "webm", "avi", "wmv", "flv", "ts"];
 
+/// The picture stored in a file as its cover, when it has one (a JPEG or PNG): its media type and bytes.
+pub fn cover_art(path: &Path) -> Option<(String, Vec<u8>)> {
+    let file = File::open(path).ok()?;
+    let mss = MediaSourceStream::new(Box::new(file), Default::default());
+    let mut hint = Hint::new();
+    if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+        hint.with_extension(ext);
+    }
+    let mut format = symphonia::default::get_probe().probe(&hint, mss, FormatOptions::default(), MetadataOptions::default()).ok()?;
+    let mut meta = format.metadata();
+    let rev = meta.skip_to_latest()?;
+    let v = rev.media.visuals.iter().chain(rev.per_track.iter().flat_map(|t| t.metadata.visuals.iter())).find(|v| !v.data.is_empty())?;
+    let kind = match v.media_type.as_deref() {
+        Some(t) if t.contains("png") => "image/png",
+        Some(t) if t.contains("jp") => "image/jpeg",
+        _ if v.data.starts_with(&[0x89, b'P', b'N', b'G']) => "image/png",
+        _ if v.data.starts_with(&[0xFF, 0xD8]) => "image/jpeg",
+        _ => return None,
+    };
+    Some((kind.to_string(), v.data.to_vec()))
+}
+
 pub fn is_video(path: &Path) -> bool {
     path.extension().and_then(|e| e.to_str()).is_some_and(|e| VIDEO_EXTENSIONS.contains(&e.to_ascii_lowercase().as_str()))
 }
