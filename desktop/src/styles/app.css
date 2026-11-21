@@ -886,6 +886,19 @@ select.btn {
   text-decoration-color: var(--hairline-strong);
   text-underline-offset: 3px;
 }
+/* Where a word was heard: lines start at the same edge as the sentence above, and a long file name breaks
+   anywhere and stops after two lines (the whole name is in the tooltip). */
+.source-name {
+  min-width: 0;
+  max-width: 100%;
+  text-align: start;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
 .select {
   font: 500 13px/1 var(--font-text);
   color: var(--ink);
