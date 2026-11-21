@@ -165,6 +165,8 @@ export type Item = {
   transcriptDoneMs: number;
   /** Where Listen or Watch was left; 0 to start from the beginning. */
   listenMs: number;
+  /** The transcript came from a subtitles file beside the video, not from Whisper. */
+  transcriptFromSubtitles?: boolean;
   practice?: Practice | null;
 };
 

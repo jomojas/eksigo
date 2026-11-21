@@ -16,6 +16,7 @@ mod mishear;
 mod progress;
 pub mod sentences;
 mod storage;
+mod subtitles;
 mod sync;
 pub mod transcribe;
 mod translate;

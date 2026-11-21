@@ -90,6 +90,8 @@ pub struct Item {
     pub transcript_done_ms: i64,
     /// Where Listen or Watch was left; 0 to start from the beginning.
     pub listen_ms: i64,
+    /// The transcript came from a subtitles file beside the video, not from Whisper.
+    pub transcript_from_subtitles: bool,
     /// The latest dictation of it, when there is one.
     pub practice: Option<Practice>,
 }
@@ -138,7 +140,7 @@ fn episode_from(r: &Row) -> rusqlite::Result<Episode> {
 
 const ITEM_COLS: &str = "i.id, i.episode_id, e.show_id, i.title, i.source, i.own_file, i.path, i.bytes, i.duration_s,
     i.state, i.error, i.added_at, i.last_practised_at, COALESCE(e.artwork_url, s.artwork_url, i.thumbnail),
-    COALESCE(t.state, 'none'), COALESCE(t.done_ms, 0), i.listen_ms";
+    COALESCE(t.state, 'none'), COALESCE(t.done_ms, 0), i.listen_ms, COALESCE(t.model = 'subtitles', 0)";
 const ITEM_FROM: &str = "items i LEFT JOIN episodes e ON e.id = i.episode_id LEFT JOIN shows s ON s.id = e.show_id
     LEFT JOIN transcripts t ON t.item_id = i.id";
 
@@ -167,6 +169,7 @@ fn item_from(r: &Row) -> rusqlite::Result<Item> {
         transcript_state: r.get(14)?,
         transcript_done_ms: r.get(15)?,
         listen_ms: r.get(16)?,
+        transcript_from_subtitles: r.get(17)?,
         practice: None,
     })
 }

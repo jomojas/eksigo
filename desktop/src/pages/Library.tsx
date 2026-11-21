@@ -238,7 +238,7 @@ export function Library() {
             <div style={{ font: "500 13px/1.3 var(--font-text)", color: "var(--ink-muted)" }}>
               {t(dragging ? "Drop to add to your library" : "Drop audio or video files here")}
             </div>
-            <div style={{ fontSize: 12, marginTop: 4 }}>{t("MP3, M4A, WAV, MP4, MOV and more. Files stay where they are on this computer.")}</div>
+            <div style={{ fontSize: 12, marginTop: 4 }}>{t("MP3, M4A, WAV, MP4, MOV and more. Files stay where they are on this computer. English subtitles (.srt) beside a video are used as its transcript.")}</div>
           </div>
         </div>
       </div>

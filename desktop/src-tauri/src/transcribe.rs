@@ -25,8 +25,12 @@ use crate::{
     db::Db,
     models,
     sentences::{self, Sentence, Word},
+    subtitles,
     whisper,
 };
+
+/// The `model` of a transcript made from a subtitles file beside the video.
+pub const SUBTITLES: &str = "subtitles";
 
 /// The first chunk is short, so the first sentences are ready in seconds even on a slow computer.
 const FIRST_CHUNK_MS: i64 = 30_000;
@@ -525,6 +529,17 @@ impl Worker {
             return Err(anyhow!("The audio isn't downloaded yet"));
         }
         let path = path.ok_or_else(|| anyhow!("The audio isn't downloaded yet"))?;
+
+        // English subtitles beside the file are the transcript, with no need for Whisper.
+        if let Some(sentences) = subtitles::load(Path::new(&path)) {
+            let duration_ms = duration_s.map(|d| (d * 1000.0) as i64);
+            let mut conn = db.conn();
+            begin(&conn, item_id, SUBTITLES, duration_ms)?;
+            let done_ms = duration_ms.unwrap_or_else(|| sentences.last().map_or(0, |s| s.end_ms));
+            save_chunk(&mut conn, item_id, &Chunk { sentences, done_ms, finished: true })?;
+            eprintln!("item {item_id}: transcript from the subtitles file");
+            return Ok(Next::Done);
+        }
 
         let model = models::find(models::DEFAULT)?;
         self.load_engine(model, item_id)?;
