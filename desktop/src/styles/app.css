@@ -1478,8 +1478,8 @@ select.btn {
 .video video {
   display: block;
   width: 100%;
-  /* Leaves room for the sentences under it, even in the smallest window. */
-  max-height: min(440px, 44cqh);
+  /* About three fifths of the page, the sentences under it the rest. */
+  max-height: 60cqh;
   object-fit: contain;
   cursor: pointer;
 }

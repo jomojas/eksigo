@@ -49,7 +49,7 @@ The welcome shows once; the app remembers it in its own database, so updates don
 
 **Starting an episode:** dictation starts after about 30 seconds while transcription continues in the background (section 3).
 
-**Listen (decided 2026-11-13, design D07).** The everyday way in, for learners who aren't preparing for a test and won't type a whole episode. The episode plays straight through; its sentences are listed with the one being heard highlighted and kept in view, but **hidden by default**: each shows as grey bars, one per word and as long as the word, which darken as the words are spoken. The learner tests their ears first, then shows what they want to read.
+**Listen (decided 2026-11-13, design D07).** The everyday way in, for learners who aren't preparing for a test and won't type a whole episode. The episode plays straight through, starting as soon as the page opens (from the beginning, or from the sentence opened from My words); its sentences are listed with the one being heard highlighted and kept in view, but **hidden by default**: each shows as grey bars, one per word and as long as the word, which darken as the words are spoken. The learner tests their ears first, then shows what they want to read.
 - `S` (or the row's *Show*) shows or hides the sentence being heard; **Hidden · All shown** above the list (`Shift+S`) shows or hides them all. A sentence once shown **stays shown** as playback moves on. Hidden is the default every time; the choice isn't remembered.
 - `↑ ↓` go to the sentence before or after and play it from its start; `R` replays the sentence; `Space` plays or pauses; `← →` 5 seconds; the speed as in dictation.
 - Selecting words in a shown sentence opens the same dictionary card as the results, docked in the right panel; playback pauses while it's open and carries on when it closes. Words saved here keep their sentence and audio like any other, and are listed under *Saved while listening*.
@@ -57,7 +57,7 @@ The welcome shows once; the app remembers it in its own database, so updates don
 - Opening a word's sentence from My words opens Listen there, with that sentence shown. No transcript yet: Listen starts it, and the audio plays meanwhile.
 
 **Watch (decided 2026-11-21).** The learner's own videos (MP4, MOV, M4V) are the same page, called *Watch*. The file stays where it is; only that one file is opened to the window, when its page opens. Whisper transcribes the sound as for audio, and dictation works on it the same way.
-- The video plays above the sentence list, with the sentence being said as a **subtitle** on the picture. Hidden sentences are bars there too, until `S`.
+- The video takes about three fifths of the page's height and plays above the sentence list, with the sentence being said as a **subtitle** on the picture. Hidden sentences are bars there too, until `S`.
 - The mouse on the subtitle **pauses** the video, so the line stays still; moving away carries on. Clicking a word or dragging across a phrase, on the subtitle or in the list, opens the dictionary card; the picked words are marked in both places. A phrase stays inside one sentence.
 - Other video formats (MKV, WebM, AVI…) are turned away when added, with a line saying to convert them to MP4: the window can't play them, and their sound is often in a format the decoder doesn't read.
 - **Not planned:** YouTube and streaming services. Their terms forbid downloading, ads come and go in the middle, and browser tools such as Language Reactor already do subtitles there well.

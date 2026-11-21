@@ -84,6 +84,7 @@ export function ListenScreen() {
   const video = isVideo(item);
   const src = useVideoSrc(itemId, video);
   const [videoEl, setVideoEl] = useState<HTMLVideoElement | null>(null);
+  const [videoReady, setVideoReady] = useState(false);
   const audio = usePlayer(item?.state === "ready" && !video ? item.path : null);
   const film = useVideoPlayer(videoEl);
   const player = video ? film : audio;
@@ -127,6 +128,14 @@ export function ListenScreen() {
     [player, speed, durMs],
   );
   const [follow, setFollow] = useState(true);
+  // Opening Listen or Watch starts playing at once: from the beginning, or from the sentence opened from My words.
+  const started = useRef(false);
+  useEffect(() => {
+    if (started.current || item?.state !== "ready" || !item.path) return;
+    if (video && !videoReady) return;
+    started.current = true;
+    playFrom(startAt ?? 0);
+  }, [item?.state, item?.path, video, videoReady, startAt, playFrom]);
   const toggle = useCallback(() => {
     if (player.playing) return player.stop();
     setFollow(true);
@@ -357,7 +366,7 @@ export function ListenScreen() {
           <div ref={bar} style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--canvas)", padding: "12px 0", margin: "-12px 0" }}>
             {video && (
               <div className="video">
-                <video ref={setVideoEl} src={src ?? undefined} preload="auto" playsInline onClick={toggle} />
+                <video ref={setVideoEl} src={src ?? undefined} preload="auto" playsInline onClick={toggle} onLoadedMetadata={() => setVideoReady(true)} />
                 {held && (
                   <div className="video-held">
                     <Icon name="pause" size={12} stroke={2.2} />
