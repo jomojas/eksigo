@@ -297,7 +297,7 @@ function TranscriptPanel({ item }: { item: Item }) {
   }, [live]);
   const status = live && stopping && isBusy(live.state) ? { ...live, state: "none" as const, sentences: 0, doneMs: 0 } : live;
   useEffect(() => {
-    backend.transcriptStatus(item.id).then(setInitial);
+    backend.transcriptStatus(item.id).then(setInitial, () => {});
   }, [item.id]);
   return (
     <Transcript

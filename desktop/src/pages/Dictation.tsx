@@ -62,15 +62,17 @@ export function DictationScreen() {
 
   // The transcript, growing while the learner dictates.
   const [initial, setInitial] = useState<TranscriptStatus | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
-    backend.transcriptStatus(itemId).then(setInitial);
-  }, [itemId]);
+    backend.transcriptStatus(itemId).then(setInitial, () => setLoadError("Couldn't load the transcript."));
+  }, [itemId, attempt]);
   const status = useTranscript(itemId, initial);
   const [sentences, setSentences] = useState<Sentence[]>([]);
   const count = status?.sentences ?? 0;
   useEffect(() => {
-    if (count > 0) backend.sentences(itemId).then(setSentences);
-  }, [itemId, count]);
+    if (count > 0) backend.sentences(itemId).then(setSentences, () => setLoadError("Couldn't load the transcript."));
+  }, [itemId, count, attempt]);
 
   // A downloaded episode with no transcript yet starts transcribing as soon as dictation opens.
   const asked = useRef(false);
@@ -96,6 +98,20 @@ export function DictationScreen() {
           {error ? (
             <div className="notice notice-error" role="alert">
               {error}
+            </div>
+          ) : loadError ? (
+            <div className="notice notice-error" role="alert">
+              <span style={{ flexGrow: 1 }}>{t(loadError)}</span>
+              <button
+                type="button"
+                className="btn btn-sm"
+                onClick={() => {
+                  setLoadError(null);
+                  setAttempt((a) => a + 1);
+                }}
+              >
+                {t("Try again")}
+              </button>
             </div>
           ) : (
             <Preparing item={item} status={status} onRetry={() => backend.transcribe(itemId)} onBack={() => navigate(`/library/${itemId}`)} />

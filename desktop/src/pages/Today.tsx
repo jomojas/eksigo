@@ -264,7 +264,7 @@ export function Today() {
   if (first) keys.push(["Enter", "Resume"]);
   if (words?.total) keys.push(["P", "Practise words"]);
   if (missed?.length) keys.push(["H", "Hear missed sentences"]);
-  keys.push(["Mod O", "Add audio"]);
+  keys.push(["Mod O", "Add audio or video"]);
 
   return (
     <Page crumbs={["Today"]} keys={keys}>
@@ -408,7 +408,7 @@ export function Today() {
                 </button>
                 <button type="button" className="btn btn-sm" disabled={!inApp} onClick={() => addAudio().then((added) => added && navigate("/library", { state: { added } }))}>
                   <Icon name="plus" />
-                  {t("Add audio")}
+                  {t("Add audio or video")}
                 </button>
               </div>
             )}

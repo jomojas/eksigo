@@ -946,4 +946,14 @@ export const zh: Record<string, string> = {
   "Eksigo plays MP4, MOV and M4V videos. Convert it to MP4 and add it again": "Eksigo 支持 MP4、MOV 和 M4V 视频。请转换为 MP4 后再添加",
   "That item isn't a video.": "这一项不是视频。",
   "As said in the video": "视频里的读法",
+  // Found in the app review
+  Hidden: "隐藏",
+  "All shown": "全部显示",
+  "It's": "答案是",
+  later: "即将推出",
+  "Delete account…": "删除账户…",
+  Delete: "删除",
+  "Couldn't load the transcript.": "无法载入文字稿。",
+  "Couldn't load your library.": "无法载入资料库。",
+  "Couldn't work out how much space Eksigo uses.": "无法计算 Eksigo 占用的空间。",
 };
