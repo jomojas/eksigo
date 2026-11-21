@@ -368,6 +368,33 @@ textarea,
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  /* Status lines give way when the window is narrow, rather than wrapping into the bar's single line. */
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 45%;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.statusbar > .statusbar-version {
+  flex-shrink: 0;
+}
+.statusbar-keys {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 28px;
+  overflow: hidden;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-content: flex-start;
+  column-gap: 16px;
+}
+.statusbar-keys > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  white-space: nowrap;
 }
 
 /* ---------- page bodies ---------- */

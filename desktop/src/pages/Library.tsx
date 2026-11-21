@@ -33,8 +33,15 @@ export function Library() {
   const [added, setAdded] = useState<Added | null>((location.state as { added?: Added } | null)?.added ?? null);
   const [dragging, setDragging] = useState(false);
 
+  const [loadError, setLoadError] = useState(false);
   const reload = useCallback(() => {
-    backend.library().then(setPage);
+    backend.library().then(
+      (p) => {
+        setPage(p);
+        setLoadError(false);
+      },
+      () => setLoadError(true),
+    );
   }, []);
   useEffect(reload, [reload]);
   useLibraryChanged(reload);
@@ -103,7 +110,7 @@ export function Library() {
   const statusLine = page ? t("{items} · {size} downloaded", { items: plural(all.length, "item"), size: bytes(page.downloadsBytes) }) : "";
 
   return (
-    <Page crumbs={["Library"]} keys={[["Enter", "Open"], ["Mod O", "Add audio"], ["Del", "Remove"]]} status={statusLine}>
+    <Page crumbs={["Library"]} keys={[["Enter", "Open"], ["Mod O", "Add audio or video"], ["Del", "Remove"]]} status={statusLine}>
       <div className="page" style={{ padding: "20px 32px 32px", gap: 14 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <div className="pills" role="group" aria-label={t("Show")}>
@@ -144,6 +151,14 @@ export function Library() {
         </div>
 
         {added && <AddedNotice added={added} onClose={() => setAdded(null)} />}
+        {loadError && (
+          <div className="notice notice-error" role="alert">
+            <span style={{ flexGrow: 1 }}>{t("Couldn't load your library.")}</span>
+            <button type="button" className="btn btn-sm" onClick={reload}>
+              {t("Try again")}
+            </button>
+          </div>
+        )}
 
         {confirm && (
           <div className="notice" role="alertdialog" aria-label={t("Remove from library")}>

@@ -196,14 +196,16 @@ function AppShell() {
           <UpdateStatus />
           <AiStatusLine />
           {status && <span>{t(status)}</span>}
-          <span style={{ flexGrow: 1 }} />
-          {keys.map(([k, label]) => (
-            <span key={k}>
-              <Kbd keys={k} />
-              {t(label)}
-            </span>
-          ))}
-          <span className="mono" style={{ fontSize: 11 }}>
+          {/* Key hints, most useful first; the ones that don't fit drop onto a hidden second line. */}
+          <div className="statusbar-keys">
+            {keys.map(([k, label]) => (
+              <span key={k}>
+                <Kbd keys={k} />
+                {t(label)}
+              </span>
+            ))}
+          </div>
+          <span className="mono statusbar-version" style={{ fontSize: 11 }}>
             v{info?.version ?? ""}
           </span>
         </footer>

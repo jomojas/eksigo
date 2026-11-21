@@ -63,15 +63,21 @@ export function ListenScreen() {
 
   // The transcript, which may still be growing.
   const [initial, setInitial] = useState<TranscriptStatus | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const retry = () => {
+    setLoadError(null);
+    setAttempt((a) => a + 1);
+  };
   useEffect(() => {
-    backend.transcriptStatus(itemId).then(setInitial);
-  }, [itemId]);
+    backend.transcriptStatus(itemId).then(setInitial, () => setLoadError("Couldn't load the transcript."));
+  }, [itemId, attempt]);
   const status = useTranscript(itemId, initial);
   const [sentences, setSentences] = useState<Sentence[]>([]);
   const count = status?.sentences ?? 0;
   useEffect(() => {
-    if (count > 0) backend.sentences(itemId).then(setSentences);
-  }, [itemId, count]);
+    if (count > 0) backend.sentences(itemId).then(setSentences, () => setLoadError("Couldn't load the transcript."));
+  }, [itemId, count, attempt]);
   // No transcript yet: start it, as dictation does. The audio plays meanwhile.
   const asked = useRef(false);
   useEffect(() => {
@@ -374,7 +380,20 @@ export function ListenScreen() {
     <Page crumbs={crumbs} keys={KEYS} actions={actions}>
       <div style={{ display: "flex", minHeight: "100%" }}>
         <section aria-label={t(video ? "Watch" : "Listen")} className="page" style={{ flexGrow: 1, minWidth: 0, gap: 16, paddingTop: 20 }}>
-          {item && item.state !== "ready" && <div className="notice">{t("This episode isn’t downloaded. Download it on its page first.")}</div>}
+          {item && item.state === "missing" && (
+            <div className="notice notice-error" role="alert">
+              {t("This file is no longer at {path}. Move it back, or remove it from the Library and add it again.", { path: item.path ?? "" })}
+            </div>
+          )}
+          {item && item.state !== "ready" && item.state !== "missing" && <div className="notice">{t("This episode isn’t downloaded. Download it on its page first.")}</div>}
+          {loadError && (
+            <div className="notice notice-error" role="alert">
+              <span style={{ flexGrow: 1 }}>{t(loadError)}</span>
+              <button type="button" className="btn btn-sm" onClick={retry}>
+                {t("Try again")}
+              </button>
+            </div>
+          )}
 
           {/* Stays at the top while the sentences scroll under it. */}
           <div ref={bar} style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--canvas)", padding: "12px 0", margin: "-12px 0" }}>
@@ -425,11 +444,11 @@ export function ListenScreen() {
                 <Icon name="replay" size={15} stroke={1.8} />
               </button>
               <div style={{ flexGrow: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 10, fontSize: 13 }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 10, fontSize: 13, whiteSpace: "nowrap", overflow: "hidden" }}>
                   {current >= 0 ? (
                     <>
                       <b style={{ fontWeight: 500, color: "var(--ink)" }}>{t("Sentence {n}", { n: current + 1 })}</b>
-                      <span className="mono" style={{ fontSize: 12 }}>
+                      <span className="mono" style={{ fontSize: 12, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
                         {t(busy ? "of {n} so far" : "of {n}", { n: sentences.length })}
                       </span>
                     </>
@@ -437,7 +456,7 @@ export function ListenScreen() {
                     <span>{sentences.length > 0 ? plural(sentences.length, "sentence") : busy ? t("Transcribing…") : ""}</span>
                   )}
                   <span style={{ flexGrow: 1 }} />
-                  <span className="mono" style={{ fontSize: 12 }}>
+                  <span className="mono" style={{ fontSize: 12, flexShrink: 0 }}>
                     {clock(pos / 1000)} / {clock(item?.durationS)}
                   </span>
                 </div>
@@ -486,11 +505,11 @@ export function ListenScreen() {
             <div className="seg" role="group" aria-label={t("Sentences")}>
               <button type="button" aria-pressed={!allShown} onClick={() => setAllShown(false)}>
                 <Icon name="eye-off" size={13} />
-                &nbsp;Hidden
+                &nbsp;{t("Hidden")}
               </button>
               <button type="button" aria-pressed={allShown} onClick={() => setAllShown(true)}>
                 <Icon name="eye" size={13} />
-                &nbsp;All shown
+                &nbsp;{t("All shown")}
               </button>
             </div>
             <Kbd keys="Shift S" />

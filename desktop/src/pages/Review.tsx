@@ -554,7 +554,7 @@ export function ReviewScreen() {
   }, [attemptId]);
   useEffect(() => {
     backend.item(itemId).then(setItem, (e) => setError(String(e)));
-    backend.sentences(itemId).then(setSentences);
+    backend.sentences(itemId).then(setSentences, (e) => setError(String(e)));
     load();
     return on("practice", load);
   }, [itemId, load]);

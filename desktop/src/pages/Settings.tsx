@@ -730,7 +730,7 @@ function Speech() {
   const [confirm, setConfirm] = useState(false);
 
   const load = useCallback(() => {
-    backend.models().then(setModels);
+    backend.models().then(setModels, (e) => setError(String(e)));
   }, []);
   useEffect(load, [load]);
   useEffect(() => on("model-download", (p) => p.state !== "downloading" && load()), [load]);
@@ -831,7 +831,7 @@ function Translator() {
   const [model, setModel] = useState<TranslationModel | null>(null);
   const [error, setError] = useState<string | null>(null);
   const load = useCallback(() => {
-    backend.translationModel().then(setModel);
+    backend.translationModel().then(setModel, (e) => setError(String(e)));
   }, []);
   useEffect(load, [load]);
   useEffect(
@@ -1003,9 +1003,10 @@ function Dictionaries() {
 /** What Eksigo keeps on this computer, and where. */
 function Storage({ onOpen }: { onOpen: (s: SectionId) => void }) {
   const [u, setU] = useState<StorageUsage | null>(null);
+  const [failed, setFailed] = useState(false);
   const navigate = useNavigate();
   useEffect(() => {
-    backend.storage().then(setU);
+    backend.storage().then(setU, () => setFailed(true));
     // Downloads and removals elsewhere change the numbers.
     const offs = [on("library", () => backend.storage().then(setU)), on("model-download", (p) => p.state !== "downloading" && backend.storage().then(setU))];
     return () => offs.forEach((f) => f());
@@ -1031,6 +1032,11 @@ function Storage({ onOpen }: { onOpen: (s: SectionId) => void }) {
   return (
     <section aria-labelledby="storage" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <Header title={t("Storage")} text={t("Everything stays on this computer. Episodes you download are kept until you remove them; your own files are never copied or moved.")} />
+      {failed && !u && (
+        <div className="notice notice-error" role="alert">
+          {t("Couldn't work out how much space Eksigo uses.")}
+        </div>
+      )}
       {u && (
         <>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
