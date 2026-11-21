@@ -55,7 +55,12 @@ The welcome shows once; the app remembers it in its own database, so updates don
 - Selecting words in a shown sentence opens the same dictionary card as the results, docked in the right panel; playback pauses while it's open and carries on when it closes. Words saved here keep their sentence and audio like any other, and are listed under *Saved while listening*.
 - The panel also shows *Shown so far* and *Listened today*. Time listening counts towards the streak and Progress (kind `listening`), like dictation; accuracy stays dictation only.
 - Opening a word's sentence from My words opens Listen there, with that sentence shown. No transcript yet: Listen starts it, and the audio plays meanwhile.
-- **Not planned (decided 2026-11-13):** video and YouTube. Browser tools such as Language Reactor already do subtitles on YouTube and Netflix well; Eksigo's part is training the ear with podcasts, dictation and the learner's own mistakes.
+
+**Watch (decided 2026-11-21).** The learner's own videos (MP4, MOV, M4V) are the same page, called *Watch*. The file stays where it is; only that one file is opened to the window, when its page opens. Whisper transcribes the sound as for audio, and dictation works on it the same way.
+- The video plays above the sentence list, with the sentence being said as a **subtitle** on the picture. Hidden sentences are bars there too, until `S`.
+- The mouse on the subtitle **pauses** the video, so the line stays still; moving away carries on. Clicking a word or dragging across a phrase, on the subtitle or in the list, opens the dictionary card; the picked words are marked in both places. A phrase stays inside one sentence.
+- Other video formats (MKV, WebM, AVI…) are turned away when added, with a line saying to convert them to MP4: the window can't play them, and their sound is often in a format the decoder doesn't read.
+- **Not planned:** YouTube and streaming services. Their terms forbid downloading, ads come and go in the middle, and browser tools such as Language Reactor already do subtitles there well.
 
 **Playback, saved as defaults and changeable during a session (decided 2026-11-11):**
 - **Mode.** *Manual* (default): each sentence plays when the learner presses `Tab`, again up to the maximum. *Auto*: one `Tab` plays the sentence the maximum number of times in a row, with a pause between plays. In both modes the next sentence never starts by itself: it waits for `Tab`.

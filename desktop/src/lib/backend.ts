@@ -520,6 +520,8 @@ export const backend = {
   // The Library
   library: () => call<LibraryPage>("library_items", {}, () => sample.library()),
   item: (id: number) => call<Item>("library_item", { id }, () => sample.item(id)),
+  /** Allows the window to play one of the learner's own videos; returns its path. */
+  videoOpen: (id: number) => call<string>("video_open", { id }, async () => (await sample.item(id)).path ?? ""),
   addFiles: (paths: string[]) => call<Added>("library_add_files", { paths }, () => ({ ids: [], skipped: [] })),
   remove: (id: number) => call<void>("library_remove", { id }, () => sample.remove(id)),
 

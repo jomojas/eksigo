@@ -14,6 +14,7 @@ import { fraction, useDownloads, useLibraryChanged } from "../lib/downloads";
 import { bytes, clock, plural, shortDate, whenDay } from "../lib/format";
 import { isBusy, transcribed, useActivity, useTranscript } from "../lib/transcripts";
 import { t } from "../lib/i18n";
+import { isVideo } from "../lib/video";
 
 type Data = { episode: Episode | null; show: Show | null; item: Item | null };
 
@@ -193,6 +194,7 @@ function Actions({ episode, item, onChange, onError }: { episode: Episode | null
   }
 
   const p = item.practice;
+  const video = isVideo(item);
   const open = (again: boolean) => navigate(dictationPath(item.id), again ? { state: { again: true } } : undefined);
   const inProgress = !!p && !p.finished && p.position > 0;
   return (
@@ -202,8 +204,8 @@ function Actions({ episode, item, onChange, onError }: { episode: Episode | null
           {inProgress ? t("Resume dictation at {n}", { n: p.position + 1 }) : t(p?.finished ? "Dictate again" : "Start dictation")}
         </button>
         <button type="button" className="btn" onClick={() => navigate(listenPath(item.id))}>
-          <Icon name="headphones" size={14} />
-          {t("Listen")} <Kbd keys="L" />
+          <Icon name={video ? "video" : "headphones"} size={14} />
+          {t(video ? "Watch" : "Listen")} <Kbd keys="L" />
         </button>
         {inProgress && (
           <button type="button" className="btn btn-ghost" onClick={() => open(true)}>
@@ -216,9 +218,15 @@ function Actions({ episode, item, onChange, onError }: { episode: Episode | null
         <span>
           <b style={{ fontWeight: 500, color: "var(--ink-muted)" }}>{t("Dictate:")}</b> {t("one sentence at a time, typed from what you hear.")}
         </span>
-        <span>
-          <b style={{ fontWeight: 500, color: "var(--ink-muted)" }}>{t("Listen:")}</b> {t("straight through, sentences hidden until you show them; save words as you go.")}
-        </span>
+        {video ? (
+          <span>
+            <b style={{ fontWeight: 500, color: "var(--ink-muted)" }}>{t("Watch:")}</b> {t("the video with its subtitles, hidden until you show them; click words to save them.")}
+          </span>
+        ) : (
+          <span>
+            <b style={{ fontWeight: 500, color: "var(--ink-muted)" }}>{t("Listen:")}</b> {t("straight through, sentences hidden until you show them; save words as you go.")}
+          </span>
+        )}
       </div>
     </div>
   );

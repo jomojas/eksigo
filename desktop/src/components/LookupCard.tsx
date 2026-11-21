@@ -15,6 +15,7 @@ import { AiProblemLine, AiSource } from "./Ask";
 import { Icon } from "./Icon";
 import { Kbd } from "./Shell";
 import { t } from "../lib/i18n";
+import { isVideoPath } from "../lib/video";
 
 export type Selection = {
   itemId: number;
@@ -261,7 +262,7 @@ export function LookupCard({
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
         <button type="button" className="btn btn-sm" onClick={asSaid} disabled={!path || times.length === 0}>
           <Icon name="play" size={11} />
-          {t("As said in the episode")}
+          {t(isVideoPath(path) ? "As said in the video" : "As said in the episode")}
         </button>
         <button type="button" className="btn btn-sm btn-ghost" onClick={() => speak(sel.text)} title={t("Read by your computer's voice")}>
           <Icon name="speaker" size={14} />
