@@ -110,7 +110,8 @@ export function Words() {
                     <b className="ell">{w.text}</b>
                     <span className="ell">{w.note || firstLine(w.meaning) || "—"}</span>
                     <span>{levelName(w.level)}</span>
-                    <span>{nextPractice(w.dueAt)}</span>
+                    {/* A new word has no date yet: it comes up the next time the learner practises. */}
+                    <span>{w.level === "new" ? t("Next time") : nextPractice(w.dueAt)}</span>
                   </div>
                 ))}
                 {shown.length === 0 && loaded && <div style={{ padding: 16 }}>{query ? t("No words match “{query}”.", { query }) : t("No words at this level.")}</div>}

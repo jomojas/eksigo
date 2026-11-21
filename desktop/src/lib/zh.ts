@@ -959,4 +959,7 @@ export const zh: Record<string, string> = {
   // Carrying on where Listen or Watch was left
   "Picking up from {time}, where you stopped last time.": "从上次停下的 {time} 继续。",
   "Start over": "从头开始",
+  // Clearer wording
+  "up {n} points from last month": "比上月高 {n} 个百分点",
+  "down {n} points from last month": "比上月低 {n} 个百分点",
 };
